@@ -42,9 +42,9 @@ end
 local spidey={
     version="2012.12.25",
     emu={},
+    nes={},  -- nes-specific stuff.  Note that it's seperate because we still want it available on other platforms (how about a script to map snes games to nes palettes for example?).
     Menu={},
     game={},
-    nes={},  -- nes-specific stuff.  Note that it's seperate because we still want it available on other platforms (how about a script to map snes games to nes palettes for example?).
     classes={},
     debug={
         showinput=nil
@@ -104,11 +104,7 @@ elseif (vba) then
         spidey.screenWidth=160
         spidey.screenHeight=144
     end
-
 elseif (snes9x) then
-    -- Note: I don't know how to identify snes9x yet, so we'll have
-    -- to set snes9x=true before importing this
-    --
     -- Snes9x uses memory.read to read from ROM
     rom=memory
     -- .get and .set seem to be more standard; we should avoid read/write but
@@ -119,10 +115,12 @@ elseif (snes9x) then
     --joypad.write=joypad.set
     spidey.emu.button_names={'up','down','left','right','A','B','Y','X','L','R','select','start'}
     
+    --[[ this is handled elsewhere now
     spidey.game.title=''
     for i = 0, 14 do
         spidey.game.title=spidey.game.title .. string.char(memory.readbyte(0xffc0+i))
     end
+    ]]--
 
     spidey.screenWidth=256  -- these are wrong, fix later
     spidey.screenHeight=240
@@ -153,6 +151,17 @@ end
 enableddisabled={[true]="enabled",[false]="disabled"}
 truefalse={[true]='true',[false]='false'}
 yesno={[true]="yes",[false]="no"}
+
+spidey.emu.getTitle=function()
+    if snes9x then
+        spidey.game.lastTitle=spidey.game.title
+        spidey.game.title=''
+        for i = 0, 14 do
+            spidey.game.title=spidey.game.title .. string.char(memory.readbyte(0xffc0+i))
+        end
+    end
+end
+
 
 --
 -- New memory functions
@@ -681,6 +690,7 @@ end
 --------------------------------------------------------------------------------
 --
 -- Create gd image out of an 8x8, 4-color tile in a pattern table
+-- Note: I stole this from Neill Corlett's Metroid script and modified it to use a pattern table 
 --
 function gdTile(ofs,c0,c1,c2,c3,hflip,double)
     local gd = "\255\254\0\008\0\008\001\255\255\255\255"
@@ -1154,13 +1164,29 @@ end
 spidey.classes.class=class --this isn't actually a class, but the class function itself.
 spidey.classes.Address=Address
 
-spidey.frameadvance=function()
-    emu.frameadvance()
-    spidey.memoryViewer.draw()
-    spidey.cheatEngine.show()
+spidey.run=function()
+    --spidey.emu.getTitle()
+    
+    spidey.inp = input_read()
+    spidey.joy = joypad_read()
+    
+    if spidey.load then spidey.load() end
+    while true do
+        spidey.emu.getTitle()
+        if spidey.game.title~=spidey.game.lastTitle then
+            if spidey.titleChange then spidey.titleChange(spidey.game.title) end
+        end
+        
+        spidey.inp = input_read()
+        spidey.joy = joypad_read()
+        gui.text(0,0, "") -- force clear of previous text
+        spidey.memoryViewer.draw()
+        spidey.cheatEngine.show()
+        if spidey.update then spidey.update(spidey.inp,spidey.joy) end
+        emu.frameadvance()
+    end
+    if spidey.unload then spidey.unload() end
 end
-
-
 
 -- Depreciated stuff, for backwards compatability.
 showmem=function() gui.text(16,16, "Error: update script for new memory viewer format.") end
