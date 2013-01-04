@@ -152,6 +152,19 @@ enableddisabled={[true]="enabled",[false]="disabled"}
 truefalse={[true]='true',[false]='false'}
 yesno={[true]="yes",[false]="no"}
 
+prettyValue=function(v)
+    if v==true then
+        return "enabled"
+    elseif v==false then
+        return "disabled"
+    elseif v==nil then
+        return "disabled"
+    else
+        return "unknown"
+    end
+end
+
+
 spidey.emu.getTitle=function()
     if snes9x then
         spidey.game.lastTitle=spidey.game.title
@@ -843,6 +856,7 @@ spidey.nes.palette={[0]=
 '#000000'
 }
 
+--[[
 spidey.menu={
 x=72,
 y=88,
@@ -879,16 +893,6 @@ show=function()
     for i=0,#spidey.menu.items do
         if #spidey.menu.items[i].text>spidey.menu.textWidth then spidey.menu.textWidth=#spidey.menu.items[i].text end
     end
-    --[[
-    if spidey.menu.background=="small" then
-        local _i=0
-        local w=0
-        for _i=0,#spidey.menu.items do
-            if #spidey.menu.items[_i].text>w then w=#spidey.menu.items[_i].text end
-        end
-        gui.drawbox(spidey.menu.x-16, spidey.menu.y-8, spidey.menu.x+w*8+16, spidey.menu.y+#spidey.menu.items*8+2*8, spidey.menu.background_color, spidey.menu.background_color)
-    end
-    ]]--
     if spidey.menu.background=="small" then
         gui.drawbox(spidey.menu.x-16, spidey.menu.y-8, spidey.menu.x+spidey.menu.textWidth*8+16, spidey.menu.y+#spidey.menu.items*8+2*8, spidey.menu.background_color, spidey.menu.background_color)
     end
@@ -924,9 +928,9 @@ elseif FCEU then
     -- black looks more nes-ish anyway
     spidey.menu.background_color="black"
 end
+]]--
 
 function math.dist(x1,y1, x2,y2) return ((x2-x1)^2+(y2-y1)^2)^0.5 end
-
 
 -- Print contents of `tbl`, with indentation.
 -- `indent` sets the initial level of indentation.
@@ -1161,10 +1165,112 @@ function Address:inc(value)
     self.value=self.value+(value or 1)
 end
 
+class "Menu" {
+    x=72,
+    y=88,
+    center=true,
+    background=true,
+    index=1,
+    items={},
+    background_color='#00000080'
+}
+--[[
+function Menu:init()
+    self.items={}
+end
+]]--
+function Menu:show()
+    self.visible=true
+end
+function Menu:hide()
+    self.visible=not true
+end
+function Menu:addItem(t)
+    table.insert(self.items, t)
+end
+
+
+function Menu:update()
+    if self.visible~=true then return end
+    local joypad_data=spidey.joy
+    
+    -- Handle input (could be better)
+    if (joypad_data[1]['up_press'] or (joypad_data[1]['up_press_time'] > 20 and joypad_data[1]['up_press_time'] % 5 ==0)) then
+        if self.moveaction then
+            self.moveaction()
+        end
+        self.index=self.index-1
+        if (self.index<1) then self.index=1 end
+    end
+    if (joypad_data[1]['down_press'] or (joypad_data[1]['down_press_time'] > 20 and joypad_data[1]['down_press_time'] % 5 ==0)) then
+        if self.moveaction then
+            self.moveaction()
+        end
+        self.index=self.index+1
+        if (self.index>#self.items) then self.index=#self.items end
+    end
+    if joypad_data[1]['A_press'] or joypad_data[1]['1_press'] then
+        self.items[self.index].action()
+    end
+
+    -- Draw the menu
+    if self.background==true then gui.drawbox(0, 0, spidey.screenWidth-1,spidey.screenHeight-1, self.background_color, self.background_color) end
+    
+    self.textWidth=0
+    for i=1,#self.items do
+        if #self.items[i].text>self.textWidth then self.textWidth=#self.items[i].text end
+    end
+    if self.background=="small" then
+        gui.drawbox(self.x-16, self.y, self.x+self.textWidth*8+16, self.y+#self.items*8+2*8, self.background_color, self.background_color)
+    end
+    
+    if self.center then
+        self.x=math.floor(spidey.screenWidth*.5- (self.textWidth*8)*.5)
+    end
+    
+    self.text=''
+    local _i=0
+    for _i=1,#self.items do
+        drawfont(self.x,self.y+8*_i,self.font, self.items[_i].text)
+    end
+    
+    -- Display custom cursor image if set, otherwise use a blinking '-'
+    if self.cursor_image then
+        gui.gdoverlay(self.x-12,self.y+8*self.index,self.cursor_image)
+    else
+        if (emu.framecount() % 24>12) then
+            drawfont(self.x-12,self.y+8*self.index,self.font, "-") --cursor
+        end
+    end
+end
+
+--[[
+if spidey.emu.gbx then
+    spidey.menu.x=12
+    spidey.menu.y=8
+elseif spidey.emu.gba then
+    spidey.menu.x=12+8*5
+    spidey.menu.y=8+8*4
+elseif FCEU then
+    -- fceux is buggy with text opacity atm.
+    -- black looks more nes-ish anyway
+    spidey.menu.background_color="black"
+end
+]]--
+
+
+
+
 spidey.classes.class=class --this isn't actually a class, but the class function itself.
 spidey.classes.Address=Address
+spidey.classes.Menu=Menu
 
 spidey.run=function()
+    if math and os then
+        math.randomseed(os.time())
+        math.random() math.random()
+    end
+    
     --spidey.emu.getTitle()
     
     spidey.inp = input_read()
@@ -1196,7 +1302,6 @@ game_title=spidey.game.title
 nespalette=spidey.nes.palette
 getpalettedata = spidey.nes.getPaletteData
 menu=spidey.menu
-
 
 --spidey.cheatEngine.reset()
 
