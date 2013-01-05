@@ -40,7 +40,7 @@ end
 
 
 local spidey={
-    version="2012.12.25",
+    version="2013.1.4",
     emu={},
     nes={},  -- nes-specific stuff.  Note that it's seperate because we still want it available on other platforms (how about a script to map snes games to nes palettes for example?).
     Menu={},
@@ -1217,6 +1217,16 @@ function Menu:update()
     if self.background==true then gui.drawbox(0, 0, spidey.screenWidth-1,spidey.screenHeight-1, self.background_color, self.background_color) end
     
     self.textWidth=0
+    
+    for i=1,#self.items do
+        if type(self.items[i].text)=="function" then
+            self.items[i].textf=self.items[i].text
+        end
+        if self.items[i].textf then
+            self.items[i].text=self.items[i].textf()
+        end
+    end
+    
     for i=1,#self.items do
         if #self.items[i].text>self.textWidth then self.textWidth=#self.items[i].text end
     end
