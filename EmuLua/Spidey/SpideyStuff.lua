@@ -40,16 +40,18 @@ end
 
 
 local spidey={
-    version="2013.1.4",
+    version="2013.1.15",
     emu={},
-    nes={},  -- nes-specific stuff.  Note that it's seperate because we still want it available on other platforms (how about a script to map snes games to nes palettes for example?).
+    nes={},
     Menu={},
+    menus={},
     game={},
     classes={},
     debug={
         showinput=nil
     },
     memoryViewer={visible=false},
+    paletteViewer={visible=false},
     cheatEngine={
         enabled=true,
         active=true,
@@ -58,7 +60,14 @@ local spidey={
         data={
             last=nil,valid={},numValid=0
         }
-    }
+    },
+    imgEdit={
+        transparent=not true,
+        transparentColor="#000000",
+        nobk=false,
+        capture=false
+    },
+    showSelect=not true
 }
 
 if (FCEU) then
@@ -94,11 +103,11 @@ elseif (vba) then
         end
         spidey.game.code=""
         for i=0,3 do
-            spidey.game.title=spidey.game.title .. string.char(memory.readbyte(0x08000000+0x0ac+i))
+            spidey.game.code=spidey.game.code.. string.char(memory.readbyte(0x08000000+0x0ac+i))
         end
         spidey.game.vendor=""
         for i=0,1 do
-            spidey.game.title=spidey.game.title .. string.char(memory.readbyte(0x08000000+0x0b0+i))
+            spidey.game.vendor=spidey.game.vendor.. string.char(memory.readbyte(0x08000000+0x0b0+i))
         end
     else
         spidey.screenWidth=160
@@ -173,6 +182,7 @@ spidey.emu.getTitle=function()
             spidey.game.title=spidey.game.title .. string.char(memory.readbyte(0xffc0+i))
         end
     end
+    return spidey.game.title
 end
 
 
@@ -456,7 +466,7 @@ function input_read()
         input_data.current.ymouse_up=input_data.old.ymouse_up
     end
 
-    if input_data.showselect and input_data.current.leftclick then
+    if spidey.showSelect and input_data.current.leftclick then
         x2=input_data.current.xmouse
         y2=input_data.current.ymouse
         -- snap 8
@@ -472,8 +482,10 @@ end
 function input_showselect(show)
     if show==true then
         input_data.showselect=true
+        spidey.showSelect=true
     else
         input_data.showselect=nil
+        spidey.showSelect=not true
     end
 end
 
@@ -511,7 +523,6 @@ function writetofile(path,stuff)
     return true
 end
 
-
 -- draw font loaded with loadfont function
 function drawfont(x,y,font,str)
     if not gui.gdoverlay then
@@ -532,6 +543,40 @@ function drawfont(x,y,font,str)
             x=x+8
         end
     end
+end
+
+function spidey.outlineText(x,y,str,c1,c2)
+    gui.text(x-1,y,str,c2,"clear")
+    gui.text(x+1,y,str,c2,"clear")
+    gui.text(x,y-1,str,c2,"clear")
+    gui.text(x,y+1,str,c2,"clear")
+
+    gui.text(x-1,y-1,str,c2,"clear")
+    gui.text(x+1,y-1,str,c2,"clear")
+    gui.text(x-1,y-1,str,c2,"clear")
+    gui.text(x+1,y+1,str,c2,"clear")
+
+    ret = gui.text(x,y,str,c1,"clear")
+    return ret
+end
+
+function spidey.recolorImage(img, oldColor, newColor)
+    if gui.parsecolor then
+        r,g,b,a=gui.parsecolor(oldColor)
+        oldColor=string.format("%02x%02x%02x%02x",a,r,g,b)
+        r,g,b,a=gui.parsecolor(newColor)
+        newColor=string.format("%02x%02x%02x%02x",a,r,g,b)
+    end
+    
+    newStr=string.sub(img,1,11)
+    for j=1,(#img-11)/4 do
+        if string.sub(img, 11+j*4-3,11+j*4-3+3)==hex2bin(oldColor) then
+            newStr=newStr..hex2bin(newColor)
+        else
+            newStr=newStr..string.sub(img, 11+j*4-3,11+j*4-3+3)
+        end
+    end
+    return newStr
 end
 
 function bin2hex(str)
@@ -575,6 +620,30 @@ function spidey.memoryViewer.draw()
             --_address=address+j*(16*0x20)+0x20*i
             _address=_address+1
             gui.text(x+8*(6*j), y+8*(1+i), string.format('%X %02X  ',_address, memory.readbyte(_address)) ,"white","black")
+        end
+    end
+end
+
+function spidey.paletteViewer.show()
+    spidey.paletteViewer.visible=true
+end
+
+function spidey.paletteViewer.draw()
+    if not spidey.paletteViewer.visible==true then return end
+    local x,y,r,g,b
+    gui.drawbox(8*1-1,8*2-1,8*31+1,8*28+1, "#00000070","#000000D0")
+    x=8
+    y=16
+    for i=0,0x3f do
+        c=string.format("P%02X",i+24*0)
+        gui.drawbox(x,y,x+8*10,y+8, c, c)
+        spidey.outlineText(x+8,y,c,"white","black")
+        r,g,b=gui.getpixel(x,y)
+        spidey.outlineText(x+8*4,y,string.format("#%02X%02X%02X",r,g,b),"white","black")
+        y=y+8
+        if y>spidey.screenHeight-8*3 then
+            x=x+8*10
+            y=16
         end
     end
 end
@@ -778,17 +847,6 @@ function gdTile(ofs,c0,c1,c2,c3,hflip,double)
     return gd
 end
 
-
-function spidey.nes.getPaletteData()
-    local _palettedata={}
-    _palettedata.color_indexed={}
-    local _i
-    for _i=0,25-1 do
-        _palettedata.color_indexed[_i]=memory.readbyteppu(0x3f00+_i)
-    end
-    return _palettedata
-end
-
 spidey.nes.palette={[0]=
 '#7C7C7C',
 '#0000FC',
@@ -856,79 +914,17 @@ spidey.nes.palette={[0]=
 '#000000'
 }
 
---[[
-spidey.menu={
-x=72,
-y=88,
-center=true,
-background=true,
-index=0,
-items={},
-background_color='#00000080',
-
-doinput=function()
-    if (joypad_data[1]['up_press'] or (joypad_data[1]['up_press_time'] > 20 and joypad_data[1]['up_press_time'] % 5 ==0)) then
-        if spidey.menu.moveaction then
-            spidey.menu.moveaction()
-        end
-        spidey.menu.index=spidey.menu.index-1
-        if (spidey.menu.index<0) then spidey.menu.index=0 end
+function spidey.nes.getPaletteData()
+    local _palettedata={}
+    _palettedata.color_indexed={}
+    _palettedata.colorRGB={}
+    local _i
+    for _i=0,25-1 do
+        _palettedata.color_indexed[_i]=memory.readbyteppu(0x3f00+_i)
+        _palettedata.colorRGB[_i]=spidey.nes.palette[_palettedata.color_indexed[_i]] or "#000000"
     end
-    if (joypad_data[1]['down_press'] or (joypad_data[1]['down_press_time'] > 20 and joypad_data[1]['down_press_time'] % 5 ==0)) then
-        if spidey.menu.moveaction then
-            spidey.menu.moveaction()
-        end
-        spidey.menu.index=spidey.menu.index+1
-        if (spidey.menu.index>#spidey.menu.items) then spidey.menu.index=#spidey.menu.items end
-    end
-    if joypad_data[1]['A_press'] or joypad_data[1]['1_press'] then
-        spidey.menu.items[spidey.menu.index].action()
-    end
-end,
-
-show=function()
-    if spidey.menu.background==true then gui.drawbox(0, 0, spidey.screenWidth-1,spidey.screenHeight-1, spidey.menu.background_color, spidey.menu.background_color) end
-    
-    spidey.menu.textWidth=0
-    for i=0,#spidey.menu.items do
-        if #spidey.menu.items[i].text>spidey.menu.textWidth then spidey.menu.textWidth=#spidey.menu.items[i].text end
-    end
-    if spidey.menu.background=="small" then
-        gui.drawbox(spidey.menu.x-16, spidey.menu.y-8, spidey.menu.x+spidey.menu.textWidth*8+16, spidey.menu.y+#spidey.menu.items*8+2*8, spidey.menu.background_color, spidey.menu.background_color)
-    end
-    
-    if spidey.menu.center then
-        spidey.menu.x=math.floor(spidey.screenWidth*.5- (spidey.menu.textWidth*8)*.5)
-    end
-    
-    spidey.menu.text=''
-    local _i=0
-    for _i=0,#spidey.menu.items do
-        drawfont(spidey.menu.x,spidey.menu.y+8*_i,spidey.menu.font, spidey.menu.items[_i].text)
-    end
-    
-    -- Display custom cursor image if set, otherwise use a blinking '-'
-    if spidey.menu.cursor_image then
-        gui.gdoverlay(spidey.menu.x-12,spidey.menu.y+8*spidey.menu.index,spidey.menu.cursor_image)
-    else
-        if (emu.framecount() % 24>12) then
-            drawfont(spidey.menu.x-12,spidey.menu.y+8*spidey.menu.index,spidey.menu.font, "-") --cursor
-        end
-    end
+    return _palettedata
 end
-}
-if spidey.emu.gbx then
-    spidey.menu.x=12
-    spidey.menu.y=8
-elseif spidey.emu.gba then
-    spidey.menu.x=12+8*5
-    spidey.menu.y=8+8*4
-elseif FCEU then
-    -- fceux is buggy with text opacity atm.
-    -- black looks more nes-ish anyway
-    spidey.menu.background_color="black"
-end
-]]--
 
 function math.dist(x1,y1, x2,y2) return ((x2-x1)^2+(y2-y1)^2)^0.5 end
 
@@ -946,8 +942,6 @@ function tprint (tbl, indent)
     end
   end
 end
-
-
 
 -- this is just some testing crap for fceux atm.  uses auxlib
 function testwindow()
@@ -1174,11 +1168,12 @@ class "Menu" {
     items={},
     background_color='#00000080'
 }
---[[
+
 function Menu:init()
     self.items={}
+    spidey.menus[#spidey.menus+1]=self
 end
-]]--
+
 function Menu:show()
     self.visible=true
 end
@@ -1189,6 +1184,48 @@ function Menu:addItem(t)
     table.insert(self.items, t)
 end
 
+function Menu:addStandard()
+    local i
+    local t
+    
+    t={
+        {text=function() return string.format('Cheats: %s',prettyValue(cheats.active)) end,
+        action=function() cheats.active=not cheats.active end},
+        
+        {text=function() return string.format('Capture: %s',prettyValue(spidey.imgEdit.capture)) end,
+        action=function() spidey.imgEdit.capture=not spidey.imgEdit.capture end},
+        
+        {text=function() return string.format('Debug: %s',prettyValue(debug.show)) end,
+        action=function() debug.show=not debug.show end},
+        
+        {text=function() return string.format('Mem View: %s',prettyValue(spidey.memoryViewer.visible)) end,
+        action=function() spidey.memoryViewer.visible=not spidey.memoryViewer.visible end},
+        
+        {text=function() return string.format('Palette View: %s',prettyValue(spidey.paletteViewer.visible)) end,
+        action=function() spidey.paletteViewer.visible=not spidey.paletteViewer.visible end},
+        
+        {disabled=true, text=function() return string.format('menu color test %02X',mnu.r or 0) end,
+        action=function()
+            self.r=math.random(0,#spidey.nes.palette)
+            self.background_color=spidey.nes.palette[self.r]
+        end}
+    }
+    
+    --[[
+    {text="Cheat Engine",
+    action=function()
+        spidey.cheatEngine.menuOpen=not spidey.cheatEngine.menuOpen
+        --spidey.menu.index=0
+    end}
+    ]]--
+
+    for i = 1,#t do
+        if not t[i].disabled then
+            table.insert(self.items, t[i])
+        end
+    end
+    
+end
 
 function Menu:update()
     if self.visible~=true then return end
@@ -1268,9 +1305,6 @@ elseif FCEU then
 end
 ]]--
 
-
-
-
 spidey.classes.class=class --this isn't actually a class, but the class function itself.
 spidey.classes.Address=Address
 spidey.classes.Menu=Menu
@@ -1295,16 +1329,41 @@ spidey.run=function()
         
         spidey.inp = input_read()
         spidey.joy = joypad_read()
+        
+        if spidey.imgEdit.capture then
+            spidey.showSelect=true
+            if spidey.inp.leftbutton_release and not spidey.inp.leftbutton_click then
+                spidey.imgEdit.clip=gdfromscreen(spidey.inp.selection.x,spidey.inp.selection.y,spidey.inp.selection.width,spidey.inp.selection.height, {transparent=spidey.imgEdit.transparent,transparentcolor=spidey.imgEdit.transparentColor or "#000000",spidey.imgEdit.noBk or false})
+                spidey.imgEdit.clipWidth=spidey.inp.selection.width
+                spidey.imgEdit.clipHeight=spidey.inp.selection.height
+                writetofile('.\\Spidey\\output.gd', spidey.imgEdit.clip)
+                emu.message("saved.")
+            end
+            if spidey.imgEdit.clip then
+                --gui.drawbox(8*2,8*2, 8*2+spidey.imgEdit.clipWidth, 8*2+spidey.imgEdit.clipHeight, "#70707080", "#70707080")
+                spidey.outlineText(8,8,"capture:","white","black")
+                gui.gdoverlay(8*2,8*2, spidey.imgEdit.clip)
+            else
+              --gui.text(8,8,'X')
+            end
+        end
+        
         gui.text(0,0, "") -- force clear of previous text
         spidey.memoryViewer.draw()
+        spidey.paletteViewer.draw()
         spidey.cheatEngine.show()
         if spidey.update then spidey.update(spidey.inp,spidey.joy) end
+        -- process any menus
+        if #spidey.menus>0 then
+            for i=1,#spidey.menus do spidey.menus[i]:update() end
+        end
         emu.frameadvance()
     end
     if spidey.unload then spidey.unload() end
 end
 
 -- Depreciated stuff, for backwards compatability.
+--[[
 showmem=function() gui.text(16,16, "Error: update script for new memory viewer format.") end
 showMem=showmem
 emu_data=spidey.emu
@@ -1312,6 +1371,7 @@ game_title=spidey.game.title
 nespalette=spidey.nes.palette
 getpalettedata = spidey.nes.getPaletteData
 menu=spidey.menu
+]]--
 
 --spidey.cheatEngine.reset()
 
