@@ -6,7 +6,6 @@
 --
 
 local class
---function class(name)
 class=function(name)
     local newclass={}
     _G[name]=newclass
@@ -37,20 +36,19 @@ class=function(name)
     return setmetatable(newclass,{__call=newclass.define})
 end
 
-
-
 local spidey={
     version="2013.1.15",
     emu={},
     nes={},
     Menu={},
     menus={},
+    windows={},
     game={},
     classes={},
     debug={
         showinput=nil
     },
-    memoryViewer={visible=false},
+    memoryViewer={visible=false, type="ram"},
     paletteViewer={visible=false},
     cheatEngine={
         enabled=true,
@@ -302,6 +300,30 @@ function memory.writebytes(address,str)
     end
 end
 
+-- sets a custom breakpoint thing
+function spidey.setBreakpoint(address, fn)
+    local f=function()
+        local a,x,y,s,p,pc=memory.getregisters()
+        if fn then
+            fn(address,{a,x,y,s,p,pc})
+        end
+        --gui.text(0+4+50, 20+08, string.format("a=%X x=%X y=%X s=%X p=%X pc=%X",a,x,y,s,p,pc))
+        --emu.pause()
+    end
+    memory.registerexec(address,1,f)
+end
+
+-- sets an exec breakpoint from a memory write, then
+-- unregisters itself.  neat, eh?
+function spidey.setBreakpointFromWrite(address, fn)
+    local f=function()
+        a,x,y,s,p,pc=memory.getregisters()
+        spidey.setBreakpoint(pc,fn)
+        memory.register(address,1,nil)
+    end
+    memory.register(address,1,f)
+end
+
 --fonts={}
 --fonts[letters]="ABCDEFGHIJKLMNOPQRSTUVWXYZ.,?!abcdefghijklmnopqrstuvwxyz-*@#0123456789“”:&''\"             "
 --font_letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ.,?!abcdefghijklmnopqrstuvwxyz-*@#0123456789“”:&''\"             "
@@ -390,11 +412,16 @@ end
 -- leftbutton_click returns true when the left button is pressed and released without movement
 -- selection.x selection.y selection.width selection.height
 --
+-- Note: the keyboard part of this is kind of lacking right now
 --
 input_data={['current']=input.get()}
 function input_read()
     input_data['old']=input_data.current
     input_data.current=input.get()
+    
+    input_data.current.pageup_press=input_data.current.pageup and not input_data.old.pageup
+    input_data.current.pagedown_press=input_data.current.pagedown and not input_data.old.pagedown
+    
     input_data.current.selection={}
     
     --depreciated; use leftbutton_press
@@ -607,21 +634,49 @@ function to display memory on screen; good for debugging n stuff
 --------------------------------------------------]]--
 function spidey.memoryViewer.draw()
     if not spidey.memoryViewer.visible==true then return end
-    local _address,x,y
+    local address,x,y
+    spidey.memoryViewer.address=spidey.memoryViewer.address or 0
+    
+    if spidey.inp.pageup_press then
+        spidey.memoryViewer.address=spidey.memoryViewer.address-0x50
+        if spidey.memoryViewer.address<0 then spidey.memoryViewer.address=0 end
+    end
+    if spidey.inp.pagedown_press then
+        spidey.memoryViewer.address=spidey.memoryViewer.address+0x50
+    end
+    
+    address=spidey.memoryViewer.address
     
     x=spidey.memoryViewer.x or 8
     y=spidey.memoryViewer.y or 8
+    x=4
+    address=spidey.memoryViewer.address or 0
     
-    _address=spidey.memoryViewer.address or 0
-    
-    gui.drawbox(x-1, y+8-1, x+8*6*5+1, y+8*17, "black", "black")
-    for j=0,5-1 do
-        for i=0,16-1 do
-            --_address=address+j*(16*0x20)+0x20*i
-            _address=_address+1
-            gui.text(x+8*(6*j), y+8*(1+i), string.format('%X %02X  ',_address, memory.readbyte(_address)) ,"white","black")
+    --gui.drawbox(x-1, y-1, spidey.screenWidth-(x-1), y+8*16, "black", "black")
+    for i=1,16 do
+        --gui.text(x,y+8*i-7,string.format('%04x %02X  ',address, rom.readbyte(address+0x10)) ,"white","clear")
+        gui.text(x,y+8*i-7,string.format('%04x',address),"white","clear")
+        for j=0,15 do
+            if spidey.memoryViewer.type=="rom" then
+                gui.text(x+28+14*j,y+8*i-7,string.format('%02X', rom.readbyte(address+0x10+j)),"white","clear")
+            else
+                gui.text(x+28+14*j,y+8*i-7,string.format('%02X', memory.readbyte(address+j)),"white","clear")
+            end
+            address=address+1
         end
     end
+    --[[
+    for j=1,5 do
+        for i=0,16-1 do
+            if spidey.memoryViewer.type=="rom" then
+                gui.text(x+8*(6*j-5), y+8*(1+i), string.format('%X %02X  ',address, rom.readbyte(address+0x10)) ,"white","black")
+            else
+                gui.text(x+8*(6*j-5), y+8*(1+i), string.format('%X %02X  ',address, memory.readbyte(address)) ,"white","black")
+            end
+            address=address+1
+        end
+    end
+    ]]--
 end
 
 function spidey.paletteViewer.show()
@@ -645,6 +700,94 @@ function spidey.paletteViewer.draw()
             x=x+8*10
             y=16
         end
+    end
+end
+
+class "Window" {
+    x=0,
+    y=8,
+    width=64,
+    height=64,
+    backgroundColor="#00000070",
+    borderColor="#000000C0",
+    titleColor="#ffffffd0",
+    titleBackgroundColor="#808080c0",
+    titleDividerColor="#000000C0",
+    title="title",
+    innerX=0,
+    innerY=0,
+    visible=false
+}
+function Window:init(name)
+    self.name=name or self.title
+    self.title=name or self.title
+    spidey.windows[#spidey.windows+1]=self
+end
+function Window:show()
+    self.visible=true
+end
+function Window:hide()
+    self.visible=not true
+end
+function Window:_draw()
+    if self.visible~=true then return end
+    gui.drawbox(self.x,self.y, self.x+self.width, self.y+self.height, self.backgroundColor,self.borderColor)
+    gui.drawbox(self.x,self.y, self.x+self.width, self.y+8+2, self.titleBackgroundColor,"clear")
+    gui.drawline(self.x+1,self.y+8+2, self.x+self.width-1, self.y+8+2, self.titleDividerColor)
+    gui.text(self.x+2,self.y+2,self.title,self.titleColor7,"clear")
+    self.innerX=self.x+1
+    self.innerY=self.y+8+3
+    if self.draw then self.draw() end
+end
+
+local captureWindow
+captureWindow=Window:new("capture")
+
+function captureWindow:draw()
+    if spidey.imgEdit.clip then
+        gui.gdoverlay(captureWindow.innerX,captureWindow.innerY, spidey.imgEdit.clip)
+    end
+    --if button(captureWindow.innerX,captureWindow.innerY+50,"save") then
+    --end
+end
+
+local memoryViewerWindow
+memoryViewerWindow=Window:new("memoryViewerWindow")
+memoryViewerWindow.backgroundColor="#000000D0"
+
+function memoryViewerWindow:draw()
+    if spidey.memoryViewer.type=="rom" then
+        memoryViewerWindow.backgroundColor="#400000D0"
+        memoryViewerWindow.title="Memory: ROM"
+    else
+        memoryViewerWindow.backgroundColor="#000000D0"
+        memoryViewerWindow.title="Memory: RAM"
+    end
+    spidey.memoryViewer.x=memoryViewerWindow.innerX
+    spidey.memoryViewer.y=memoryViewerWindow.innerY+4
+    memoryViewerWindow.width=spidey.screenWidth
+    memoryViewerWindow.height=memoryViewerWindow.innerY+8*16
+    spidey.memoryViewer.draw()
+end
+
+function spidey.imgEdit.update()
+    if spidey.imgEdit.capture then
+        spidey.showSelect=true
+        --if spidey.inp.leftbutton_release and not spidey.inp.leftbutton_click then
+        if spidey.inp.leftbutton_release then
+            local clip
+            clip=gdfromscreen(spidey.inp.selection.x,spidey.inp.selection.y,spidey.inp.selection.width,spidey.inp.selection.height, {transparent=spidey.imgEdit.transparent,transparentcolor=spidey.imgEdit.transparentColor or "#000000",spidey.imgEdit.noBk or false})
+            if clip then
+                spidey.imgEdit.clip=clip
+                spidey.imgEdit.clipWidth=spidey.inp.selection.width
+                spidey.imgEdit.clipHeight=spidey.inp.selection.height
+                captureWindow:show()
+                writetofile('.\\Spidey\\output.gd', spidey.imgEdit.clip)
+                emu.message("saved.")
+            end
+        end
+    else
+        captureWindow:hide()
     end
 end
 
@@ -945,6 +1088,40 @@ end
 
 -- this is just some testing crap for fceux atm.  uses auxlib
 function testwindow()
+    if not iup then return end
+    
+    dlg=iup.filedlg{}
+    
+    --dlg.file="./Spidey/output.gd"
+    dlg.file=arg[0]
+    --writetofile('.\\Spidey\\output.gd', spidey.imgEdit.clip)
+    
+    
+    dlg:popup()
+    
+    --[[
+    btn1 = iup.button{title = "Save",alignment="ARIGHT"}
+    text1 = iup.text{value="hello",expand = "HORIZONTAL"}
+    --box = iup.hbox {btn1,btn2; gap=4}
+    frame= iup.frame{
+        iup.vbox{
+            iup.hbox{
+                text1,
+                btn1;gap=4
+            }
+        }
+    }
+    
+    btn1.action=function()
+        print("Save to "..text1.value)
+    end
+    
+    dlg = iup.dialog{frame; title="Save Capture As...",size="QUARTERxQUARTER"}
+    dlg:show()
+    ]]--
+    
+    if true then return end
+
     --require( "iuplua" )
     --require( "iupluacontrols" )
 
@@ -1128,7 +1305,6 @@ spidey.cheatEngine.menu.main[#spidey.cheatEngine.menu.main+1]={
     end
 }
 
-
 class "Address" {
     address=0,
     value=0,
@@ -1193,13 +1369,25 @@ function Menu:addStandard()
         action=function() cheats.active=not cheats.active end},
         
         {text=function() return string.format('Capture: %s',prettyValue(spidey.imgEdit.capture)) end,
-        action=function() spidey.imgEdit.capture=not spidey.imgEdit.capture end},
+        action=function()
+            spidey.imgEdit.capture=not spidey.imgEdit.capture
+            spidey.showSelect=spidey.imgEdit.capture
+        end},
         
         {text=function() return string.format('Debug: %s',prettyValue(debug.show)) end,
         action=function() debug.show=not debug.show end},
         
         {text=function() return string.format('Mem View: %s',prettyValue(spidey.memoryViewer.visible)) end,
         action=function() spidey.memoryViewer.visible=not spidey.memoryViewer.visible end},
+        
+        {text=function() return string.format('Mem View type: %s',spidey.memoryViewer.type) end,
+        action=function()
+            if spidey.memoryViewer.type=="ram" then
+                spidey.memoryViewer.type="rom"
+            else
+                spidey.memoryViewer.type="ram"
+            end
+        end},
         
         {text=function() return string.format('Palette View: %s',prettyValue(spidey.paletteViewer.visible)) end,
         action=function() spidey.paletteViewer.visible=not spidey.paletteViewer.visible end},
@@ -1307,6 +1495,7 @@ end
 
 spidey.classes.class=class --this isn't actually a class, but the class function itself.
 spidey.classes.Address=Address
+spidey.classes.Window=Window
 spidey.classes.Menu=Menu
 
 spidey.run=function()
@@ -1330,29 +1519,16 @@ spidey.run=function()
         spidey.inp = input_read()
         spidey.joy = joypad_read()
         
-        if spidey.imgEdit.capture then
-            spidey.showSelect=true
-            if spidey.inp.leftbutton_release and not spidey.inp.leftbutton_click then
-                spidey.imgEdit.clip=gdfromscreen(spidey.inp.selection.x,spidey.inp.selection.y,spidey.inp.selection.width,spidey.inp.selection.height, {transparent=spidey.imgEdit.transparent,transparentcolor=spidey.imgEdit.transparentColor or "#000000",spidey.imgEdit.noBk or false})
-                spidey.imgEdit.clipWidth=spidey.inp.selection.width
-                spidey.imgEdit.clipHeight=spidey.inp.selection.height
-                writetofile('.\\Spidey\\output.gd', spidey.imgEdit.clip)
-                emu.message("saved.")
-            end
-            if spidey.imgEdit.clip then
-                --gui.drawbox(8*2,8*2, 8*2+spidey.imgEdit.clipWidth, 8*2+spidey.imgEdit.clipHeight, "#70707080", "#70707080")
-                spidey.outlineText(8,8,"capture:","white","black")
-                gui.gdoverlay(8*2,8*2, spidey.imgEdit.clip)
-            else
-              --gui.text(8,8,'X')
-            end
-        end
-        
         gui.text(0,0, "") -- force clear of previous text
-        spidey.memoryViewer.draw()
+        memoryViewerWindow.visible=spidey.memoryViewer.visible
         spidey.paletteViewer.draw()
+        spidey.imgEdit.update() -- process image edit stuff, like capturing
         spidey.cheatEngine.show()
         if spidey.update then spidey.update(spidey.inp,spidey.joy) end
+        -- draw any windows
+        if #spidey.windows>0 then
+            for i=1,#spidey.windows do spidey.windows[i]:_draw() end
+        end
         -- process any menus
         if #spidey.menus>0 then
             for i=1,#spidey.menus do spidey.menus[i]:update() end
@@ -1362,16 +1538,8 @@ spidey.run=function()
     if spidey.unload then spidey.unload() end
 end
 
--- Depreciated stuff, for backwards compatability.
---[[
-showmem=function() gui.text(16,16, "Error: update script for new memory viewer format.") end
-showMem=showmem
-emu_data=spidey.emu
-game_title=spidey.game.title
-nespalette=spidey.nes.palette
-getpalettedata = spidey.nes.getPaletteData
-menu=spidey.menu
-]]--
+spidey.imgEdit.captureWindow=captureWindow
+spidey.imgEdit.memoryViewerWindow=memoryViewerWindow
 
 --spidey.cheatEngine.reset()
 
