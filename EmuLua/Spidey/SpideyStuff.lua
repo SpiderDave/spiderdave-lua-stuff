@@ -420,6 +420,11 @@ input_data={['current']=input.get()}
 function input_read()
     input_data['old']=input_data.current
     input_data.current=input.get()
+    if input_data.current.X then
+        -- bizhawk uses X Y not xmouse ymouse
+        input_data.current.xmouse=input_data.current.X
+        input_data.current.Ymouse=input_data.current.Y
+    end
     
     input_data.current.pageup_press=input_data.current.pageup and not input_data.old.pageup
     input_data.current.pagedown_press=input_data.current.pagedown and not input_data.old.pagedown
