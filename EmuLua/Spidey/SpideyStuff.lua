@@ -216,6 +216,8 @@ end
 
 if rom then
     function rom.readword(a) return rom.readbyte(a) + 256 * rom.readbyte(a+1) end
+end
+if not memory.readword then
     function memory.readword(a) return memory.readbyte(a) + 256 * memory.readbyte(a+1) end
 end
 
