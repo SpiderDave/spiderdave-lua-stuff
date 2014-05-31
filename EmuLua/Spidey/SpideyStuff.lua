@@ -1186,7 +1186,8 @@ function spidey.cheatEngine.reset()
         spidey.cheatEngine.data.valid[i]=true
         if FCEU then
             -- ignore zero page, stack, and ram mirrors
-            if i<0x0200 or (i>=0x0800 and i<=0x1fff) then spidey.cheatEngine.data.valid[i]=false end
+            --if i<0x0200 or (i>=0x0800 and i<=0x1fff) then spidey.cheatEngine.data.valid[i]=false end
+            if (i>=0x0800 and i<=0x1fff) then spidey.cheatEngine.data.valid[i]=false end
         end
         if spidey.cheatEngine.data.valid[i]==true then
             spidey.cheatEngine.data.numValid=spidey.cheatEngine.data.numValid+1
@@ -1221,14 +1222,16 @@ function spidey.cheatEngine.show()
     local i
     local cheat
     if #spidey.cheatEngine.cheats==0 then return end
-    gui.drawbox(8-4,8+8-4,8*8+4, 8+8*#spidey.cheatEngine.cheats+8+4, spidey.menu.background_color,spidey.menu.background_color)
+    --gui.drawbox(8-4,8+8-4,8*8+4, 8+8*#spidey.cheatEngine.cheats+8+4, spidey.menu.background_color,spidey.menu.background_color)
+    gui.drawbox(8-4,8+8-4,8*8+4, 8+8*#spidey.cheatEngine.cheats+8+4, "black","black")
     for i=1,#spidey.cheatEngine.cheats do
         cheat=spidey.cheatEngine.cheats[i]
         if cheat.active==true then
             memory.writebyte(cheat.address,cheat.value)
         end
         --gui.text(8, 8+8*2+8*i, string.format("%012X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value) ,"white","clear")
-        drawfont(8,8+8*i,spidey.menu.font, string.format("%04X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value))
+        --drawfont(8,8+8*i,spidey.menu.font, string.format("%04X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value))
+        drawfont(8,8+8*i,font[current_font], string.format("%04X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value))
     end
 end
 
@@ -1258,9 +1261,9 @@ end
 
 spidey.cheatEngine.menu={}
 spidey.cheatEngine.menu.main={
-    [0]={text="Back",action=function()
+    {text="Back",action=function()
         spidey.cheatEngine.menuOpen=not spidey.cheatEngine.menuOpen
-        spidey.menu.index=0
+        --spidey.menu.index=0
     end},
     {text="Reset",action=function()
         spidey.cheatEngine.reset()
@@ -1270,12 +1273,17 @@ spidey.cheatEngine.menu.main={
     end},
     {text="equal to 1",action=function()
         spidey.cheatEngine.equalTo(1)
-    end}
+    end},
+    {text=function() return string.format('equal to %i', spidey.cheatEngine.equalToValue or 0) end,
+        action=function() spidey.cheatEngine.equalTo(spidey.cheatEngine.equalToValue) end,
+        left=function() spidey.cheatEngine.equalToValue=math.max((spidey.cheatEngine.equalToValue or 0)-1,0) end,
+        right=function() spidey.cheatEngine.equalToValue=math.min((spidey.cheatEngine.equalToValue or 0)+1,255) end,
+    }
 }
 spidey.cheatEngine.menu.current=spidey.cheatEngine.menu.main
 
 spidey.cheatEngine.menu.main[#spidey.cheatEngine.menu.main+1]={
-    text="Results",
+    text=function() return string.format("Results (%i)",spidey.cheatEngine.data.numValid) end,
     action=function()
         if spidey.cheatEngine.data.numValid==0 then
             emu.message("Error: no results.")
@@ -1284,12 +1292,12 @@ spidey.cheatEngine.menu.main[#spidey.cheatEngine.menu.main+1]={
         if not spidey.cheatEngine.data.current then
             spidey.cheatEngine.data.current=memory.readbytes(0,spidey.cheatEngine.range)
         end
-        spidey.cheatEngine.menu.possible={}
+        spidey.cheatEngine.menu.possible={[1]="dummy"}
         y=0
         for i=0,spidey.cheatEngine.range-1 do
             if spidey.cheatEngine.data.valid[i]==true then
                 --drawfont(8,8+8*y,spidey.menu.font, string.format("%04X %02X",i, string.byte(spidey.cheatEngine.data.current,i+1)))
-                spidey.cheatEngine.menu.possible[y+1]={
+                spidey.cheatEngine.menu.possible[y+2]={
                     --text=string.format("%04X %02X",i, memory.readbyte(i)
                     text=string.format("%04X %02X",i, string.byte(spidey.cheatEngine.data.current,i+1)),
                     action=function()
@@ -1302,12 +1310,12 @@ spidey.cheatEngine.menu.main[#spidey.cheatEngine.menu.main+1]={
                 if y>10 then break end
             end
         end
-        spidey.cheatEngine.menu.possible[0]={
+        spidey.cheatEngine.menu.possible[1]={
             text="back",action=function ()
                 spidey.cheatEngine.menu.current=spidey.cheatEngine.menu.main
             end
         }
-        spidey.menu.index=0
+        --spidey.menu.index=1
         spidey.cheatEngine.menu.current=spidey.cheatEngine.menu.possible
     end
 }
@@ -1395,7 +1403,8 @@ function Menu:addStandard()
         {text=function() return string.format('Mem View: %s',prettyValue(spidey.memoryViewer.visible)) end,
         action=function() spidey.memoryViewer.visible=not spidey.memoryViewer.visible end},
         
-        {text=function() return string.format('Mem View type: %s',spidey.memoryViewer.type) end,
+        {id="memViewType", text=function() return string.format('Mem View type: %s',spidey.memoryViewer.type) end,
+        condition=function() return spidey.memoryViewer.visible end,
         action=function()
             if spidey.memoryViewer.type=="ram" then
                 spidey.memoryViewer.type="rom"
@@ -1444,7 +1453,7 @@ function Menu:update()
             self.moveaction()
         end
         self.index=self.index-1
-        if self.items[self.index] and self.items[self.index].disabled then
+        while self.items[self.index] and self.items[self.index].disabled do
             self.index=self.index-1
         end
         if (self.index<1) then self.index=1 end
@@ -1454,13 +1463,19 @@ function Menu:update()
             self.moveaction()
         end
         self.index=self.index+1
-        if self.items[self.index] and self.items[self.index].disabled then
+        while self.items[self.index] and self.items[self.index].disabled do
             self.index=self.index+1
         end
         if (self.index>#self.items) then self.index=#self.items end
     end
     if joypad_data[1]['A_press'] or joypad_data[1]['1_press'] then
         self.items[self.index].action()
+    end
+    if joypad_data[1]['left_press'] and self.items[self.index].left then
+        self.items[self.index].left()
+    end
+    if joypad_data[1]['right_press'] and self.items[self.index].right then
+        self.items[self.index].right()
     end
 
     -- Draw the menu
@@ -1498,7 +1513,7 @@ function Menu:update()
             y=y+8
             self.items[_i].disabled=false
         else
-            if _i<cursorIndex then cursorIndex=cursorIndex-1 end
+            if _i<=cursorIndex then cursorIndex=cursorIndex-1 end
             self.items[_i].disabled=true
             --drawfont(self.x,self.y+8*_i,self.font, "X "..self.items[_i].text)
         end
@@ -1542,6 +1557,8 @@ spidey.run=function()
     end
     
     --spidey.emu.getTitle()
+    
+    spidey.cheatEngine.reset()
     
     spidey.inp = input_read()
     spidey.joy = joypad_read()
