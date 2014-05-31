@@ -1367,6 +1367,14 @@ function Menu:addItem(t)
     table.insert(self.items, t)
 end
 
+function Menu:getIndexFromId(id)
+    for i=1,#menu.items do
+        if menu.items[i].id==id then
+            return i
+        end
+    end
+end
+
 function Menu:addStandard()
     local i
     local t
@@ -1426,12 +1434,19 @@ function Menu:update()
     if self.visible~=true then return end
     local joypad_data=spidey.joy
     
+    if self.items[self.index] and self.items[self.index].disabled then
+        self.index=1
+    end
+    
     -- Handle input (could be better)
     if (joypad_data[1]['up_press'] or (joypad_data[1]['up_press_time'] > 20 and joypad_data[1]['up_press_time'] % 5 ==0)) then
         if self.moveaction then
             self.moveaction()
         end
         self.index=self.index-1
+        if self.items[self.index] and self.items[self.index].disabled then
+            self.index=self.index-1
+        end
         if (self.index<1) then self.index=1 end
     end
     if (joypad_data[1]['down_press'] or (joypad_data[1]['down_press_time'] > 20 and joypad_data[1]['down_press_time'] % 5 ==0)) then
@@ -1439,6 +1454,9 @@ function Menu:update()
             self.moveaction()
         end
         self.index=self.index+1
+        if self.items[self.index] and self.items[self.index].disabled then
+            self.index=self.index+1
+        end
         if (self.index>#self.items) then self.index=#self.items end
     end
     if joypad_data[1]['A_press'] or joypad_data[1]['1_press'] then
@@ -1472,16 +1490,28 @@ function Menu:update()
     
     self.text=''
     local _i=0
+    local y=self.y+8
+    local cursorIndex=self.index
     for _i=1,#self.items do
-        drawfont(self.x,self.y+8*_i,self.font, self.items[_i].text)
+        if (not self.items[_i].condition) or (self.items[_i].condition and self.items[_i].condition()) then
+            drawfont(self.x,y,self.font, self.items[_i].text)
+            y=y+8
+            self.items[_i].disabled=false
+        else
+            if _i<cursorIndex then cursorIndex=cursorIndex-1 end
+            self.items[_i].disabled=true
+            --drawfont(self.x,self.y+8*_i,self.font, "X "..self.items[_i].text)
+        end
+        
     end
     
     -- Display custom cursor image if set, otherwise use a blinking '-'
     if self.cursor_image then
-        gui.gdoverlay(self.x-12,self.y+8*self.index,self.cursor_image)
+        --gui.gdoverlay(self.x-12,self.y+8*self.index,self.cursor_image)
     else
         if (emu.framecount() % 24>12) then
-            drawfont(self.x-12,self.y+8*self.index,self.font, "-") --cursor
+            --drawfont(self.x-12,self.y+8*self.index,self.font, "-") --cursor
+            drawfont(self.x-12,self.y+8*cursorIndex,self.font, "-") --cursor
         end
     end
 end
