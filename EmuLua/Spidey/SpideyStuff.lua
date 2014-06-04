@@ -46,7 +46,7 @@ local spidey={
     game={},
     classes={},
     debug={
-        showinput=nil
+        showInput=nil
     },
     memoryViewer={visible=false, type="ram"},
     paletteViewer={visible=false},
@@ -297,8 +297,14 @@ end
 function memory.writebytes(address,str)
     local i
     local c
-    for i = 0, #str-1 do
-        memory.writebyte(address+i,string.byte(str,i+1))
+    if type(str)=="table" then
+        for i = 0, #str-1 do
+            memory.writebyte(address+i,str[i+1])
+        end
+    else
+        for i = 0, #str-1 do
+            memory.writebyte(address+i,string.byte(str,i+1))
+        end
     end
 end
 
@@ -392,6 +398,10 @@ function joypad_read()
             b=spidey.emu.button_names[ii]
             joypad_data[i][b..'_press']=(joypad_data[i][b] and not joypad_data.old[i][b])
             joypad_data[i][b..'_press_time']=joypad_data[i][b] and math.min((joypad_data.old[i][b..'_press_time'] or 0) +1,1000) or 0
+            
+            -- Similar to a keyboard repeat function.  it triggers faster if held down longer.
+            joypad_data[i][b..'_press_repeat'] = joypad_data[i][b..'_press'] or (joypad_data[i][b..'_press_time']>20 and joypad_data[i][b..'_press_time'] %5==0) or (joypad_data[i][b..'_press_time']>100 and joypad_data[i][b..'_press_time'] %2==0) or (joypad_data[i][b..'_press_time']>200)
+            
             joypad_data[i]['idle']= (joypad_data[i].up~=true and joypad_data[i].down~=true and joypad_data[i].left~=true and joypad_data[i].right~=true and joypad_data[i].A~=true and joypad_data[i].B~=true and joypad_data[i].select~=true and joypad_data[i].start~=true)
             joypad_data[i]['idle_time']=joypad_data[i]['idle'] and math.min((joypad_data.old[i]['idle_time'] or 0) +1,1000) or 0
             if spidey.debug.showInput then
@@ -1397,8 +1407,8 @@ function Menu:addStandard()
             spidey.showSelect=spidey.imgEdit.capture
         end},
         
-        {text=function() return string.format('Debug: %s',prettyValue(debug.show)) end,
-        action=function() debug.show=not debug.show end},
+        {text=function() return string.format('Debug: %s',prettyValue(spidey.debug.enabled)) end,
+        action=function() spidey.debug.enabled=not spidey.debug.enabled end},
         
         {text=function() return string.format('Mem View: %s',prettyValue(spidey.memoryViewer.visible)) end,
         action=function() spidey.memoryViewer.visible=not spidey.memoryViewer.visible end},
@@ -1448,7 +1458,8 @@ function Menu:update()
     end
     
     -- Handle input (could be better)
-    if (joypad_data[1]['up_press'] or (joypad_data[1]['up_press_time'] > 20 and joypad_data[1]['up_press_time'] % 5 ==0)) then
+    --if (joypad_data[1]['up_press'] or (joypad_data[1]['up_press_time'] > 20 and joypad_data[1]['up_press_time'] % 5 ==0)) then
+    if joypad_data[1]['up_press_repeat'] then
         if self.moveaction then
             self.moveaction()
         end
@@ -1458,7 +1469,7 @@ function Menu:update()
         end
         if (self.index<1) then self.index=1 end
     end
-    if (joypad_data[1]['down_press'] or (joypad_data[1]['down_press_time'] > 20 and joypad_data[1]['down_press_time'] % 5 ==0)) then
+    if joypad_data[1]['down_press_repeat'] then
         if self.moveaction then
             self.moveaction()
         end
@@ -1471,10 +1482,10 @@ function Menu:update()
     if joypad_data[1]['A_press'] or joypad_data[1]['1_press'] then
         self.items[self.index].action()
     end
-    if joypad_data[1]['left_press'] and self.items[self.index].left then
+    if joypad_data[1]['left_press_repeat'] and self.items[self.index].left then
         self.items[self.index].left()
     end
-    if joypad_data[1]['right_press'] and self.items[self.index].right then
+    if joypad_data[1]['right_press_repeat'] and self.items[self.index].right then
         self.items[self.index].right()
     end
 
