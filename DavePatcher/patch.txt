@@ -136,11 +136,13 @@ hex 1b3cf 291909
 # starting lives
 hex 1c472 00
 
+# ???
 hex 1c512 eaea
 
 # Scores don't flash (but headings are shown)
 hex 1cb0a c9
 
+# ???
 hex 1d238 09
 hex 1d23b 19
 
@@ -153,7 +155,5 @@ hex 1d23b 19
 
 //# show ending instead of start
 //hex 1c3e7 06
-
-find hex a900
 
 
