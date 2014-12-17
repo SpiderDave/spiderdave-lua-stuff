@@ -37,7 +37,7 @@ class=function(name)
 end
 
 local spidey={
-    version="2013.1.15",
+    version="2014.12.17",
     emu={},
     nes={},
     Menu={},
