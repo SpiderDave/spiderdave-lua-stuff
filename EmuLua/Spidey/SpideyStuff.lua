@@ -45,6 +45,7 @@ local spidey={
     windows={},
     game={},
     classes={},
+    class=class,
     debug={
         showInput=nil
     },
@@ -65,7 +66,11 @@ local spidey={
         nobk=false,
         capture=false
     },
-    showSelect=not true
+    showSelect=not true,
+    cheats = {
+        enabled=true,
+        active=false,
+    },
 }
 
 if (FCEU) then
@@ -159,7 +164,7 @@ enableddisabled={[true]="enabled",[false]="disabled"}
 truefalse={[true]='true',[false]='false'}
 yesno={[true]="yes",[false]="no"}
 
-prettyValue=function(v)
+local prettyValue=function(v)
     if v==true then
         return "enabled"
     elseif v==false then
@@ -171,6 +176,27 @@ prettyValue=function(v)
     end
 end
 
+local onOff=function(v)
+    if v==0 then return "off" else return "on" end
+end
+
+spidey.drawCircle=function(xCenter,yCenter,radius,color,width)
+    local coords={}
+    local r2=radius*radius
+    local x,y
+    for x = -radius, radius do
+        y=math.sqrt(r2-x*x)+.5
+        coords[x+radius+1]={xCenter+x,yCenter+y}
+        coords[radius*3-x+2]={xCenter+x,yCenter-y}
+        gui.drawline(xCenter+x,yCenter+y,xCenter+x,yCenter-y,color)
+    end
+    --console.canvasDrawPoly(coords,color,width or 1)
+    for i=2,#coords,2 do
+        --gui.drawline(coords[i][1],coords[i][2],coords[i-1][1],coords[i-1][2])
+        --gui.drawpixel(coords[i][1],coords[i][2],color)
+    end
+    
+end
 
 spidey.emu.getTitle=function()
     if snes9x then
@@ -221,7 +247,7 @@ if not memory.readword then
     function memory.readword(a) return memory.readbyte(a) + 256 * memory.readbyte(a+1) end
 end
 
-function memory.getregisters()
+function spidey.getregisters()
     return memory.getregister("a"),memory.getregister("x"),memory.getregister("y"),memory.getregister("s"),memory.getregister("p"),memory.getregister("pc")
 end
 
@@ -793,7 +819,7 @@ function spidey.imgEdit.update()
         --if spidey.inp.leftbutton_release and not spidey.inp.leftbutton_click then
         if spidey.inp.leftbutton_release then
             local clip
-            clip=gdfromscreen(spidey.inp.selection.x,spidey.inp.selection.y,spidey.inp.selection.width,spidey.inp.selection.height, {transparent=spidey.imgEdit.transparent,transparentcolor=spidey.imgEdit.transparentColor or "#000000",spidey.imgEdit.noBk or false})
+            clip=gdfromscreen(spidey.inp.selection.x,spidey.inp.selection.y,spidey.inp.selection.width,spidey.inp.selection.height, {transparent=spidey.imgEdit.transparent,transparentcolor=spidey.imgEdit.transparentColor or "#000000",nobk=spidey.imgEdit.nobk or false})
             if clip then
                 spidey.imgEdit.clip=clip
                 spidey.imgEdit.clipWidth=spidey.inp.selection.width
@@ -875,8 +901,10 @@ function gdfromscreen(x,y,w,h,opt)
         for x = 0, w-1 do
             local t=0
             local r, g, b=emu.getscreenpixel(_mx+x,_my+y+0,true)
+            --e40058
             --if opt.transparent==true and r+g+b==0 then t=0x80 end
             --if opt.transparent==true and r==0xe4 and g==0x00 and b==0x58 then r=0;g=0;b=0;t=0x80 end
+            opt.transparentcolor=string.format('#%02X%02X%02X',0Xe4,0x00,0x58)
             if opt.transparent==true and string.format('#%02X%02X%02X',r,g,b)==opt.transparentcolor then r=0;g=0;b=0;t=0x80 end
             gdstr=gdstr..string.format('%02x%02x%02x%02x',t,r,g,b)
         end
@@ -934,9 +962,11 @@ end
 -- Create gd image out of an 8x8, 4-color tile in a pattern table
 -- Note: I stole this from Neill Corlett's Metroid script and modified it to use a pattern table 
 --
-function gdTile(ofs,c0,c1,c2,c3,hflip,double)
-    local gd = "\255\254\0\008\0\008\001\255\255\255\255"
-    if double then gd = "\255\254\0\016\0\016\001\255\255\255\255" end
+function gdTile(ofs,c0,c1,c2,c3,hflip,vflip,double)
+    local gd = ""
+    --local gd_start = "\255\254\0\008\0\008\001\255\255\255\255"
+    local gd_start = "\255\254\0\008\0\008\001\255\255\255\255"
+    if double then gd_start = "\255\254\0\016\0\016\001\255\255\255\255" end
     --memory.writebyte(0x2001,0x00) -- Turn off rendering
     local v0,v1
     for y=0,7 do
@@ -1000,11 +1030,18 @@ function gdTile(ofs,c0,c1,c2,c3,hflip,double)
                 v0 = v0 * 2
             end
         end
-        gd = gd .. line
-        if double then gd = gd .. line end
+        if vflip then
+            gd = line .. gd
+            if double then gd = line .. gd end
+        else
+            gd = gd .. line
+            if double then gd = gd .. line end
+        end
+        
+        
     end
     --memory.writebyte(0x2001,0x1e) -- Turn on rendering
-    return gd
+    return gd_start..gd
 end
 
 spidey.nes.palette={[0]=
@@ -1079,7 +1116,8 @@ function spidey.nes.getPaletteData()
     _palettedata.color_indexed={}
     _palettedata.colorRGB={}
     local _i
-    for _i=0,25-1 do
+    --for _i=0,25-1 do
+    for _i=0,4*8-1 do
         _palettedata.color_indexed[_i]=memory.readbyteppu(0x3f00+_i)
         _palettedata.colorRGB[_i]=spidey.nes.palette[_palettedata.color_indexed[_i]] or "#000000"
     end
@@ -1396,7 +1434,7 @@ end
 function Menu:addStandard()
     local i
     local t
-    
+    local cheats = cheats or spidey.cheats or {}
     t={
         {text=function() return string.format('Cheats: %s',prettyValue(cheats.active)) end,
         action=function() cheats.active=not cheats.active end},
@@ -1507,7 +1545,7 @@ function Menu:update()
         if #self.items[i].text>self.textWidth then self.textWidth=#self.items[i].text end
     end
     if self.background=="small" then
-        gui.drawbox(self.x-16, self.y, self.x+self.textWidth*8+16, self.y+#self.items*8+2*8, self.background_color, self.background_color)
+        gui.drawbox(self.x-16, self.y, self.x+self.textWidth*8+16, self.y+(self.nVisible or #self.items)*8+2*8, self.background_color, self.background_color)
     end
     
     if self.center then
@@ -1518,22 +1556,24 @@ function Menu:update()
     local _i=0
     local y=self.y+8
     local cursorIndex=self.index
+    local nVisible = 0
     for _i=1,#self.items do
         if (not self.items[_i].condition) or (self.items[_i].condition and self.items[_i].condition()) then
             drawfont(self.x,y,self.font, self.items[_i].text)
             y=y+8
             self.items[_i].disabled=false
+            nVisible = nVisible + 1
         else
             if _i<=cursorIndex then cursorIndex=cursorIndex-1 end
             self.items[_i].disabled=true
             --drawfont(self.x,self.y+8*_i,self.font, "X "..self.items[_i].text)
         end
-        
     end
+    self.nVisible = nVisible
     
     -- Display custom cursor image if set, otherwise use a blinking '-'
     if self.cursor_image then
-        --gui.gdoverlay(self.x-12,self.y+8*self.index,self.cursor_image)
+        gui.gdoverlay(self.x-12,self.y+8*cursorIndex,self.cursor_image)
     else
         if (emu.framecount() % 24>12) then
             --drawfont(self.x-12,self.y+8*self.index,self.font, "-") --cursor
@@ -1561,6 +1601,18 @@ spidey.classes.Address=Address
 spidey.classes.Window=Window
 spidey.classes.Menu=Menu
 
+spidey._draw = function()
+    if spidey.draw then spidey.draw() end
+    if #spidey.windows>0 then
+        for i=1,#spidey.windows do spidey.windows[i]:_draw() end
+    end
+    spidey.paletteViewer.draw()
+    if #spidey.menus>0 then
+        for i=1,#spidey.menus do spidey.menus[i]:update() end
+    end
+end
+gui.register(spidey._draw)
+
 spidey.run=function()
     if math and os then
         math.randomseed(os.time())
@@ -1586,18 +1638,18 @@ spidey.run=function()
         
         gui.text(0,0, "") -- force clear of previous text
         memoryViewerWindow.visible=spidey.memoryViewer.visible
-        spidey.paletteViewer.draw()
         spidey.imgEdit.update() -- process image edit stuff, like capturing
         spidey.cheatEngine.show()
         if spidey.update then spidey.update(spidey.inp,spidey.joy) end
         -- draw any windows
-        if #spidey.windows>0 then
-            for i=1,#spidey.windows do spidey.windows[i]:_draw() end
-        end
+--        if #spidey.windows>0 then
+--            for i=1,#spidey.windows do spidey.windows[i]:_draw() end
+--        end
+--        spidey.paletteViewer.draw()
         -- process any menus
-        if #spidey.menus>0 then
-            for i=1,#spidey.menus do spidey.menus[i]:update() end
-        end
+--        if #spidey.menus>0 then
+--            for i=1,#spidey.menus do spidey.menus[i]:update() end
+--        end
         emu.frameadvance()
     end
     if spidey.unload then spidey.unload() end
@@ -1605,7 +1657,14 @@ end
 
 spidey.imgEdit.captureWindow=captureWindow
 spidey.imgEdit.memoryViewerWindow=memoryViewerWindow
+memory.getregisters = spidey.getregisters
+
+spidey.prettyValue = prettyValue
+spidey.onOff = onOff
+spidey.gdTile = gdTile
 
 --spidey.cheatEngine.reset()
+
+spidey.default_font = font
 
 return spidey
