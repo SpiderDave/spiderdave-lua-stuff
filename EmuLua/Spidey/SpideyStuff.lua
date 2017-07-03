@@ -10,6 +10,7 @@
 --     Organize and comment.  It's a big mess!
 --     Test script for emu and console detection
 --     Move most things to spidey instead of adding to emu etc.
+--     Rework cheat engine menu stuff
 
 local class
 class=function(name)
@@ -46,6 +47,7 @@ local spidey={
     version="2017.04.18",
     emu={},
     nes={},
+    currentFont = 1,
     Menu={},
     menus={},
     windows={},
@@ -78,6 +80,11 @@ local spidey={
         active=false,
     },
 }
+
+spidey.getFont = function(fontNum)
+    return spidey.currentFont
+end
+spidey.setFont = function(fontNum) spidey.currentFont = fontNum end
 
 if (FCEU) then
     spidey.emu.name="FCEU"
@@ -160,6 +167,9 @@ elseif emu and nes and forms then
     emu.message=gui.addmessage
     spidey.emu.type=emu.getsystemid()
 else
+    spidey.screenWidth=256
+    spidey.screenHeight=240
+
     spidey.emu.name='unknown'
     spidey.emu.button_names={'up','down','left','right','A','B','select','start'}
 end
@@ -427,6 +437,56 @@ function spidey.setBreakpointFromWrite(address, fn)
     memory.register(address,1,f)
 end
 
+
+-- Start tracking OAM and fill the spidey.oam variable with data
+function spidey.trackOAM(enable)
+    if enable then
+        spidey.oam={mem="", address=0, sprite ={}}
+        -- OAMADDR
+        spidey.register(0x2003,1, function(opt, address, size)
+            local a,x,y,s,p,pc=memory.getregisters()
+            local opcode = memory.readbyte(pc-3)
+            if opcode == 0x8d then spidey.oam.address = a end
+            if opcode == 0x8e then spidey.oam.address = x end
+            if opcode == 0x8c then spidey.oam.address = y end
+        end)
+
+        -- OAMDATA
+        --spidey.register(0x2004,1, function(opt, address, size)
+        --   local a,x,y,s,p,pc=memory.getregisters()
+        --   v = memory.readbyte(0x2004)
+        --   gui.text(0+9*8, 8+8*1, string.format("a=%02X x=%02X y=%02X s=%02X p=%02X pc=%02X",a,x,y,s,p,pc))
+        --   gui.text(0, 8+8*1, string.format("OAMDATA %02x",v))
+        --end)
+
+        -- OAMDMA
+        spidey.register(0x4014,1, function(opt, address, size)
+            local a,x,y,s,p,pc=memory.getregisters()
+            local opcode = memory.readbyte(pc-3)
+            if opcode == 0x8d then spidey.oam.address = a end
+            if opcode == 0x8e then spidey.oam.address = x end
+            if opcode == 0x8c then spidey.oam.address = y end
+            for i = 0,63 do
+                spidey.oam.sprite[i] = {
+                    [0]=memory.readbyte(spidey.oam.address * 0x100+i*4+0),
+                    memory.readbyte(spidey.oam.address * 0x100+i*4+1),
+                    memory.readbyte(spidey.oam.address * 0x100+i*4+2),
+                    memory.readbyte(spidey.oam.address * 0x100+i*4+3),
+                }
+                spidey.oam.sprite[i].y = spidey.oam.sprite[i][0]
+                spidey.oam.sprite[i].x = spidey.oam.sprite[i][3]
+                spidey.oam.sprite[i].tile = spidey.oam.sprite[i][1]
+            end
+        end)
+    else
+        spidey.oam = nil
+        memory.register(0x2003,1)
+        memory.register(0x2004,1)
+        memory.register(0x4014,1)
+    end
+end
+
+
 --fonts={}
 --fonts[letters]="ABCDEFGHIJKLMNOPQRSTUVWXYZ.,?!abcdefghijklmnopqrstuvwxyz-*@#0123456789“”:&''\"             "
 --font_letters="ABCDEFGHIJKLMNOPQRSTUVWXYZ.,?!abcdefghijklmnopqrstuvwxyz-*@#0123456789“”:&''\"             "
@@ -631,7 +691,7 @@ end
 -- load a font from .gd files.  DEPRECIATED
 function loadfont(path)
     -- takes path to font files, ending in \
-    font={}
+    local font={}
     str="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     --str=font.letters
     for i = 1, #str do
@@ -664,6 +724,9 @@ end
 
 -- draw font loaded with loadfont function
 function drawfont(x,y,font,str)
+    if type(font) == "number" then
+        font = spidey.font[font]
+    end
     if not gui.gdoverlay then
         gui.text(x,y,str,"black","white")
         return
@@ -1425,7 +1488,7 @@ function spidey.cheatEngine.show()
         end
         --gui.text(8, 8+8*2+8*i, string.format("%012X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value) ,"white","clear")
         --drawfont(8,8+8*i,spidey.menu.font, string.format("%04X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value))
-        drawfont(8,8+8*i,font[current_font], string.format("%04X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value))
+        drawfont(8,8+8*i,spidey.getFont(), string.format("%04X %02X",spidey.cheatEngine.cheats[i].address, spidey.cheatEngine.cheats[i].value))
     end
 end
 
@@ -1778,6 +1841,15 @@ spidey.run=function()
     
     if spidey.load then spidey.load() end
     while true do
+        if spidey.error then
+            while true do
+                spidey.update = nil
+                spidey.draw = nil
+                spidey.error()
+                emu.frameadvance()
+            end
+        end
+
         spidey.emu.getTitle()
         if spidey.game.title~=spidey.game.lastTitle then
             if spidey.titleChange then spidey.titleChange(spidey.game.title) end
@@ -1815,10 +1887,11 @@ spidey.gdTile = gdTile
 
 --spidey.cheatEngine.reset()
 
-spidey.default_font = font
-
 -- depreciated
 hex2bin = spidey.hex2bin
 bin2hex = spidey.bin2hex
+
+spidey.default_font = require("Spidey.default_font")
+spidey.font = spidey.default_font
 
 return spidey
