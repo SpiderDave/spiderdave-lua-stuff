@@ -4,6 +4,12 @@
 -- Primarily for FCEUX, but I want to make it more generic, 
 -- starting with limited support for VBA.
 --
+-- ToDo:
+--     Make everything local, depreciate/remove global
+--     Fix glitchyness of gdTile
+--     Organize and comment.  It's a big mess!
+--     Test script for emu and console detection
+--     Move most things to spidey instead of adding to emu etc.
 
 local class
 class=function(name)
@@ -37,7 +43,7 @@ class=function(name)
 end
 
 local spidey={
-    version="2014.12.17",
+    version="2017.04.18",
     emu={},
     nes={},
     Menu={},
@@ -251,6 +257,22 @@ function spidey.getregisters()
     return memory.getregister("a"),memory.getregister("x"),memory.getregister("y"),memory.getregister("s"),memory.getregister("p"),memory.getregister("pc")
 end
 
+function spidey.reloadfile()
+    if emu.loadrom then
+        if pcall(function() emu.loadrom() end) then
+            -- emu.loadrom() working
+            return true
+        else
+            -- emu.loadrom() requires an argument on this version, need later one
+            return false
+        end
+    else
+        -- emu.loadrom() not available
+        return false
+    end
+end
+
+
 function memory.readbyteppu(a)
     memory.writebyte(0x2001,0x00) -- Turn off rendering
     memory.readbyte(0x2002) -- PPUSTATUS (reset address latch)
@@ -276,7 +298,6 @@ function memory.readbytesppu(a,l)
         if (a+i) < 0x3f00 then 
             dummy=memory.readbyte(0x2007) -- PPUDATA (discard contents of internal buffer if not reading palette area)
         end
-        --ret=ret..memory.readbyte(0x2007) -- PPUDATA
         ret=ret..string.char(memory.readbyte(0x2007)) -- PPUDATA
     end
     memory.writebyte(0x2001,0x1e) -- Turn on rendering
@@ -301,7 +322,6 @@ function memory.writebytesppu(a,str)
         memory.readbyte(0x2002) -- PPUSTATUS (reset address latch)
         memory.writebyte(0x2006,math.floor((a+i)/0x100)) -- PPUADDR high byte
         memory.writebyte(0x2006,(a+i) % 0x100) -- PPUADDR low byte
-        --memory.writebyte(0x2007,0x40) -- PPUDATA
         memory.writebyte(0x2007,string.byte(str,i+1)) -- PPUDATA
     end
     
@@ -332,6 +352,55 @@ function memory.writebytes(address,str)
             memory.writebyte(address+i,string.byte(str,i+1))
         end
     end
+end
+
+local fcUnique={}
+local depth = {}
+local pc = {}
+local alt = {}
+
+function spidey.register(address, range, f, fName)
+    local unique = math.random(1000)
+    memory.register(address, range, function(...)
+        --depth[unique] = (depth[unique] or 0) +1
+        --emu.message(string.format("fc=%02x fc1=%02x",fc, frameCount1 or 0))
+        --local fcUnique, depth, pc = smb3.fcUnique, smb3.depth, smb3.pc
+        
+        if (fcUnique[unique] ~= emu.framecount())  then
+            alt[unique]=100
+        end
+        
+        
+        if fcUnique[unique] == emu.framecount() and pc[unique] == memory.getregister("pc") then
+            --depth[unique] = (depth[unique] or 0) -1
+            --fcUnique[unique] = fcUnique[unique]+1
+            return
+        elseif fcUnique[unique] == emu.framecount() then
+            alt[unique] = alt[unique]+1
+        else
+            alt[unique]=0
+        end
+        
+        if (depth[unique] or 0)>0 then return end
+        
+        local opt = {pc = memory.getregister("pc")}
+        
+        depth[unique] = (depth[unique] or 0) +1
+        if depth[unique] == 1 then 
+            f(opt, ...)
+        end
+
+        depth[unique] = (depth[unique] or 0) -1
+        
+        fcUnique[unique] = emu.framecount()
+        pc[unique] = memory.getregister("pc")
+    end)
+end
+
+function spidey.registerExec(address, range, f)
+    memory.registerexec(address, range, function(...)
+        f(...)
+    end)
 end
 
 -- sets a custom breakpoint thing
@@ -649,7 +718,7 @@ function spidey.recolorImage(img, oldColor, newColor)
     return newStr
 end
 
-function bin2hex(str)
+function spidey.bin2hex(str)
     local output=''
     for i = 1, #str do
         local c = string.byte(str:sub(i,i))
@@ -658,7 +727,7 @@ function bin2hex(str)
     return output
 end
 
-function hex2bin(str)
+function spidey.hex2bin(str)
     local output=''
     for i = 1, (#str/2) do
         local c = str:sub(i*2-1,i*2)
@@ -744,6 +813,36 @@ function spidey.paletteViewer.draw()
             y=16
         end
     end
+end
+
+class "TextQueue" {
+    data = {},
+    nLines = 12,
+}
+
+function TextQueue:add(...)
+    local text = string.format(...)
+    --text = text or ""
+
+    if #self.data >= self.nLines then
+        table.remove(self.data, 1)
+        --self.data:remove(1)
+    end
+
+
+--    if #self.data >= self.nLines then
+--        local t = {}
+--        for i = 2,#self.data do
+--            t[i-1] = self.data[i]
+--        end
+--        self.data = t
+--    end
+    --self.data[#self.data+1] = string.format("%02x %s",#self.data+1,text)
+    self.data[#self.data+1] = text
+end
+
+function TextQueue:clear()
+    self.data = {}
 end
 
 class "Window" {
@@ -912,7 +1011,8 @@ function gdfromscreen(x,y,w,h,opt)
     --if opt.nobk then emu.setrenderplanes(true, true) end
     savestate.load(save1)
     save1=nil
-    gdstr=hex2bin('FFFE00'..string.format("%02x", w)..'00'..string.format("%02x", h)..'01'..'FFFFFFFF'..gdstr)
+    -- gdstr=hex2bin('FFFE00'..string.format("%02x", w)..'00'..string.format("%02x", h)..'01'..'FFFFFFFF'..gdstr)
+    gdstr=hex2bin('FFFE'..string.format("%04x%04x", w,h)..'01'..'FFFFFFFF'..gdstr) -- should work
     return gdstr
 end
 
@@ -957,31 +1057,77 @@ function button(x,y,txt,toggle)
 end
 
 
+-- Takes a palette in various forms and returns it in form like "#ffffff"
+local coercePalette = function(p)
+    local p = p
+    if type(p) == "number" then
+        p = string.format("#%06x", p)
+    elseif type(p) == "string" then
+        if #p == 4 then
+            -- assume binary
+            p = "#"..bin2hex(p)
+        elseif p:sub(1,1) == "#" then
+            p = p
+        else
+            p = "#"..p
+        end
+    end
+--    gui.text(100,100,string.format("%s ",p),"red","solid")
+--    emu.pause()
+
+    return p
+end
+
 --------------------------------------------------------------------------------
 --
 -- Create gd image out of an 8x8, 4-color tile in a pattern table
 -- Note: I stole this from Neill Corlett's Metroid script and modified it to use a pattern table 
 --
 function gdTile(ofs,c0,c1,c2,c3,hflip,vflip,double)
+    
+    c0 = coercePalette(c0):sub(2)
+    c1 = coercePalette(c1):sub(2)
+    c2 = coercePalette(c2):sub(2)
+    c3 = coercePalette(c3):sub(2)
+
+    
+--    gui.text(100,100,string.format("%s (%s)",c0,#c0),"red","solid")
+--    emu.pause()
+    c0 = hex2bin(c0)
+    c1 = hex2bin(c1)
+    c2 = hex2bin(c2)
+    c3 = hex2bin(c3)
+    
     local gd = ""
     --local gd_start = "\255\254\0\008\0\008\001\255\255\255\255"
     local gd_start = "\255\254\0\008\0\008\001\255\255\255\255"
     if double then gd_start = "\255\254\0\016\0\016\001\255\255\255\255" end
     --memory.writebyte(0x2001,0x00) -- Turn off rendering
     local v0,v1
+
     for y=0,7 do
         --local v0 = rom.readbyte(ofs + y    )
         --local v1 = rom.readbyte(ofs + y + 8)
         --local v0 = memory.readbyteppu(ofs + y    )
         --local v1 = memory.readbyteppu(ofs + y + 8)
+        
+        --memory.readbyte(0x2002) -- PPUSTATUS (reset address latch)
+        
         memory.writebyte(0x2006,math.floor((ofs+y)/0x100)) -- PPUADDR high byte
         memory.writebyte(0x2006,(ofs + y) % 0x100) -- PPUADDR low byte
         dummy = memory.readbyte(0x2007) -- PPUDATA (discard internal buffer contents)
         v0 = memory.readbyte(0x2007) -- PPUDATA
+        
+        --memory.readbyte(0x2002) -- PPUSTATUS (reset address latch)
+        
         memory.writebyte(0x2006,math.floor((ofs+y+8)/0x100)) -- PPUADDR high byte
         memory.writebyte(0x2006,(ofs + y+8) % 0x100) -- PPUADDR low byte
         dummy = memory.readbyte(0x2007) -- PPUDATA (discard internal buffer contents)
         v1 = memory.readbyte(0x2007) -- PPUDATA
+        
+        gui.text(10,10,string.format("%02x %02x",v0,v1),"red","solid")
+        --emu.pause()
+        if ppu then emu.pause() end
         
         local line = ""
         if hflip then
@@ -1405,7 +1551,8 @@ class "Menu" {
     background=true,
     index=1,
     items={},
-    background_color='#00000080'
+    background_color='#00000080',
+    border_color=nil,
 }
 
 function Menu:init()
@@ -1528,7 +1675,9 @@ function Menu:update()
     end
 
     -- Draw the menu
-    if self.background==true then gui.drawbox(0, 0, spidey.screenWidth-1,spidey.screenHeight-1, self.background_color, self.background_color) end
+    if self.background==true then
+        gui.drawbox(0, 0, spidey.screenWidth-1,spidey.screenHeight-1, self.background_color, self.background_color)
+    end
     
     self.textWidth=0
     
@@ -1545,7 +1694,7 @@ function Menu:update()
         if #self.items[i].text>self.textWidth then self.textWidth=#self.items[i].text end
     end
     if self.background=="small" then
-        gui.drawbox(self.x-16, self.y, self.x+self.textWidth*8+16, self.y+(self.nVisible or #self.items)*8+2*8, self.background_color, self.background_color)
+        gui.drawbox(self.x-16, self.y, self.x+self.textWidth*8+16, self.y+(self.nVisible or #self.items)*8+2*8, self.background_color, self.border_color or self.background_color)
     end
     
     if self.center then
@@ -1599,6 +1748,7 @@ end
 spidey.classes.class=class --this isn't actually a class, but the class function itself.
 spidey.classes.Address=Address
 spidey.classes.Window=Window
+spidey.classes.TextQueue = TextQueue
 spidey.classes.Menu=Menu
 
 spidey._draw = function()
@@ -1666,5 +1816,9 @@ spidey.gdTile = gdTile
 --spidey.cheatEngine.reset()
 
 spidey.default_font = font
+
+-- depreciated
+hex2bin = spidey.hex2bin
+bin2hex = spidey.bin2hex
 
 return spidey
