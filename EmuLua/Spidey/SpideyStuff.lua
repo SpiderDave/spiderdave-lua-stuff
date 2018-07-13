@@ -75,6 +75,10 @@ local spidey={
         capture=false
     },
     showSelect=not true,
+    selection = {
+        snap = 1,
+        visible = false,
+    },
     cheats = {
         enabled=true,
         active=false,
@@ -82,7 +86,7 @@ local spidey={
 }
 
 spidey.getFont = function(fontNum)
-    return spidey.currentFont
+    return fontNum or spidey.currentFont
 end
 spidey.setFont = function(fontNum) spidey.currentFont = fontNum end
 
@@ -258,6 +262,16 @@ end
 
 if rom then
     function rom.readword(a) return rom.readbyte(a) + 256 * rom.readbyte(a+1) end
+
+    function rom.readbytes(address,n)
+        local i
+        ret=""
+        for i = 0, n-1 do
+            ret=ret..string.char(rom.readbyte(address+i))
+        end
+        return ret
+    end
+
 end
 if not memory.readword then
     function memory.readword(a) return memory.readbyte(a) + 256 * memory.readbyte(a+1) end
@@ -265,6 +279,19 @@ end
 
 function spidey.getregisters()
     return memory.getregister("a"),memory.getregister("x"),memory.getregister("y"),memory.getregister("s"),memory.getregister("p"),memory.getregister("pc")
+end
+
+function spidey.setregisters(a,x,y,s,p,pc)
+    memory.setregister("a",a)
+    memory.setregister("x",x)
+    memory.setregister("y",y)
+    memory.setregister("s",s)
+    memory.setregister("p",p)
+    memory.setregister("pc",pc)
+end
+
+function spidey.getRomSize()
+    return (16384 * rom.readbyte(0x04) + 8192 * rom.readbyte(0x05)) + 0x10;
 end
 
 function spidey.reloadfile()
@@ -282,6 +309,11 @@ function spidey.reloadfile()
     end
 end
 
+function memory.setppuaddr(a)
+    memory.readbyte(0x2002) -- PPUSTATUS (reset address latch)
+    memory.writebyte(0x2006,math.floor(a/0x100)) -- PPUADDR high byte
+    memory.writebyte(0x2006,a % 0x100) -- PPUADDR low byte
+end
 
 function memory.readbyteppu(a)
     memory.writebyte(0x2001,0x00) -- Turn off rendering
@@ -337,7 +369,6 @@ function memory.writebytesppu(a,str)
     
     memory.writebyte(0x2001,0x1e) -- Turn on rendering
 end
-
 
 -- note: the usual memory.readbyterange is inconsistant.  table or string.
 function memory.readbytes(address,n)
@@ -437,11 +468,40 @@ function spidey.setBreakpointFromWrite(address, fn)
     memory.register(address,1,f)
 end
 
+function spidey.gridPos(n)
+    local y = math.floor(n / 16)
+    local x = (n - (y*16))
+    return x,y
+end
 
 -- Start tracking OAM and fill the spidey.oam variable with data
 function spidey.trackOAM(enable)
     if enable then
-        spidey.oam={mem="", address=0, sprite ={}}
+        spidey.oam={mem="", address=0, spriteSize=0, sprite ={patternTable=0}}
+
+        -- PPUCTRL
+        spidey.register(0x2000,1, function(opt, address, size)
+            local a,x,y,s,p,pc=memory.getregisters()
+            local v
+
+            local opcode = memory.readbyte(pc-3)
+            if opcode == 0x8d then v = a end
+            if opcode == 0x8e then v = x end
+            if opcode == 0x8c then v = y end
+            
+            if v==bit.bor(v,math.pow(2,3)) then
+                spidey.oam.sprite.patternTable = 1
+            else
+                spidey.oam.sprite.patternTable = 0
+            end
+            if v==bit.bor(v,0x20) then
+                spidey.oam.spriteSize = 1
+                --spidey.oam.sprite.patternTable = 0
+            else
+                spidey.oam.spriteSize = 0
+            end
+        end)
+
         -- OAMADDR
         spidey.register(0x2003,1, function(opt, address, size)
             local a,x,y,s,p,pc=memory.getregisters()
@@ -466,6 +526,7 @@ function spidey.trackOAM(enable)
             if opcode == 0x8d then spidey.oam.address = a end
             if opcode == 0x8e then spidey.oam.address = x end
             if opcode == 0x8c then spidey.oam.address = y end
+            spidey.oam.sprite.count = 0
             for i = 0,63 do
                 spidey.oam.sprite[i] = {
                     [0]=memory.readbyte(spidey.oam.address * 0x100+i*4+0),
@@ -476,13 +537,20 @@ function spidey.trackOAM(enable)
                 spidey.oam.sprite[i].y = spidey.oam.sprite[i][0]
                 spidey.oam.sprite[i].x = spidey.oam.sprite[i][3]
                 spidey.oam.sprite[i].tile = spidey.oam.sprite[i][1]
+                spidey.oam.sprite[i].hide = false
+                --if spidey.oam.sprite[i].x>=0xf9 then spidey.oam.sprite[i].hide = true end
+                if spidey.oam.sprite[i].y>=0xef then spidey.oam.sprite[i].hide = true end
+                if spidey.oam.sprite[i].hide ~=true then
+                    spidey.oam.sprite.count = spidey.oam.sprite.count + 1
+                end
             end
         end)
     else
         spidey.oam = nil
-        memory.register(0x2003,1)
-        memory.register(0x2004,1)
-        memory.register(0x4014,1)
+        memory.register(0x2000,1) --PPUCTRL
+        memory.register(0x2003,1) --OAMADDR
+        memory.register(0x2004,1) --OAMDATA
+        memory.register(0x4014,1) --OAMDMA
     end
 end
 
@@ -583,12 +651,12 @@ end
 --
 input_data={['current']=input.get()}
 function input_read()
-    input_data['old']=input_data.current
+    input_data.old=input_data.current
     input_data.current=input.get()
     if input_data.current.X then
         -- bizhawk uses X Y not xmouse ymouse
         input_data.current.xmouse=input_data.current.X
-        input_data.current.Ymouse=input_data.current.Y
+        input_data.current.ymouse=input_data.current.Y
     end
     
     input_data.current.pageup_press=input_data.current.pageup and not input_data.old.pageup
@@ -621,10 +689,10 @@ function input_read()
     end
     
     -- snap 8
-    if input_data.current.xmouse_down and input_data.current.ymouse_down then
-        input_data.current.xmouse_down=input_data.current.xmouse_down-input_data.current.xmouse_down % 8
-        input_data.current.ymouse_down=input_data.current.ymouse_down-input_data.current.ymouse_down % 8
-    end
+--    if input_data.current.xmouse_down and input_data.current.ymouse_down then
+--        input_data.current.xmouse_down=input_data.current.xmouse_down-input_data.current.xmouse_down % 8
+--        input_data.current.ymouse_down=input_data.current.ymouse_down-input_data.current.ymouse_down % 8
+--    end
     
     if input_data.current.xmouse==input_data.old.xmouse and input_data.current.ymouse==input_data.old.ymouse then
         input_data.current.mouseidle=math.min((input_data.old.mouseidle or 0) +1,1000)
@@ -633,18 +701,21 @@ function input_read()
     end
     
     if input_data.current.leftbutton_release then
-        if input_data.current.xmouse==input_data.current.xmouse_down and input_data.current.ymouse==input_data.current.ymouse_down then
+        if (input_data.current.xmouse==input_data.old.xmouse) and (input_data.current.ymouse==input_data.old.ymouse) then
             -- Click is pressing and releasing without movement
             input_data.current.leftbutton_click=true
         end
+--        if (input_data.current.xmouse==input_data.current.xmouse_down) and (input_data.current.ymouse==input_data.current.ymouse_down) then
+--            input_data.current.leftbutton_click=true
+--        end
         input_data.current.xmouse_up=input_data.current.xmouse
         input_data.current.ymouse_up=input_data.current.ymouse
         
         -- snap 8
-        if input_data.current.xmouse_up and input_data.current.ymouse_up then
-            input_data.current.xmouse_up=(input_data.current.xmouse_up+4)-(input_data.current.xmouse_up+4) % 8
-            input_data.current.ymouse_up=(input_data.current.ymouse_up+4)-(input_data.current.ymouse_up+4) % 8
-        end
+--        if input_data.current.xmouse_up and input_data.current.ymouse_up then
+--            input_data.current.xmouse_up=(input_data.current.xmouse_up+4)-(input_data.current.xmouse_up+4) % 8
+--            input_data.current.ymouse_up=(input_data.current.ymouse_up+4)-(input_data.current.ymouse_up+4) % 8
+--        end
         
         if input_data.current.xmouse_up>input_data.current.xmouse_down then
             input_data.current.selection.x=input_data.current.xmouse_down
@@ -665,20 +736,44 @@ function input_read()
         input_data.current.ymouse_up=input_data.old.ymouse_up
     end
 
-    if spidey.showSelect and input_data.current.leftclick then
-        x2=input_data.current.xmouse
-        y2=input_data.current.ymouse
+    if (spidey.selection.visible or spidey.showSelect) and input_data.current.leftclick then
+        local x = input_data.current.xmouse_down
+        local y = input_data.current.ymouse_down
+        local x2 = input_data.current.xmouse
+        local y2 = input_data.current.ymouse
+        
+        spidey.selection.snap = 1
+        
+        x=(x-0)-(x-0) % spidey.selection.snap
+        y=(y-0)-(y-0) % spidey.selection.snap
+--        x2=(x2+4)-((x2+4)%8)
+--        y2=(y2+4)-((y2+4)%8)
+        
         -- snap 8
-        x2=(x2+4)-(x2+4) % 8
-        y2=(y2+4)-(y2+4) % 8
-        gui.text(input_data.current.xmouse_down,input_data.current.ymouse_down-8,string.format('(%s,%s) %sx%s',input_data.current.xmouse_down, input_data.current.ymouse_down,math.abs(x2-input_data.current.xmouse_down),math.abs(y2-input_data.current.ymouse_down)), "white", "black")
-        gui.drawbox(input_data.current.xmouse_down, input_data.current.ymouse_down, x2, y2, 'clear',"white")
+        x2=(x2+4)-(x2+4) % spidey.selection.snap
+        y2=(y2+4)-(y2+4) % spidey.selection.snap
+        local w = math.abs(x2-x)
+        local h = math.abs(y2-y)
+        
+        spidey.selection.x = x
+        spidey.selection.y = y
+        spidey.selection.width = w
+        spidey.selection.height = h
+        
+        -- Register this as a drawing function after spidey.draw() so it's on top
+        spidey.registerDrawingFunction("selection", function()
+            gui.text(input_data.current.xmouse_down,input_data.current.ymouse_down-8,string.format('(%s,%s) %sx%s',x, y, w,h), "white", "black")
+            gui.drawbox(x, y, x2, y2, 'clear',"white")
+        end)
+    else
+        spidey.unregisterDrawingFunction("selection")
     end
 
     return input_data.current
 end
 
 function input_showselect(show)
+    spidey.selection.visible = show
     if show==true then
         input_data.showselect=true
         spidey.showSelect=true
@@ -977,7 +1072,8 @@ end
 
 function spidey.imgEdit.update()
     if spidey.imgEdit.capture then
-        spidey.showSelect=true
+        spidey.showSelect=true -- depreciated
+        spidey.selection.visible = true
         --if spidey.inp.leftbutton_release and not spidey.inp.leftbutton_click then
         if spidey.inp.leftbutton_release then
             local clip
@@ -1652,7 +1748,8 @@ function Menu:addStandard()
         {text=function() return string.format('Capture: %s',prettyValue(spidey.imgEdit.capture)) end,
         action=function()
             spidey.imgEdit.capture=not spidey.imgEdit.capture
-            spidey.showSelect=spidey.imgEdit.capture
+            spidey.showSelect=spidey.imgEdit.capture -- depreciated
+            spidey.selection.visible=spidey.imgEdit.capture
         end},
         
         {text=function() return string.format('Debug: %s',prettyValue(spidey.debug.enabled)) end,
@@ -1814,8 +1911,43 @@ spidey.classes.Window=Window
 spidey.classes.TextQueue = TextQueue
 spidey.classes.Menu=Menu
 
+-- registered drawing functions
+spidey.drawFunctions = {}
+
+function spidey.registerDrawingFunction(name, f)
+    for i,v in ipairs(spidey.drawFunctions) do
+        for k,v in pairs(v) do
+            if k==name then
+                spidey.drawFunctions[i] = {[name]=f}
+                return
+            end
+        end
+    end
+    spidey.drawFunctions[#spidey.drawFunctions+1] = {[name]=f}
+end
+
+function spidey.unregisterDrawingFunction(name)
+    for i,v in ipairs(spidey.drawFunctions) do
+        for k,v in pairs(v) do
+            if k==name then
+                spidey.drawFunctions[i] = nil
+                return
+            end
+        end
+    end
+end
+
+spidey.registerDrawingFunction("draw" , function() if spidey.draw then spidey.draw() end end)
+
 spidey._draw = function()
-    if spidey.draw then spidey.draw() end
+    -- perform registered drawing functions, including our wrapper for spidey.draw()
+    for _,v in ipairs(spidey.drawFunctions) do
+        for _,v in pairs(v) do
+            v()
+            break
+        end
+    end
+    
     if #spidey.windows>0 then
         for i=1,#spidey.windows do spidey.windows[i]:_draw() end
     end
@@ -1827,6 +1959,13 @@ end
 gui.register(spidey._draw)
 
 spidey.run=function()
+
+    spidey.time = 0 -- time in seconds
+    spidey.counter = 0
+    spidey.tick = false
+    spidey.fps = 30
+    start_time = os.clock()
+    
     if math and os then
         math.randomseed(os.time())
         math.random() math.random()
@@ -1849,6 +1988,17 @@ spidey.run=function()
                 emu.frameadvance()
             end
         end
+        
+        spidey.time=os.clock()-start_time
+        if spidey.counter < math.floor(spidey.time*spidey.fps) then
+            spidey.counter = spidey.counter + 1
+            spidey.tick = true
+            --spidey.timer.update()
+            if spidey.onTick then spidey.onTick() end
+        else
+            spidey.tick = not true
+        end
+
 
         spidey.emu.getTitle()
         if spidey.game.title~=spidey.game.lastTitle then
@@ -1877,9 +2027,17 @@ spidey.run=function()
     if spidey.unload then spidey.unload() end
 end
 
+function spidey.writeToFile(file, data)
+    local f = io.open(file,"w")
+    f:write(data)
+    f:close()
+end
+spidey.getFileContents = getfilecontents
+
 spidey.imgEdit.captureWindow=captureWindow
 spidey.imgEdit.memoryViewerWindow=memoryViewerWindow
 memory.getregisters = spidey.getregisters
+memory.setregisters = spidey.setregisters
 
 spidey.prettyValue = prettyValue
 spidey.onOff = onOff
