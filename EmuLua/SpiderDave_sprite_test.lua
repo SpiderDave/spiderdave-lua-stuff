@@ -9,7 +9,7 @@ end
 --ignoreErrors = true
 
 local useGD=false
-local useExtraWindow=false
+local useExtraWindow=true
 
 if useGD then
     if not pcall(function()
