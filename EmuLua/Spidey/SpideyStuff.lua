@@ -395,6 +395,32 @@ function memory.writebytes(address,str)
     end
 end
 
+-- Write a string of bytes from rom
+function rom.readbytes(address,n)
+    local i
+    ret=""
+    for i = 0, n-1 do
+        ret=ret..string.char(rom.readbyte(address+i))
+    end
+    return ret
+end
+
+-- Write a string of bytes to rom
+function rom.writebytes(address,str)
+    local i
+    local c
+    if type(str)=="table" then
+        for i = 0, #str-1 do
+            rom.writebyte(address+i,str[i+1])
+        end
+    else
+        for i = 0, #str-1 do
+            rom.writebyte(address+i,string.byte(str,i+1))
+        end
+    end
+end
+
+
 local fcUnique={}
 local depth = {}
 local pc = {}
@@ -494,12 +520,17 @@ function spidey.trackOAM(enable)
             else
                 spidey.oam.sprite.patternTable = 0
             end
+            
             if v==bit.bor(v,0x20) then
                 spidey.oam.spriteSize = 1
                 --spidey.oam.sprite.patternTable = 0
             else
                 spidey.oam.spriteSize = 0
             end
+            
+            
+            --spidey.oam.base_nametable_address = math.fmod(v,4)
+            
         end)
 
         -- OAMADDR
@@ -731,6 +762,7 @@ function input_read()
             input_data.current.selection.y=input_data.current.ymouse_up
             input_data.current.selection.height=input_data.current.ymouse_down-input_data.current.ymouse_up
         end
+        --emu.message(string.format("x=%s,y=%s, w=%s, h=%s",input_data.current.selection.x, input_data.current.selection.y, input_data.current.selection.width, input_data.current.selection.height))
     else
         input_data.current.xmouse_up=input_data.old.xmouse_up
         input_data.current.ymouse_up=input_data.old.ymouse_up
@@ -742,7 +774,10 @@ function input_read()
         local x2 = input_data.current.xmouse
         local y2 = input_data.current.ymouse
         
-        spidey.selection.snap = 1
+        if x>x2 then x,x2=x2,x end
+        if y>y2 then y,y2=y2,y end
+        
+        --spidey.selection.snap = 1
         
         x=(x-0)-(x-0) % spidey.selection.snap
         y=(y-0)-(y-0) % spidey.selection.snap
@@ -752,8 +787,9 @@ function input_read()
         -- snap 8
         x2=(x2+4)-(x2+4) % spidey.selection.snap
         y2=(y2+4)-(y2+4) % spidey.selection.snap
-        local w = math.abs(x2-x)
-        local h = math.abs(y2-y)
+        local w = math.abs(x2-x) % spidey.selection.snap
+        local h = math.abs(y2-y) % spidey.selection.snap
+        
         
         spidey.selection.x = x
         spidey.selection.y = y
@@ -762,7 +798,8 @@ function input_read()
         
         -- Register this as a drawing function after spidey.draw() so it's on top
         spidey.registerDrawingFunction("selection", function()
-            gui.text(input_data.current.xmouse_down,input_data.current.ymouse_down-8,string.format('(%s,%s) %sx%s',x, y, w,h), "white", "black")
+            --gui.text(input_data.current.xmouse_down,input_data.current.ymouse_down-8,string.format('(%s,%s) %sx%s',x, y, w,h), "white", "black")
+            gui.text(spidey.selection.x+1,spidey.selection.y-8,string.format('(%s,%s) %sx%s',x, y, w,h), "white", "black")
             gui.drawbox(x, y, x2, y2, 'clear',"white")
         end)
     else
@@ -1077,6 +1114,12 @@ function spidey.imgEdit.update()
         --if spidey.inp.leftbutton_release and not spidey.inp.leftbutton_click then
         if spidey.inp.leftbutton_release then
             local clip
+            if spidey.selection.snap>1 then
+                spidey.inp.selection.x = spidey.inp.selection.x - (spidey.inp.selection.x % spidey.selection.snap)
+                spidey.inp.selection.y = spidey.inp.selection.y - (spidey.inp.selection.y % spidey.selection.snap)
+                spidey.inp.selection.width = spidey.inp.selection.width - (spidey.inp.selection.width % spidey.selection.snap) +spidey.selection.snap
+                spidey.inp.selection.height = spidey.inp.selection.height - (spidey.inp.selection.height % spidey.selection.snap) +spidey.selection.snap
+            end
             clip=gdfromscreen(spidey.inp.selection.x,spidey.inp.selection.y,spidey.inp.selection.width,spidey.inp.selection.height, {transparent=spidey.imgEdit.transparent,transparentcolor=spidey.imgEdit.transparentColor or "#000000",nobk=spidey.imgEdit.nobk or false})
             if clip then
                 spidey.imgEdit.clip=clip
@@ -1286,7 +1329,7 @@ function gdTile(ofs,c0,c1,c2,c3,hflip,vflip,double)
         
         gui.text(10,10,string.format("%02x %02x",v0,v1),"red","solid")
         --emu.pause()
-        if ppu then emu.pause() end
+        --if ppu then emu.pause() end
         
         local line = ""
         if hflip then
@@ -1445,6 +1488,50 @@ function tprint (tbl, indent)
     end
   end
 end
+
+-- table pretty printer
+-- uses a return value
+-- does not handle infinite loops (except _G)
+-- does not handle weird things used as table keys
+tablePrint = function(t, level)
+    local txt = ""
+    level=level or 0
+    for k,v in pairs(t) do
+        local k=tostring(k)
+        if k=="_G" then
+            txt=txt.."_G {[globals]}\n"
+        else
+            txt=txt..string.rep(" ",level)
+            if type(v)=="string" then
+                txt=txt or ""
+                --txt = txt..string.format('%s = "%s"',k or "*",v or "*")
+                txt = txt..string.format("%s='%s'",k,v)
+            elseif type(v)=="number" then
+                txt = txt..string.format('%s = %s',k,v)
+            elseif type(v)=="boolean" then
+                txt = txt..string.format('%s = %s',k,tostring(v))
+            elseif type(v)=="table" then
+                txt = txt..string.format('%s = {',k)
+                if level<16 then
+                    txt = txt.."\n"..tablePrint(v,level+4)
+                else
+                    --txt = txt.."}*\n"
+                end
+            elseif type(v)=="function" then
+                txt = txt..string.format("%s()",k)
+            else
+                txt = txt..string.format("%s [%s]",k, type(v))
+            end
+            txt=txt.."\n"
+        end
+    end
+    if level>0 then
+        level=level-4
+        txt=txt.."}"
+    end
+    return txt
+end
+
 
 -- this is just some testing crap for fceux atm.  uses auxlib
 function testwindow()
@@ -2026,6 +2113,39 @@ spidey.run=function()
     end
     if spidey.unload then spidey.unload() end
 end
+
+
+-- ines header
+function spidey.getHeader(str)
+    local str = str or rom.readbytes(0,16)
+    local header = {
+        id=str:sub(1,4),
+        prg_rom_size=string.byte(str:sub(1+4,1+4)),
+        chr_rom_size=string.byte(str:sub(1+5,1+5)),
+        flags6=string.byte(str:sub(6,6)),
+        flags7=string.byte(str:sub(7,7)),
+        prg_ram_size=string.byte(str:sub(8,8)),
+        flags9=string.byte(str:sub(9,9)),
+        flags10=string.byte(str:sub(10,10)),
+        byte11=string.byte(str:sub(11,11)),
+        byte12=string.byte(str:sub(12,12)),
+        byte13=string.byte(str:sub(13,13)),
+        byte14=string.byte(str:sub(14,14)),
+        byte15=string.byte(str:sub(15,15)),
+        str=str,
+        valid = true,
+    }
+    
+    if header.id~="NES"..string.char(0x1a) then header.valid=false end
+--    patcher.variables["INES"]=true
+--    patcher.variables["CHRSTART"]=header.prg_rom_size*0x4000
+--    patcher.variables["CHRSIZE"]=header.chr_rom_size*0x2000
+--    patcher.variables["PRGCOUNT"]=header.prg_rom_size
+--    patcher.variables["CHRCOUNT"]=header.chr_rom_size
+    spidey.header = header
+    return header
+end
+
 
 function spidey.writeToFile(file, data)
     local f = io.open(file,"w")
