@@ -276,6 +276,12 @@ end
 if not memory.readword then
     function memory.readword(a) return memory.readbyte(a) + 256 * memory.readbyte(a+1) end
 end
+if not memory.writeword then
+    function memory.writeword(a, v)
+        memory.writebyte(a,v % 256)
+        memory.writebyte(a+1,(v-(v % 256))/256)
+    end
+end
 
 function spidey.getregisters()
     return memory.getregister("a"),memory.getregister("x"),memory.getregister("y"),memory.getregister("s"),memory.getregister("p"),memory.getregister("pc")

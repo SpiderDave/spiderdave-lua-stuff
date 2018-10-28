@@ -8,30 +8,39 @@ cv2.weapons = {
     names={'Dagger','Silver Dagger','Golden Dagger','Holy Water','Diamond','Sacred Flame','Oak Stake','Laurel','Garlic'}
 }
 
-cv2.enemies = {
-    
-    [0x03] = "Skeleton/Skeleton Soldier",
-    [0x04] = "The Fish Man",
-    [0x05] = "Knight",
-    [0x06] = "Two-Headed Creature",
-    [0x08] = "Ghostly Eyeball",
-    [0x09] = "Fireball/Bat",
-    [0x0D] = "Skeleton Bone Thrower",
-    [0x0E] = "The Spider",
-    [0x0f] = "The Gargoyle",
-    [0x13] = "The Wolf Man",
-    [0x16] = "Freddie",
-    [0x18] = "Slimy BarSinister",
-    [0x30] = "Fireball",
-    [0x33] = "Web",
-    [0x38] = "The Zombie Hand",
-    [0x40] = "The Ghastly Leech",
-    [0x41] = "Slime",
-    [0x42] = "Carmilla",
-    [0x4a] = "Dragon Bones",
-
+cv2.whips = {
+    names={[0]="Leather Whip", "Thorn Whip", "Chain Whip", "Morning Star", "Flame Whip"}
 }
 
+cv2.enemies = {
+    
+    [0x03] = {
+        name="Skeleton/Skeleton Soldier",
+    },
+    [0x04] = {
+        name="The Fish Man",
+    },
+    [0x05] = {name="Knight",},
+    [0x06] = {name="Two-Headed Creature",},
+    [0x08] = {name="Ghostly Eyeball",},
+    [0x09] = {name="Fireball/Bat",},
+    [0x0a] = {
+        name="Medusa Head",
+    },
+    [0x0D] = {name="Skeleton Bone Thrower",},
+    [0x0E] = {name="The Spider",},
+    [0x0f] = {name="The Gargoyle",},
+    [0x13] = {name="The Wolf Man",},
+    [0x16] = {name="Freddie",},
+    [0x18] = {name="Slimy BarSinister",},
+    [0x30] = {name="Fireball",},
+    [0x33] = {name="Web",},
+    [0x38] = {name="The Zombie Hand",},
+    [0x40] = {name="The Ghastly Leech",},
+    [0x41] = {name="Slime",},
+    [0x42] = {name="Carmilla",},
+    [0x4a] = {name="Dragon Bones",},
+}
 
 local locations={}
 locations[0]={name="Towns"}
