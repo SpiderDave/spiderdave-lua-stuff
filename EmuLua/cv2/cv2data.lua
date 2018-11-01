@@ -22,40 +22,165 @@ cv2.whips = {
 }
 
 cv2.enemies = {
-    
-    [0x03] = {
-        name="Skeleton/Skeleton Soldier",
-        exp = 1,
-    },
-    [0x04] = {
-        name="The Fish Man",
-        exp = 1,
-    },
-    [0x05] = {name="Knight",exp = 1,},
-    [0x06] = {name="Two-Headed Creature",exp = 3,},
-    [0x08] = {name="Ghostly Eyeball",exp = 1,},
-    [0x09] = {
-        name="Bat",
-        exp = 1,
-    },
-    [0x0a] = {
-        name="Medusa Head",exp = 1,
-    },
-    [0x0D] = {name="Skeleton Bone Thrower",exp = 3,},
-    [0x0E] = {name="The Spider",exp = 1,},
-    [0x0f] = {name="The Gargoyle",exp = 1,},
-    [0x13] = {name="The Wolf Man",exp = 1,},
-    [0x16] = {name="Freddie",exp = 1,},
-    [0x17] = {name="Town Zombie",exp = 1,},
-    [0x18] = {name="Slimy BarSinister",},
-    [0x30] = {name="Fireball",exp = 0,},
-    [0x33] = {name="Web",exp = 0,},
-    [0x38] = {name="The Zombie Hand",exp = 0,},
-    [0x40] = {name="The Ghastly Leech",exp = 1,},
-    [0x41] = {name="Slime",exp = 1,},
-    [0x42] = {name="Carmilla",exp = 50,},
-    [0x4a] = {name="Dragon Bones",exp = 2,},
+    [0x00] = {name="Nothing", exp=1},
+    [0x01] = {name="Town Raven", exp=1},
+    [0x02] = {name="Swamp Worm", exp=1},
+    [0x03] = {name="Skeleton", exp=1},
+    [0x04] = {name="Fishman", exp=1},
+    [0x05] = {name="Pitchfork Armor", exp=1},
+    [0x06] = {name="Snakeman", exp=3},
+    [0x07] = {name="Splash", exp=0},
+    [0x08] = {name="Eyeball", exp=1},
+    [0x09] = {name="Bat", exp=1},
+    [0x0A] = {name="Medusa", exp=1},
+    [0x0B] = {name="?", exp=1},
+    [0x0C] = {name="Skeleton Bone", exp=0},
+    [0x0D] = {name="Jumping Skeleton", exp=3},
+    [0x0E] = {name="Spider", exp=1},
+    [0x0F] = {name="Gargoyle", exp=3},
+    [0x10] = {name="Skull", exp=2},
+    [0x11] = {name="Hanging Bat", exp=1},
+    [0x12] = {name="Wolf", exp=2},
+    [0x13] = {name="Werewolf", exp=2},
+    [0x14] = {name="Mansion Zombie", exp=1},
+    [0x15] = {name="Swamp Ghost", exp=1},
+    [0x16] = {name="Freddie", exp=2},
+    [0x17] = {name="Zombie", exp=1},
+    [0x18] = {name="Swamp Ghoul", exp=1},
+    [0x19] = {name="Skeledrag Segment", exp=1},
+    [0x1A] = {name="Skeledrag Segment", exp=1},
+    [0x1B] = {name="Eagle", exp=1},
+    [0x1C] = {name="Deborah Cliff Tornado ", exp=0},
+    [0x1D] = {name="Flameman", exp=2},
+    [0x1E] = {name="Secret Merchant", exp=0},
+    [0x1F] = {name="Blob", exp=1},
+    [0x20] = {name="Spikeshot", exp=0},
+    [0x21] = {name="Sideways block", exp=0},
+    [0x22] = {name="Floating block", exp=0},
+    [0x23] = {name="?", exp=0},
+    [0x24] = {name="Sign", exp=0},
+    [0x25] = {name="Orb", exp=0},
+    [0x26] = {name="Sacred Flame", exp=0},
+    [0x27] = {name="Book", exp=0},
+    [0x28] = {name="Town Man", exp=0},
+    [0x29] = {name="Town Woman", exp=0},
+    [0x2A] = {name="Town Man", exp=0},
+    [0x2B] = {name="Town Man", exp=0},
+    [0x2C] = {name="Town Old Woman", exp=0},
+    [0x2D] = {name="Priest", exp=0},
+    [0x2E] = {name="Merchant", exp=0},
+    [0x2F] = {name="Town Knight", exp=0},
+    [0x30] = {name="Fireball", exp=0},
+    [0x31] = {name="Fireball", exp=0},
+    [0x32] = {name="Fireball (from flame man)", exp=0},
+    [0x33] = {name="Spider Web", exp=0},
+    [0x34] = {name="Single Floating Block", exp=0},
+    [0x35] = {name="Town Old Man", exp=1},
+    [0x36] = {name="Flame after killing enemy", exp=0},
+    [0x37] = {name="Heart after killing enemy", exp=0},
+    [0x38] = {name="Hand", exp=1},
+    [0x39] = {name="Ghost", exp=2},
+    [0x3A] = {name="Mummy", exp=4},
+    [0x3B] = {name="Eagleman", exp=2},
+    [0x3C] = {name="Ferry Man", exp=0},
+    [0x3D] = {name="Ferry Boat", exp=0},
+    [0x3E] = {name="Falling Rock", exp=0},
+    [0x3F] = {name="Thornweed", exp=1},
+    [0x40] = {name="Swamp Worm (high)", exp=1},
+    [0x41] = {name="High Jump Blob", exp=1},
+    [0x42] = {name="Camilla", exp=50},
+    [0x43] = {name="Marsh", exp=0},
+    [0x44] = {name="Death", exp=100},
+    [0x45] = {name="Camilla drops", exp=0},
+    [0x46] = {name="Death hatchet", exp=0},
+    [0x47] = {name="Dracula", exp=0},
+    [0x48] = {name="Dracula shot", exp=0},
+    [0x49] = {name="Item after killing boss", exp=1},
+    [0x4A] = {name="Skeledrag", exp=2},
+    [0x4B] = {name="Money bags rising", exp=0},
+    [0x4C] = {name="Flame that burns dracula's parts", exp=0},
+    [0x4D] = {name="Flame that ends game", exp=0},
 }
+
+--00- Nothing		
+--01- Town Raven
+--02- Swamp Worm
+--03- Skeleton
+--04- Fishman
+--05- Pitchfork Armor
+--06- Snakeman
+--07- Splash
+--08- Eyeball
+--09- Bat
+--0A- Medusa
+--0B- ?
+--0C- Skeleton Bone
+--0D- Jumping Skeleton 
+--0E- Spider
+--0F- Gargoyle
+--10- Skull
+--11- Hanging Bat
+--12- Wolf
+--13- Werewolf
+--14- Mansion Zombie
+--15- Swamp Ghost
+--16- Freddie
+--17- Zombie
+--18- Swamp Ghoul
+--19- Skeledrag Segment
+--1A- Skeledrag Segment
+--1B- Eagle
+--1C- Deborah Cliff Tornado 
+--1D- Flameman
+--1E- Secret Merchant
+--1F- Blob 
+--20- Spikeshot
+--21- Sideways block
+--22- Floating block
+--23- ?
+--24- Sign
+--25- Orb
+--26- Sacred Flame
+--27- Book
+--28- Town Man
+--29- Town Woman
+--2A- Town Man
+--2B- Town Man
+--2C- Town Old Woman
+--2D- Priest
+--2E- Merchant
+--2F- Town Knight
+--30- Fireball
+--31- Fireball
+--32- Fireball (from flame man)
+--33- Spider Web
+--34- Single Floating Block
+--35- Town Old Man
+--36- Flame after killing enemy
+--37- Heart after killing enemy
+--38- Hand
+--39- Ghost
+--3A- Mummy
+--3B- Eagleman
+--3C- Ferry Man
+--3D- Ferry Boat
+--3E- Falling Rock
+--3F- Thornweed
+--40- Swamp Worm (high)
+--41- High Jump Blob
+--42- Camilla
+--43- Marsh
+--44- Death
+--45- Camilla drops
+--46- Death hatchet
+--47- Dracula
+--48- Dracula shot
+--49- Item after killing boss
+--4A- Skeledrag
+--4B- Money bags rising
+--4C- Flame that burns dracula's parts
+--4D- Flame that ends game
+
 
 local locations={}
 locations[0]={name="Towns"}
