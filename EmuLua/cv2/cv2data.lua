@@ -5,7 +5,16 @@ cv2.relics = {
 }
 
 cv2.weapons = {
-    names={'Dagger','Silver Dagger','Golden Dagger','Holy Water','Diamond','Sacred Flame','Oak Stake','Laurel','Garlic'}
+    {name = "Dagger", cost = 1},
+    {name = "Silver Dagger", cost = 2},
+    {name = "Golden Dagger", cost = 3},
+    {name = "Holy Water", cost = 2},
+    {name = "Diamond", cost = 3},
+    {name = "Sacred Flame", cost = 4},
+    {name = "Oak Stake", cost =0},
+    {name = "Laurel", cost = 0},
+    {name = "Garlic", cost = 0},
+    {name = "Banshee Boomerang", cost = 4},
 }
 
 cv2.whips = {
@@ -16,30 +25,36 @@ cv2.enemies = {
     
     [0x03] = {
         name="Skeleton/Skeleton Soldier",
+        exp = 1,
     },
     [0x04] = {
         name="The Fish Man",
+        exp = 1,
     },
-    [0x05] = {name="Knight",},
-    [0x06] = {name="Two-Headed Creature",},
-    [0x08] = {name="Ghostly Eyeball",},
-    [0x09] = {name="Fireball/Bat",},
+    [0x05] = {name="Knight",exp = 1,},
+    [0x06] = {name="Two-Headed Creature",exp = 3,},
+    [0x08] = {name="Ghostly Eyeball",exp = 1,},
+    [0x09] = {
+        name="Bat",
+        exp = 1,
+    },
     [0x0a] = {
-        name="Medusa Head",
+        name="Medusa Head",exp = 1,
     },
-    [0x0D] = {name="Skeleton Bone Thrower",},
-    [0x0E] = {name="The Spider",},
-    [0x0f] = {name="The Gargoyle",},
-    [0x13] = {name="The Wolf Man",},
-    [0x16] = {name="Freddie",},
+    [0x0D] = {name="Skeleton Bone Thrower",exp = 3,},
+    [0x0E] = {name="The Spider",exp = 1,},
+    [0x0f] = {name="The Gargoyle",exp = 1,},
+    [0x13] = {name="The Wolf Man",exp = 1,},
+    [0x16] = {name="Freddie",exp = 1,},
+    [0x17] = {name="Town Zombie",exp = 1,},
     [0x18] = {name="Slimy BarSinister",},
-    [0x30] = {name="Fireball",},
-    [0x33] = {name="Web",},
-    [0x38] = {name="The Zombie Hand",},
-    [0x40] = {name="The Ghastly Leech",},
-    [0x41] = {name="Slime",},
-    [0x42] = {name="Carmilla",},
-    [0x4a] = {name="Dragon Bones",},
+    [0x30] = {name="Fireball",exp = 0,},
+    [0x33] = {name="Web",exp = 0,},
+    [0x38] = {name="The Zombie Hand",exp = 0,},
+    [0x40] = {name="The Ghastly Leech",exp = 1,},
+    [0x41] = {name="Slime",exp = 1,},
+    [0x42] = {name="Carmilla",exp = 50,},
+    [0x4a] = {name="Dragon Bones",exp = 2,},
 }
 
 local locations={}

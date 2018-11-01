@@ -54,7 +54,8 @@
 --  * add save system, remove lives?
 --  * add production flag to remove all cheats/debug stuff
 --  * add cross and bag to sub screen
-
+--  * test for rom.writebyte and show message to upgrade fceux if not there
+--  * make garlic throw a bunch of garlic
 -- 3c6 00=render player 04=don't
 
 
@@ -96,7 +97,7 @@ font_selector=false
 show_cursor = true
 --quickmessages= true -- Displays idle messages; work in progress
 game.paused = false
-cheats={enabled=true,active=false,invincible=true,allitems=true,flamewhip=true,refightbosses=true,battest=false,bonetest=true,leftClick="candle"}
+cheats={enabled=true,active=false,invincible=true,allitems=true,flamewhip=true,refightbosses=true,battest=false,bonetest=true,leftClick=""}
 skeleton=false
 bat=false
 frame=0
@@ -186,6 +187,9 @@ gfx.relics[3]=getfilecontents("cv2/images/cv2_relic_eye.gd")
 gfx.relics[4]=getfilecontents("cv2/images/cv2_relic_nail.gd")
 gfx.relics[5]=getfilecontents("cv2/images/cv2_relic_ring.gd")
 gfx.relics[6]=getfilecontents("cv2/images/cv2_relic_redcrystal.gd")
+gfx.items = {}
+gfx.items.bag = getfilecontents("cv2/images/bag.gd")
+gfx.items.cross = getfilecontents("cv2/images/cross.gd")
 gfx.weapons={}
 gfx.weapons[1]=getfilecontents("cv2/images/cv2_dagger.gd")
 gfx.weapons[2]=getfilecontents("cv2/images/cv2_dagger2.gd")
@@ -227,9 +231,38 @@ gfx.candles = {}
 gfx.candles[0]=getfilecontents("cv2/images/cv1candle1_1.gd")
 gfx.candles[1]=getfilecontents("cv2/images/cv1candle1_2.gd")
 
+gfx.block = getfilecontents("cv2/images/block.gd")
+
 mnu.cursor_image=gfx.cv2heart
 
 local subScreen = {}
+
+local ignoreErrors = false
+local useGD = false
+
+if useGD then
+    if not pcall(function()
+        require "gd"
+    end) then
+        if ignoreErrors then
+            --pass
+        else
+            spidey.error = function()
+                gui.drawrect(0,8,spidey.screenWidth-1,spidey.screenHeight-1, "#00000080")
+                gui.text(0+8*2, 8+8*10, "Error: gd not loaded.\n\nWindows: Put the lua-GD .dll files in the FCEUX \nfolder, and restart FCEUX.","white","clear")
+            end
+        end
+    end
+end
+
+if gd then
+    --gfx.items.bag = gd.createFromPng("cv2/images/bag.png"):gdStr()
+    --gfx.items.cross = gd.createFromPng("cv2/images/cross.png"):gdStr()
+    gfx.block = gd.createFromPng("cv2/images/block.png"):gdStr()
+    --spidey.writeToFile('cv2/images/bag.gd', gfx.items.bag)
+    --spidey.writeToFile('cv2/images/cross.gd', gfx.items.cross)
+    spidey.writeToFile('cv2/images/block.gd', gfx.block)
+end
 
 if false then
     temp=getfilecontents('cv2/cv2.gfx')
@@ -258,7 +291,6 @@ relics={}
 relics.names = cv2data.relics.names
 
 weapons={}
-weapons.names = cv2data.weapons.names
 weapons.gfx={}
 
 map={x=4,y=8*4,linkx=0,linky=0,scale=2,data=''}
@@ -270,8 +302,12 @@ local locations = cv2data.locations
 
 o={}
 o.count=12
-o.player={}
+o.player = {}
 o.boss={}
+
+o.player.gold = 0
+o.player.maxHearts = 99
+
 for i=0,o.count-1 do
     o[i]={}
 end
@@ -486,11 +522,13 @@ function drawSubScreen()
     gui.gdoverlay(x+28+8*19,y+28+8*9,gfx.weapons[9])
     drawfont(x+28+8*20,y+28+8*9,font[itemFont], string.format(":%02d",o.player.garlic or 0))
     
+    --gui.gdoverlay(x+28+8*19,y+28+8*11,gfx.items.bag)
+    
     -- hearts count
     gui.gdoverlay(x+28,y+28+8*4,gfx.cv2heart)
     drawfont(x+28+8*1,y+28+8*4,font[itemFont], string.format(":%02d",o.player.hearts or 0))
     
-    drawfont(x+28+8*0,y+28+8*5,font[itemFont], string.format("G:%02d",o.player.gold or 0))
+    drawfont(x+28+8*0,y+28+8*5,font[itemFont], string.format("G:%d",o.player.gold or 0))
     
     drawfont(x+28+8*14,y+28+8*17,font[itemFont], string.format("Lives: %02d",o.player.lives-1))
     
@@ -500,6 +538,14 @@ function drawSubScreen()
             gui.gdoverlay(x+28+8*(i*2-2),y+28+8*12,v)
         end
     end
+    --if o.player.hascross then
+    if hasItem(8) then
+        gui.gdoverlay(x+28+8*(10*2-2),y+28+8*12,gfx.items.cross)
+    end
+    if hasItem(7) then
+        gui.gdoverlay(x+28+8*(11*2-2),y+28+8*12,gfx.items.bag)
+    end
+
     
     --drawfont(8*22,8*4+4,font[current_font], string.format('%s',relics.currentname))
     
@@ -538,9 +584,14 @@ function enterSubScreen()
 end
 
 function exitSubScreen()
-    if hasItem(subScreen.weapon) then
-        weapons.current=subScreen.weapon
-        memory.writebyte(0x0090, weapons.current or 0)
+    if hasItem(subScreen.weapon) or (hasItem(8) and subScreen.weapon==10) then
+        if subScreen.weapon == 10 then
+            weapons.current=subScreen.weapon
+            memory.writebyte(0x0090, 1)
+        else
+            weapons.current=subScreen.weapon
+            memory.writebyte(0x0090, weapons.current or 0)
+        end
     else
         weapons.current=0
         subScreen.weapon = 0
@@ -613,7 +664,7 @@ function drawHUD()
         end
         
         gui.gdoverlay(8*21-1,8*2+4,gfx.cv2heart)
-        drawfont(8*22,8*2+4,font[current_font], string.format('-%03s',hearts or 0))
+        drawfont(8*22,8*2+4,font[current_font], string.format('-%02s',o.player.hearts or 0))
         drawfont(8*21,8*3+4,font[current_font], string.format('P-%02s',(o.player.lives or 1) - 1))
         
         drawfont(8*21-1,8+4,font[current_font], "time:"..time)
@@ -630,7 +681,8 @@ function drawHUD()
         gui.drawbox(128,20,148+11,20+21, "clear", "#d82800")
         gui.drawbox(128+1,20+1,148+11-1,20+21-1, "clear", "#d82800")
         
-        if relics.currentname=="ring" and weapons.currentname=="Golden Dagger" then
+        --if relics.currentname=="ring" and weapons.currentname=="Golden Dagger" then
+        if weapons.currentname=="Dagger" and subScreen.weapon == 10 then
             gui.gdoverlay(145-9,11+12,gfx.boomerang[2])
         elseif relics.currentname=="ring" and weapons.currentname=="Silver Dagger" then
             gui.gdoverlay(145-13,11+11,gfx.axe[0])
@@ -855,6 +907,52 @@ function addExp(n)
     memory.writebyte(0x47, (e-(e % 0x100))/0x100)
 end
 
+function setHearts(n)
+    o.player.hearts = n
+    if o.player.hearts > o.player.maxHearts then
+        o.player.hearts = o.player.maxHearts
+    end
+    if o.player.hearts < 0 then o.player.hearts=0 end
+    memory.writebyte(0x48, tonumber(string.format("%02d",o.player.hearts % 100),16))
+    memory.writebyte(0x49, tonumber(string.format("%02d",(o.player.hearts-(o.player.hearts % 100))/100),16))
+end
+
+
+-- buying (cost)
+-- changes sp weapon cost too, but we fix that elsewhere
+memory.registerexec(0xd86b,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    local h1=memory.readbyte(0x05)
+    local h2=memory.readbyte(0x09)
+    
+    
+    local cost = tonumber(string.format("%02x%02x",h1,h2))
+    if o.player.gold >= cost then
+        -- free
+        memory.writebyte(0x05, 0)
+        memory.writebyte(0x09, 0)
+        
+        -- deduct from gold here
+        o.player.gold = o.player.gold-cost
+        memory.writeword(0x7000+1, o.player.gold)
+    else
+        -- not buyable
+        memory.writebyte(0x05, 0xaa)
+        memory.writebyte(0x09, 0xaa)
+    end
+end)
+
+-- buying (deduct)
+-- changes sp weapon cost too, but we fix that elsewhere
+memory.registerexec(0xd888,1, function()
+    -- don't deduct hearts
+    memory.setregister("a", memory.readbyte(0x48))
+end)
+memory.registerexec(0xd88c,1, function()
+    -- don't deduct hearts
+    memory.setregister("a", memory.readbyte(0x49))
+end)
+
 -- triggers when an enemy dies from whip
 memory.registerexec(0x8927,1,
     function()
@@ -872,12 +970,19 @@ memory.registerexec(0x8927,1,
 
 -- triggers when an enemy dies from anything
 memory.registerexec(0x8948,1, function()
-        addExp(1)
-        if not spidey.debug.enabled then return end
         local a,x,y,s,p,pc=memory.getregisters()
         local t = memory.readbyte(0x03b4+x)
+        
         if cv2data.enemies[t] then
-            emu.message(string.format("%02X %s",x,cv2data.enemies[t].name or "?"))
+            local e = cv2data.enemies[t].exp or 0
+            -- extra exp at night, but not for town zombies
+            if night and e>0 and t~=0x17 then e=e+1 end
+            addExp(e)
+        end
+        
+        if not spidey.debug.enabled then return end
+        if cv2data.enemies[t] then
+            emu.message(string.format("%02X %s",t,cv2data.enemies[t].name or "?"))
         else
             emu.message(string.format("%02X %02x",x,t))
         end
@@ -987,32 +1092,64 @@ memory.registerexec(0x8a5f,1,
     end
 )
 
--- abort throwing of holy water if fire is on ground
+-- remove heart use from sp weapons
+memory.registerexec(0xd858,1, function()
+    memory.setregister("a", 0)
+end)
+
+
 memory.registerexec(0xd7ea,1,
     function()
         local a,x,y,s,p,pc=memory.getregisters()
         local t=memory.readbyte(0x03ba+y-6)
+        
+        local w = weapons.current
+        if subScreen.weapon == 10 then w=10 end
+        
+        local cost = cv2data.weapons[w].cost
+        local abort = false
+        if cost > o.player.hearts then
+            -- abort weapon
+            memory.setregister("a",0)
+            memory.writebyte(0x40e,0)
+            abort = true -- use this to cancel axes/boomerang
+        else
+            -- spend hearts
+            setHearts(o.player.hearts - cost)
+        end
+        
+--        if o.player.hearts==0 then
+--            memory.setregister("a",0)
+--            memory.writebyte(0x40e,0)
+--        end
+        
+        -- abort throwing of holy water if fire is on ground
         if getCustomCount("holyfire")>0 then
             memory.setregister("a",0)
             memory.writebyte(0x40e,0)
         end
-        if relics.currentname=="ring" then
+        if relics.currentname=="ring" and not abort then
             if a==0x02 then
                 memory.setregister("a",0)
                 if getCustomCount("axe")<3 then
                     createAxe(o.player.x,o.player.y)
                 end
             elseif a==0x03 then
-                memory.setregister("a",0)
-                if getCustomCount("bansheeboomerang")<3 then
-                    createBoomerang(o.player.x,o.player.y)
-                end
+--                memory.setregister("a",0)
+--                if getCustomCount("bansheeboomerang")<3 then
+--                    createBoomerang(o.player.x,o.player.y)
+--                end
+            end
+        end
+        -- equippable cross (real item is the dagger)
+        if subScreen.weapon == 10 and a==0x01 and not abort then
+            memory.setregister("a",0)
+            if getCustomCount("bansheeboomerang")<3 then
+                createBoomerang(o.player.x,o.player.y)
             end
         end
     end
 )
-
-
 
 -- create a callback for manipulating enemy creation
 memory.registerexec(0x80ec,1,
@@ -1025,14 +1162,15 @@ memory.registerexec(0x80ec,1,
     end
 )
 function createEnemy(i,t)
+    --if t==0x43 then t=0x3a end
     --if t==0x03 then t=0x13 end
     
     --if t==0x03 then t=0x3a end --turn skeletons into mummies
     
---    pattern1=6
---    pattern2=7
---    memory.writebyte(0x101,pattern1)
---    memory.writebyte(0x102,pattern2)
+    --pattern1=6
+    --pattern2=7
+    --memory.writebyte(0x101,pattern1)
+    --memory.writebyte(0x102,pattern2)
     
     
     --t=0
@@ -1162,14 +1300,14 @@ function createBoomerang(x,y)
     end
 end
 
-memory.registerexec(0xc5ad,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        memory.setregister("a",a)
-        memory.setregister("x",x)
-        memory.setregister("y",y)
-    end
-)
+--memory.registerexec(0xc5ad,1,
+--    function()
+--        local a,x,y,s,p,pc=memory.getregisters()
+--        memory.setregister("a",a)
+--        memory.setregister("x",x)
+--        memory.setregister("y",y)
+--    end
+--)
 
 -- set area after restart
 memory.registerexec(0xc521,1, function()
@@ -1454,6 +1592,7 @@ function romPatch()
 
     -- Change golden dagger throw sfx
     rom.writebyte(0x1d90c+0x10, 0x11)
+    
 end
 
 function hasRelic(n)
@@ -1508,7 +1647,9 @@ function spidey.update(inp,joy)
     msgy=memory.readbyte(0x0077)
     msgx=memory.readbyte(0x0078)
     weapons.current=memory.readbyte(0x0090)
-    weapons.currentname=weapons.names[weapons.current]
+    if cv2data.weapons[weapons.current] then
+        weapons.currentname=cv2data.weapons[weapons.current].name
+    end
     night=(memory.readbyte(0x0082)==0x01)
     borderColor = "#0070ec"
     if night then borderColor = "#24188c" end
@@ -1598,9 +1739,20 @@ function spidey.update(inp,joy)
         o.player.laurels = memory.readbyte(0x004c)
         o.player.garlic = memory.readbyte(0x004d)
         o.player.hearts = tonumber(string.format('%01X%02X',memory.readbyte(0x0049),memory.readbyte(0x0048)))
+        
+        if o.player.hearts > o.player.maxHearts then
+            o.player.hearts = o.player.maxHearts
+            memory.writebyte(0x48, tonumber(string.format("%02d",o.player.hearts % 100),16))
+            memory.writebyte(0x49, tonumber(string.format("%02d",(o.player.hearts-(o.player.hearts % 100))/100),16))
+        end
+        
         o.player.whip = memory.readbyte(0x0434)
         o.player.items = memory.readbyte(0x004a)+memory.readbyte(0x0092)*0x100
-
+        
+        o.player.hasbag=hasItem(7)
+        o.player.hascross=hasItem(8)
+        
+        
         -- new hp formula
         o.player.maxHp=0x30+1*o.player.level+4*relics.nParts
         memory.writebyte(0x0081, o.player.maxHp)
@@ -1667,7 +1819,7 @@ function spidey.update(inp,joy)
         if joy[1].right_press then
             subScreen.cursorX = subScreen.cursorX + 1
         end
-        if joy[1].A_press then
+        if joy[1].B_press then
             if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
             if subScreen.cursorY == 2 then subScreen.weapon = subScreen.cursorX end
             if subScreen.cursorY == 0 and subScreen.cursorX == 1 then
@@ -1678,13 +1830,9 @@ function spidey.update(inp,joy)
         end
         if subScreen.cursorY == 0 and subScreen.cursorX > 1 then subScreen.cursorX = 1 end
         if subScreen.cursorY == 1 and subScreen.cursorX > 6 then subScreen.cursorX = 6 end
-        if subScreen.cursorY == 2 and subScreen.cursorX > 9 then subScreen.cursorX = 9 end
+        if subScreen.cursorY == 2 and subScreen.cursorX > 10 then subScreen.cursorX = 10 end
         if subScreen.cursorX < 1 then subScreen.cursorX = 1 end
     end
-    
-    
-
-    
     
     if (font_selector) then
         if (joy[1].left and joy[1].select_press) then
@@ -1788,7 +1936,7 @@ function spidey.update(inp,joy)
         stuff=memory.readbyte(0x004a)
         o.player.hasgoldendagger=(stuff==bit.bor(stuff, 2^2))
         stuff=memory.readbyte(0x0092)
-        o.player.hascross=(stuff==bit.bor(stuff, 2^1))
+        --o.player.hascross=(stuff==bit.bor(stuff, 2^1))
 
         for i=0,1 do
             o.whip[i].type=memory.readbyte(0x03b5+i)
@@ -1811,6 +1959,11 @@ function spidey.update(inp,joy)
             o.weapons[i].ys=memory.readbyte(0x036c+3+i)
             o.weapons[i].xs=memory.readbyte(0x0396-3+i)
             o.weapons[i].hp=memory.readbyte(0x04c8-3+i)
+            if o.weapons[i].type==0 then
+                o.weapons[i].alivetime=0
+            else
+                o.weapons[i].alivetime=(o.weapons[i].alivetime or 0)+1
+            end
             --o.weapons[i].hp=0x01
             
             if false and o.weapons[i].type==0x01 then
@@ -1853,6 +2006,14 @@ function spidey.update(inp,joy)
                 drawfont(o.weapons[i].x, o.weapons[i].y,font[4], ".")
                 --gui.line(o.weapons[i].x, o.weapons[i].y, o.weapons[i].x+1, o.weapons[i].y+1)
                 createDiamondTrail(o.weapons[i].x, o.weapons[i].y)
+            elseif o.weapons[i].type==0x09 then --garlic
+                -- make disappear after a while
+                if o.weapons[i].alivetime>400 then
+                    o.weapons[i].type = 0
+                    o.weapons[i].frame = 0
+                    memory.writebyte(0x03b7+i, o.weapons[i].type)
+                    memory.writebyte(0x0303+i, o.weapons[i].frame)
+                end
             end
         end
         
@@ -1874,7 +2035,7 @@ function spidey.update(inp,joy)
             o[i].ydist=math.abs(o.player.y-o[i].y)
             o[i].facingplayer=((o[i].x<o.player.x and o[i].facing==1) or (o[i].x>o.player.x and o[i].facing==0))
             o[i].hp=memory.readbyte(0x04c8+i) --note: if hp==0, it can't be hit
-            if o[i].type ~=0 then
+            if o[i].type ~=0 and o[i].hp>0 then
                 --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",o[i].type,o[i].x,o[i].y,o[i].hp))
                 if spidey.debug.enabled then gui.text(o[i].x,o[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x+scrollx,o[i].y+scrolly,signed8bit(o[i].xs),signed8bit(o[i].ys))) end
                 if spidey.debug.enabled then
@@ -2418,6 +2579,9 @@ function spidey.update(inp,joy)
         ]]--
     end
     
+--    o.player.gold = 9999
+--    memory.writeword(0x7000+1, o.player.gold)
+    
     if cheats.active and cheats.battest and inp.leftbutton_press then
         i=getunusedcustom()
         if (i) then
@@ -2478,11 +2642,11 @@ function spidey.update(inp,joy)
 
     end
     
-    if inp.leftbutton_press then
+    if inp.leftbutton_press and cheats.leftClick=="levelup" then
         createLevelUpText()
     end
     
-    if inp.leftbutton_press and cheats.leftClick=="xcandle" then
+    if inp.leftbutton_press and cheats.leftClick=="candle" then
         i=getunusedcustom()
 
         local c = {}
@@ -2822,8 +2986,13 @@ function spidey.update(inp,joy)
     end
     
     
+    -- draw G for gold over heart icon (needs work)
+--    if (msgnum==0x33 or msgnum==0x30) and msgstatus~=0x0b then
+--        drawfont(8*13,5+8*9,font[2], "G")
+--    end
+    
 --    local msgIndex = memory.readbyte(0x007c)
---    gui.text(8,8*6, string.format("%0x %02x",msgnum, msgIndex))
+--    gui.text(8,8*6, string.format("%0x %02x %02x",msgnum, msgIndex, msgstatus))
     
 --    fontstr=" ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
     
@@ -2864,7 +3033,7 @@ function spidey.update(inp,joy)
     end
     
     --memory.writebyte(0x0245,0x1d) --hit box test
-    --memory.writebyte(0x018b,0xc1) --hit box test **this makes it so you start low on screen after death
+    --memory.writebyte(0x018b,0xc1) --hit box test **this makes it so you start low on screen after death 0x186 does too
     if (cheats.active) then
         if joy[1].A_press and joy[1].B and joy[1].down then
             
@@ -3077,6 +3246,13 @@ function spidey.draw()
         drawHUD()
     elseif pausemenu then
         drawSubScreen()
+    end
+    
+    if (action or pausemenu) and o.player.inBossRoom==true then
+        gui.gdoverlay(0,13+16*10,gfx.block)
+        gui.gdoverlay(0,13+16*11,gfx.block)
+        gui.gdoverlay(16*15,13+16*10,gfx.block)
+        gui.gdoverlay(16*15,13+16*11,gfx.block)
     end
 end
 
