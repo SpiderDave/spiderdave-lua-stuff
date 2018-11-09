@@ -862,6 +862,7 @@ end
 
 -- draw font loaded with loadfont function
 function drawfont(x,y,font,str)
+    if not str then return end
     if type(font) == "number" then
         font = spidey.font[font]
     end

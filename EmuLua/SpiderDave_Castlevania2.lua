@@ -1,6 +1,6 @@
 -- Castlevania 2 Lua script by SpiderDave
 --
--- 2018.10.20
+-- 2018.11.8
 --
 -- Changes:
 --  * Message speed increased
@@ -10,34 +10,47 @@
 --  * Skeletons can turn around
 --  * Improved skulls, ghosts, medusa heads
 --  * Improved floating eyes
+--  * Hands are hidden until close.
 --  * All fireballs should now face proper direction
 --  * Don't re-fight Bosses
 --  * Locked boss rooms
 --  * Fireballs (except those created by script) are destructable
---  * Equip Dracula's ring and dagger to use Banshee Boomerang
+--  * Most special weapons now have a heart cost.
+--  * Garlic disappears after a while.
+--  * The cross is now equippable and works as a Banshee Boomerang
 --  * Equip Dracula's ring and white dagger to use axes
 --  * Fixed spelling "Prossess" -> "Possess"
---  * New GUI
---  * Holy water burn effect. The sprite for the bottle is now blue.
+--  * New top display
+--  * Holy water burn effect. The bottle is also now blue.
 --  * Diamond sprite graphics are changed, and trail added.
+--  * Day starts at 1
 --  * Changed lives display to mean "extra" lives (you can go down to 0)
---  * The period of invincibility when you get hit now starts when you land.
---    The player also flashes.
+--  * The period of invincibility when you get hit now starts when you land,
+--    and the player flashes.
+--  * Eye, Nail and Rib are always active if you own them.
+--  * Experience is now gained when killing enemies, and experience system is reworked.
+--  * Experience display shows total experience from all levels, not just current.
+--  * Start at level 1; maximum level is 99.
+--  * New "Level Up" toast.  Provides brief invincibility and health replenish on level up.
+--  * Gold system added.  Gold is added automatically when killing enemies.
+--  * Hearts no longer give experience and are no longer used to buy items.
+--  * Maximum hearts lowered to 99 (these are now only used for special weapons).
+--  * New reworked Sub screen
+--  
 -- Debug and experimental stuff (may not be in the final version):
 --  * Cheats
 --  * Frame tester
 --  * Bat mode
---  * Banshee boomerang instead of dagger
 -- ToDo/Issues/Bugs:
 --  * Snakes should turn before jumping
 --  * Ferryman shouldn't bounce off the dock and leave
+--    + works most of the time; buggy.
 --  * Custom projectiles need a better hit method.  Currently
 --    It simply creates holy fire where the projectile was.
 --  * Custom projectiles may disappear on non-enemy objects
 --    such as moving platforms.
 --  * Blood Skeletons
 --  * Don't get items you already have (Dracula's parts, etc)
---  * Improve sub screen cursor management
 --  * Messages to fix: 0d 1e
 --  * replace hp graphics when unloading script
 --  * add mummy bandages
@@ -45,17 +58,20 @@
 --    + select weapons, relics, equipment
 --    + bestiary
 --    + map
---  * change maximum hearts
---  * add gold system
---  * crystals all show as red crystal
---  * change color of new sub menu at night
+--    + clue list
+--  * improve gold system
 --  * add slash character to font
---  * change exp display to show all exp from all levels
 --  * add save system, remove lives?
 --  * add production flag to remove all cheats/debug stuff
---  * add cross and bag to sub screen
 --  * test for rom.writebyte and show message to upgrade fceux if not there
 --  * make garlic throw a bunch of garlic
+--  * fix medusa heads, ghosts, etc.
+--  * move selectable whip to a cheat option
+--  * Change reflected fireballs to blocked fireballs (disappear)
+--  * make bordia mountains useful (put something there)
+--  * move respawn points to where you first entered the screen
+--  * add stopwatch
+--  * fix special weapons sometimes using hearts when you don't use them.
 -- 3c6 00=render player 04=don't
 
 
@@ -65,7 +81,27 @@ spidey=require "Spidey.SpideyStuff"
 local font=require "Spidey.default_font"
 local messages = require "cv2.messages"
 local cv2data=require("cv2.cv2data")
+local util = require("cv2.util")
+local config={}
 
+function config.load(filename)
+    local file = io.open(filename, "r")
+    for line in file:lines() do
+        local k,v
+        line = util.split(line,"//")[1]
+        if util.trim(line)~="" then
+            k=util.trim(util.split(line,"=")[1],1)
+            v=util.trim(util.split(line,"=")[2],1)
+            -- Attempt to coerce to a boolean or number
+            if v=="false" then v=false end
+            if v=="true" then v=true end
+            v = tonumber(v) or v
+            config[k]=v
+        end
+    end
+end
+
+config.load("cv2/config.txt")
 
 --local textMap = " ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
 local textMap = " ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
@@ -74,8 +110,6 @@ for i=0,#textMap-1 do
     local c = textMap:sub(i+1,i+1)
     textMap2[c]=textMap2[c] or i
 end
-
-
 
 game = {}
 game.paused = false
@@ -98,12 +132,18 @@ show_cursor = true
 --quickmessages= true -- Displays idle messages; work in progress
 game.paused = false
 cheats={enabled=true,active=false,invincible=true,allitems=true,flamewhip=true,refightbosses=true,battest=false,bonetest=true,leftClick=""}
+
+if config.cheats==true then cheats.active=true end
+
 skeleton=false
 bat=false
 frame=0
 frame_tester=false
 simon_frame=0
 spidey.debug.enabled=false
+
+local msgChoice=0
+local msgMode=0
 
 classMenu=spidey.classes.Menu
 mnu=classMenu:new()
@@ -145,9 +185,11 @@ mnu.items={
     end},
     {text="Save game data",
     action=function()
-        local t= TSerial.pack(game.data)
-        writetofile('cv2/cv2.dat', t)
-        emu.message("saved.")
+        saveGame()
+    end},
+    {text="Load game data",
+    action=function()
+        loadGame() -- setArea=false
     end},
     {text=function() return string.format('Bat test: %s',spidey.prettyValue(cheats.battest)) end,
         action=function()
@@ -180,13 +222,19 @@ local candles={}
 gfx={}
 gfx.cv2heart=getfilecontents("cv2/images/cv2heart.gd")
 gfx.arrowcursor=getfilecontents("cv2/images/arrowcursor.gd")
+gfx.arrowcursorRight=getfilecontents("cv2/images/arrowcursor_right.gd")
 gfx.relics={}
 gfx.relics[1]=getfilecontents("cv2/images/cv2_relic_rib.gd")
 gfx.relics[2]=getfilecontents("cv2/images/cv2_relic_heart.gd")
 gfx.relics[3]=getfilecontents("cv2/images/cv2_relic_eye.gd")
 gfx.relics[4]=getfilecontents("cv2/images/cv2_relic_nail.gd")
 gfx.relics[5]=getfilecontents("cv2/images/cv2_relic_ring.gd")
-gfx.relics[6]=getfilecontents("cv2/images/cv2_relic_redcrystal.gd")
+gfx.relics[6]=getfilecontents("cv2/images/whitecrystal.gd")
+gfx.relics[7]=getfilecontents("cv2/images/bluecrystal.gd")
+gfx.relics[8]=getfilecontents("cv2/images/redcrystal.gd")
+gfx.whitecrystal=getfilecontents("cv2/images/whitecrystal.gd")
+gfx.bluecrystal=getfilecontents("cv2/images/bluecrystal.gd")
+gfx.redcrystal=getfilecontents("cv2/images/redcrystal.gd")
 gfx.items = {}
 gfx.items.bag = getfilecontents("cv2/images/bag.gd")
 gfx.items.cross = getfilecontents("cv2/images/cross.gd")
@@ -194,8 +242,9 @@ gfx.weapons={}
 gfx.weapons[1]=getfilecontents("cv2/images/cv2_dagger.gd")
 gfx.weapons[2]=getfilecontents("cv2/images/cv2_dagger2.gd")
 gfx.weapons[3]=getfilecontents("cv2/images/cv2_dagger3.gd")
-gfx.weapons[4]=getfilecontents("cv2/images/cv2_holywater.gd")
+--gfx.weapons[4]=getfilecontents("cv2/images/cv2_holywater.gd")
 --gfx.weapons[4]=getfilecontents("cv2/images/holywater.gd")
+gfx.weapons[4]=getfilecontents("cv2/images/holywater_new.gd")
 gfx.weapons[5]=getfilecontents("cv2/images/cv2_diamond.gd")
 gfx.weapons[6]=getfilecontents("cv2/images/cv2_flame.gd")
 gfx.weapons[7]=getfilecontents("cv2/images/cv2_stake.gd")
@@ -236,6 +285,8 @@ gfx.block = getfilecontents("cv2/images/block.gd")
 mnu.cursor_image=gfx.cv2heart
 
 local subScreen = {}
+local itemList = {}
+
 
 local ignoreErrors = false
 local useGD = false
@@ -256,12 +307,30 @@ if useGD then
 end
 
 if gd then
+--    local g = gd.createFromPng("cv2/images/whitecrystal.png"):gdStr()
+--    spidey.writeToFile('cv2/images/whitecrystal.gd', g)
+--    local g = gd.createFromPng("cv2/images/bluecrystal.png"):gdStr()
+--    spidey.writeToFile('cv2/images/bluecrystal.gd', g)
+    
+    local g = gd.createFromPng("cv2/images/arrowcursor_right.png"):gdStr()
+    spidey.writeToFile('cv2/images/arrowcursor_right.gd', g)
+    
+    --gfx.arrowcursor = gd.createFromPng("cv2/images/arrowcursor.png"):gdStr()
+    --gfx.holywater.new = gd.createFromPng("cv2/images/holywater_new.png"):gdStr()
     --gfx.items.bag = gd.createFromPng("cv2/images/bag.png"):gdStr()
     --gfx.items.cross = gd.createFromPng("cv2/images/cross.png"):gdStr()
-    gfx.block = gd.createFromPng("cv2/images/block.png"):gdStr()
+    --gfx.block = gd.createFromPng("cv2/images/block.png"):gdStr()
+    --spidey.writeToFile('cv2/images/holywater_new.gd', gfx.holywater.new)
     --spidey.writeToFile('cv2/images/bag.gd', gfx.items.bag)
     --spidey.writeToFile('cv2/images/cross.gd', gfx.items.cross)
-    spidey.writeToFile('cv2/images/block.gd', gfx.block)
+    --spidey.writeToFile('cv2/images/block.gd', gfx.block)
+    --spidey.writeToFile('cv2/images/arrowcursor.gd', gfx.arrowcursor)
+    --local img
+    --img = gd.createFromGdStr(gfx.relics[6])
+    --img:png("cv2/images/redcrystal.png")
+    --img = gd.createFromGdStr(gfx.holywater.test)
+    --img = gd.createFromGdStr(gfx.weapons[4])
+    --img:png("cv2/images/output2.png")
 end
 
 if false then
@@ -292,11 +361,6 @@ relics.names = cv2data.relics.names
 
 weapons={}
 weapons.gfx={}
-
-map={x=4,y=8*4,linkx=0,linky=0,scale=2,data=''}
-map.colors={'red','white','blue','grey','purple'}
-map.linkcolor={[0]='#0f0',[1]='#080',[2]='#00bf00'}
-map.overworld_colors={[0x04]="#fcbcb0", [0x05]="#80d010",[0x06]="#009400", [0x07]="#548554", [0x08]="#f7dd9d", [0x09]="#F0BC3C", [0x0a]="#ff0c0c", [0x0b]="#c84c0c", [0x0c]="#3cbcfc", [0x0d]="#3cbcfc"}
 
 local locations = cv2data.locations
 
@@ -417,6 +481,120 @@ function setenemydata(objnum,edata)
     end
 end
 
+function saveGame()
+    local saveData = {
+        hearts = o.player.hearts,
+        maxHearts = o.player.maxHearts,
+        hp = o.player.hp,
+        maxHp = o.player.maxHp,
+        whip = o.player.whip,
+        level = o.player.level,
+        time1=memory.readbyte(0x0086),
+        time2=memory.readbyte(0x0085),
+        day = day,
+        relics = relics.main,
+        subScreenRelic = subScreen.relic or relics.current,
+        relicsCurrent = relics.current,
+        weapon = weapons.current,
+        subScreenWeapon = subScreen.weapon or weapons.current,
+        gold = o.player.gold,
+        items = o.player.items,
+        lives = o.player.lives,
+        exp = o.player.exp,
+        laurels = o.player.laurels,
+        garlic = o.player.garlic,
+        area1=area1,
+        area2=area2,
+        area3=area3,
+        returnArea = returnArea,
+        returnScroll1 = returnScroll1,
+        returnScroll2 = returnScroll2,
+        returnX=returnX,
+        returnY=returnY,
+    }
+    
+    local t= TSerial.pack(saveData)
+    writetofile("cv2/SaveGame.dat", t)
+    emu.message("saved.")
+end
+
+function loadGame(setArea)
+    if not util.fileExists("cv2/SaveGame.dat") then return false end
+    
+    local saveData = TSerial.unpack(getfilecontents("cv2/SaveGame.dat"))
+    
+    o.player.hearts = saveData.hearts
+    o.player.maxHearts = saveData.maxHearts
+    o.player.hp = saveData.hp
+    o.player.maxHp = saveData.maxHp
+    o.player.whip = saveData.whip
+    o.player.level = saveData.level
+    local time1 = saveData.time1
+    local time2 = saveData.time2
+    day = saveData.day
+    relics.main = saveData.relics
+    subScreen.relic = saveData.subScreenRelic
+    relics.current = saveData.relicsCurrent
+    weapons.current = saveData.weapon
+    subScreen.weapon = saveData.subScreenWeapon
+    o.player.gold = saveData.gold
+    o.player.items = saveData.items
+    o.player.lives = saveData.lives
+    o.player.exp = saveData.exp
+    o.player.laurels = saveData.laurels
+    o.player.garlic = saveData.garlic
+    
+    area1=saveData.area1
+    area2=saveData.area2
+    area3=saveData.area3
+    returnArea = saveData.returnArea
+    returnScroll1 = saveData.returnScroll1
+    returnScroll2 = saveData.returnScroll2
+    returnX = saveData.returnX
+    returnY = saveData.returnY
+    
+    --subScreen.weapon = weapons.current
+    --subScreen.relic = relics.current
+    
+    setHearts(o.player.hearts)
+    memory.writebyte(0x0080, o.player.hp)
+    memory.writebyte(0x0081, o.player.maxHp)
+    memory.writebyte(0x0434, o.player.whip)
+    memory.writebyte(0x008b, o.player.level)
+    memory.writebyte(0x0086, time1)
+    memory.writebyte(0x0085, time2)
+    memory.writebyte(0x0083, day)
+    memory.writebyte(0x0091, relics.main)
+    memory.writebyte(0x004F, relics.current)
+    memory.writebyte(0x0090, weapons.current)
+    memory.writeword(0x7000+1, o.player.gold)
+    memory.writebyte(0x004a, o.player.items % 0x100)
+    memory.writebyte(0x0092, (o.player.items - (o.player.items % 0x100))/0x100)
+    memory.writebyte(0x0031, o.player.lives)
+    
+    local e = tonumber(string.format("%04d",o.player.exp),16)
+    memory.writebyte(0x46, e % 0x100)
+    memory.writebyte(0x47, (e-(e % 0x100))/0x100)
+    
+    memory.writebyte(0x004c, o.player.laurels)
+    memory.writebyte(0x004d, o.player.garlic)
+    
+    game.setArea = setArea
+    if game.setArea==true then
+        memory.writebyte(0x0030, area1)
+        memory.writebyte(0x0050, area2)
+        memory.writebyte(0x0051, area3)
+        memory.writebyte(0x004e, returnArea)
+        memory.writebyte(0x0458, returnScroll1)
+        memory.writebyte(0x046a, returnScroll2)
+        memory.writebyte(0x4a0, returnX)
+        memory.writebyte(0x4b2, returnY)
+    end
+    --emu.message("loaded.")
+    return true
+end
+
+
 function getExtraData()
     if memory.readbyte(0x7000) ~= 0x42 then
         -- initialize
@@ -426,6 +604,9 @@ function getExtraData()
         memory.writebyte(0x7000,0x42)
     end
     o.player.gold = memory.readword(0x7000+1)
+    --0x7000+3 = msgMode
+    --0x7000+4 = msgChoice
+    msgChoice=memory.readbyte(0x7000+4)
 end
 
 function getunused()
@@ -455,7 +636,7 @@ function drawSubScreen()
     
     local x=-4
     local y=0
-    local h = 14+2
+    local h = 14+2+1
     local w = 14+10
     local subScreenFont = 2
     local itemFont = 2
@@ -464,28 +645,41 @@ function drawSubScreen()
     gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
     
     drawfont(x+28,y+28+8*1,font[subScreenFont], "Simon")
-    drawfont(x+28+8*15,y+28+8*1,font[subScreenFont], string.format("Level %02d", o.player.level))
+    drawfont(x+28+8*15,y+28+8*1,font[subScreenFont], string.format("Level %02d", o.player.level+1))
     
-    drawfont(x+28+8*0,y+28+8*18,font[subScreenFont], string.format("Day %d",day+1))
-    drawfont(x+28+8*12,y+28+8*18,font[subScreenFont], string.format("Time: %s",time))
+    drawfont(x+28+8*14,y+28+8*17,font[itemFont], string.format("Lives: %02d",o.player.lives-1))
+    drawfont(x+28+8*0,y+28+8*19,font[subScreenFont], string.format("Day %d",day+1))
+    drawfont(x+28+8*12,y+28+8*19,font[subScreenFont], string.format("Time: %s",time))
     
     drawfont(x+28+8*11,y+28+8*4,font[subScreenFont], string.format(" HP: %3d %3d", o.player.hp, o.player.maxHp))
+    -- for now, draw a line to fix missing slash character
+    gui.drawline(x+28+8*20-2, y+28+8*4, x+28+8*19+1, y+28+8*5)
     
     --drawfont(x+28+8*11,y+28+8*5,font[subScreenFont], "Exp:    1234")
     
     drawfont(x+28+8*11,y+28+8*5,font[subScreenFont], string.format("Exp:  %6d", getCurrentExp()))
     drawfont(x+28+8*10,y+28+8*6,font[subScreenFont], string.format("Next:  %6d", o.player.expNext))
     
-    gui.drawbox(x+28+8*0, y+28+8*7+3, x+28+8*23+6,y+28+8*7+4, "clear", borderColor)
+    --gui.drawbox(x+28+8*0, y+28+8*9+3, x+28+8*23+6,y+28+8*9+4, "clear", borderColor)
     
-    drawfont(x+28,y+28+8*8,font[itemFont], cv2data.whips.names[o.player.whip])
+    gui.drawbox(x+28+8*0, y+28+8*9+3, x+28+8*9+6,y+28+8*17+4, "clear", borderColor)
+    
+    --drawfont(x+28,y+28+8*8,font[itemFont], cv2data.whips.names[o.player.whip])
+    drawfont(x+28+8*12,y+28+8*10,font[itemFont], cv2data.whips.names[o.player.whip])
+    --drawfont(x+28+8*12,y+28+8*12,font[itemFont], cv2data.weapons[subScreen.weapon].name)
+    
+    drawfont(x+44,y+28+8*10,font[itemFont], "Equip")
+    drawfont(x+44,y+28+8*12,font[itemFont], "Relics")
+    drawfont(x+44,y+28+8*14,font[itemFont], "Clues")
+    drawfont(x+44,y+28+8*16,font[itemFont], "Options")
+
     
     -- draw relics
-    for i=1,6 do
-        if hasRelic(i) then
-            gui.gdoverlay(x+28+16*i-16,y+28+8*10,gfx.relics[i])
-        end
-    end
+--    for i=1,8 do
+--        if hasRelic(i) then
+--            gui.gdoverlay(x+28+16*i-16,y+28+8*10,gfx.relics[i])
+--        end
+--    end
     
     
 --    gui.gdoverlay(x+28+8*0,y+28+8*10,gfx.relics[1])
@@ -499,28 +693,29 @@ function drawSubScreen()
     
     -- draw cursors
     --if subScreen.cursorY==1 or spidey.counter % 3==0 then
-    if subScreen.relic > 0 then
-        gui.drawbox(x+28+(subScreen.relic*16-16)-2,y+28+8*10-2,x+28+(subScreen.relic*16-16)+8+1,y+28+8*10+8+1,"clear","#0070ec")
-    end
+--    if subScreen.relic > 0 then
+--        gui.drawbox(x+28+(subScreen.relic*16-16)-2,y+28+8*10-2,x+28+(subScreen.relic*16-16)+8+1,y+28+8*10+8+1,"clear","#0070ec")
+--    end
     --if subScreen.cursorY==0 or spidey.counter % 3==0 then
-    if subScreen.weapon > 0 then
-        gui.drawbox(x+28+(subScreen.weapon*16-16)-2,y+28+8*12-2,x+28+(subScreen.weapon*16-16)+8+1,y+28+8*12+8+1,"clear","#0070ec")
-    end
+--    if subScreen.weapon > 0 then
+--        gui.drawbox(x+28+(subScreen.weapon*16-16)-2,y+28+8*12-2,x+28+(subScreen.weapon*16-16)+8+1,y+28+8*12+8+1,"clear","#0070ec")
+--    end
     
-    if spidey.counter %3<2 then
-        gui.drawbox(x+28+(subScreen.cursorX*16-16)-2,y+28+8*8-2+16*subScreen.cursorY,x+28+(subScreen.cursorX*16-16)+8+1,y+28+8*8+8+1+16*subScreen.cursorY,"clear","blue")
+    if spidey.counter %4<3 and not subScreen.showClues and not subScreen.showRelics then
+        gui.gdoverlay(x+28+4,y+28+8*8+16*subScreen.cursorY,gfx.arrowcursorRight)
+        --gui.drawbox(x+28+(subScreen.cursorX*16-16)-2,y+28+8*8-2+16*subScreen.cursorY,x+28+(subScreen.cursorX*16-16)+8+1,y+28+8*8+8+1+16*subScreen.cursorY,"clear","blue")
     end
     
     --if subScreen.cursorY == 0 then subScreen.relic = subScreen.cursorX end
     --if subScreen.cursorY == 1 then subScreen.weapon = subScreen.cursorX end
     
     -- laurels count
-    gui.gdoverlay(x+28+8*19,y+28+8*8,gfx.weapons[8])
-    drawfont(x+28+8*20,y+28+8*8,font[itemFont], string.format(":%02d",o.player.laurels or 0))
+    gui.gdoverlay(x+28+8*0,y+28+8*6,gfx.weapons[8])
+    drawfont(x+28+8*1,y+28+8*6,font[itemFont], string.format(":%02d",o.player.laurels or 0))
     
     -- garlic count
-    gui.gdoverlay(x+28+8*19,y+28+8*9,gfx.weapons[9])
-    drawfont(x+28+8*20,y+28+8*9,font[itemFont], string.format(":%02d",o.player.garlic or 0))
+    gui.gdoverlay(x+28+8*0,y+28+8*7,gfx.weapons[9])
+    drawfont(x+28+8*1,y+28+8*7,font[itemFont], string.format(":%02d",o.player.garlic or 0))
     
     --gui.gdoverlay(x+28+8*19,y+28+8*11,gfx.items.bag)
     
@@ -530,24 +725,18 @@ function drawSubScreen()
     
     drawfont(x+28+8*0,y+28+8*5,font[itemFont], string.format("G:%d",o.player.gold or 0))
     
-    drawfont(x+28+8*14,y+28+8*17,font[itemFont], string.format("Lives: %02d",o.player.lives-1))
-    
     -- draw weapons and items
-    for i,v in ipairs(gfx.weapons) do
-        if hasItem(i) then
-            gui.gdoverlay(x+28+8*(i*2-2),y+28+8*12,v)
-        end
-    end
-    --if o.player.hascross then
-    if hasItem(8) then
-        gui.gdoverlay(x+28+8*(10*2-2),y+28+8*12,gfx.items.cross)
-    end
-    if hasItem(7) then
-        gui.gdoverlay(x+28+8*(11*2-2),y+28+8*12,gfx.items.bag)
-    end
-
-    
-    --drawfont(8*22,8*4+4,font[current_font], string.format('%s',relics.currentname))
+--    for i,v in ipairs(gfx.weapons) do
+--        if hasItem(i) then
+--            gui.gdoverlay(x+28+8*(i*2-2),y+28+8*12,v)
+--        end
+--    end
+--    if hasItem(8) then
+--        gui.gdoverlay(x+28+8*(10*2-2),y+28+8*12,gfx.items.cross)
+--    end
+--    if hasItem(7) then
+--        gui.gdoverlay(x+28+8*(11*2-2),y+28+8*12,gfx.items.bag)
+--    end
     
     if not hasItem(subScreen.weapon) then
         weapons.current=0
@@ -560,6 +749,103 @@ function drawSubScreen()
         memory.writebyte(0x004F, relics.current or 0)
     end
     
+    if subScreen.showClues then
+        local x=2
+        local y=5
+        local h = 12
+        local w = 14
+
+        gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
+        gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
+        gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
+        
+        subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
+        subScreen.clue = subScreen.clue or 1
+        
+        drawfont(x+28,y+28+1,font[subScreenFont], "Clues")
+        drawfont(x+28,y+28+1+8*2,font[subScreenFont], string.format("- %02d -",subScreen.clue))
+        drawfont(x+28,y+28+1+8*4,font[current_font], messages[subScreen.clues[subScreen.clue]])
+    end
+    if subScreen.showRelics then
+        local x=2
+        local y=5
+        local h = 17
+        local w = 16
+
+        gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
+        gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
+        gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
+        
+        subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
+        subScreen.clue = subScreen.clue or 1
+        
+        drawfont(x+28,y+28+1,font[subScreenFont], "Relics")
+        for i=1,8 do
+            if hasRelic(i) then
+                gui.gdoverlay(x+28+8,y+28+8*(1+i*2),gfx.relics[i])
+                drawfont(x+28+8*3,y+28+8*(1+i*2),font[itemFont], cv2data.relics[i].displayNameLong)
+            else
+                drawfont(x+28+8*3,y+28+8*(1+i*2),font[itemFont], "----")
+            end
+        end
+        subScreen.subMenu = subScreen.subMenu or {}
+        subScreen.subMenu.y = subScreen.subMenu.y or 0
+        
+        gui.drawbox(x+28,y+28+8*(3+subScreen.subMenu.y*2)-4,x+28+8*15,y+28+8*(3+subScreen.subMenu.y*2)+8+4,"clear","blue")
+    end
+    if subScreen.showItems then
+        local x=2
+        local y=5
+        local h = 17
+        local w = 21
+--        itemList = {
+--            {name="test"},
+--        }
+        itemList = {}
+        
+        for i=1,0x0a do
+            if hasItem(i) then
+                itemList[#itemList+1] = {type="weapon",index=i}
+            end
+        end
+        
+        for i=1,#itemList do
+            if itemList[i].type=="weapon" then
+                itemList[i].name = cv2data.weapons[itemList[i].index].name
+                itemList[i].gfx = gfx.weapons[itemList[i].index]
+            end
+        end
+
+        gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
+        gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
+        gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
+        
+        subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
+        subScreen.clue = subScreen.clue or 1
+        
+        drawfont(x+28,y+28+1,font[subScreenFont], "Items")
+        for i=1+subScreen.subMenu.scrollY,8+subScreen.subMenu.scrollY do
+            local y2 = i-subScreen.subMenu.scrollY
+            if itemList[i] then
+                if itemList[i].gfx then
+                    gui.gdoverlay(x+28+8*2,y+28+8*(1+y2*2),itemList[i].gfx)
+                end
+                drawfont(x+28+8*3+4,y+28+8*(1+y2*2),font[itemFont], itemList[i].name)
+            else
+                drawfont(x+28+8*3,y+28+8*(1+y2*2),font[itemFont], "----")
+            end
+        end
+        subScreen.subMenu = subScreen.subMenu or {}
+        subScreen.subMenu.y = subScreen.subMenu.y or 0
+        
+        --gui.drawbox(x+28,y+28+8*(3+subScreen.subMenu.y*2)-4,x+28+8*15,y+28+8*(3+subScreen.subMenu.y*2)+8+4,"clear","blue")
+        if spidey.counter %4<3 and not subScreen.showClues and not subScreen.showRelics then
+            gui.gdoverlay(x+28+4,y+28+8*(3+subScreen.subMenu.y*2),gfx.arrowcursorRight)
+        end
+
+        
+    end
+    
     if spidey.debug.enabled then
         drawfont(28+8*0-4,28+8*22,font[subScreenFont], string.format("%02X %02X",subScreen.cursorX or 0,subScreen.cursorY or 0))
     end
@@ -568,22 +854,30 @@ end
 
 
 function enterSubScreen()
+    subScreen.showClues = false
+    subScreen.showRelics = false
+    subScreen.showItems = false
+
+    subScreen.subMenu = subScreen.subMenu or {x=0,y=0, scrollY=0} 
     subScreen.relic = relics.current
     subScreen.weapon = weapons.current
     
     memory.writebyte(0x33, 0)
     subScreen.realCursorY = 0
     subScreen.cursorY = 1
+    subScreen.cursorX = 1
     
-    if subScreen.cursorY==1 then subScreen.cursorX = subScreen.cursorX or relics.current end
-    if subScreen.cursorY==2 then subScreen.cursorX = subScreen.cursorX or weapons.current end
-
+--    if subScreen.cursorY==1 then subScreen.cursorX = subScreen.cursorX or relics.current end
+--    if subScreen.cursorY==2 then subScreen.cursorX = subScreen.cursorX or weapons.current end
 
 --  if subScreen.cursorY == 0 then subScreen.cursorX = subScreen.relic end
 --  if subScreen.cursorY == 1 then subScreen.cursorX = subScreen.weapon end
 end
 
 function exitSubScreen()
+    subScreen.showClues = false
+    subScreen.showRelics = false
+    subScreen.showItems = false
     if hasItem(subScreen.weapon) or (hasItem(8) and subScreen.weapon==10) then
         if subScreen.weapon == 10 then
             weapons.current=subScreen.weapon
@@ -609,12 +903,7 @@ end
 
 
 function drawHUD()
-        locations[area1]=locations[area1] or {}
-        locations[area1][area2]=locations[area1][area2] or {}
-        locations[area1][area2][area3]=locations[area1][area2][area3] or string.format('%s %s %s',area1,area2,area3)
-        --gui.text(8,8*8, string.format("%s",locations[area1][area2][area3] or ''))
-        displayarea=string.format("%s",locations[area1][area2][area3] or '')
-        displayarea=string.gsub(displayarea, '.(Pt[1234])','') -- trim the " (Pt1)" etc.
+        displayarea = locations.getAreaName(area1,area2,area3)
         
         if spidey.debug.enabled then
             --spidey.debug.font=font[6]
@@ -625,6 +914,22 @@ function drawHUD()
             drawfont(8*16,8*6+5,spidey.debug.font, string.format("Scroll: %02x %02x",scrollx, scrolly))
             drawfont(8*16,8*7+5,spidey.debug.font, string.format("Player: %02x %02x",o.player.x, o.player.y))
             drawfont(8*16,8*8+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
+        end
+        
+        
+        -- Bordia Mountains
+        if area1==0x02 and area2==0x09 and area3==0x02 and scrollx >= 0x265 then
+            -- make invisible stairs visible if you have the eye
+            if relics.list.eye then
+                local x=0x2f0+0x79-scrollx
+                local y=0x6e
+                for i=1,24 do
+                    gui.drawbox(x,y,x+3,y+2,"clear","#2040a060")
+                    gui.drawbox(x,y,x+4,y+1,"clear","#80808060")
+                    x=x+4
+                    y=y+4
+                end
+            end
         end
         
         name = "^aH^ai"
@@ -670,9 +975,9 @@ function drawHUD()
         drawfont(8*21-1,8+4,font[current_font], "time:"..time)
         --drawfont(256-4-8*5,8+4,font[current_font], time)
         
-        if relics.currentname then
+        if relics.name then
             if gfx.relics[relics.current] then gui.gdoverlay(8*21-1,35,gfx.relics[relics.current]) end
-            drawfont(8*22,8*4+4,font[current_font], string.format('%s',relics.currentname))
+            drawfont(8*22,8*4+4,font[current_font], string.format('%s',relics.displayName))
         end
         
         if testgfx then gui.gdoverlay(4+8*15,11+8,testgfx) end
@@ -681,10 +986,9 @@ function drawHUD()
         gui.drawbox(128,20,148+11,20+21, "clear", "#d82800")
         gui.drawbox(128+1,20+1,148+11-1,20+21-1, "clear", "#d82800")
         
-        --if relics.currentname=="ring" and weapons.currentname=="Golden Dagger" then
         if weapons.currentname=="Dagger" and subScreen.weapon == 10 then
             gui.gdoverlay(145-9,11+12,gfx.boomerang[2])
-        elseif relics.currentname=="ring" and weapons.currentname=="Silver Dagger" then
+        elseif relics.name=="ring" and weapons.currentname=="Silver Dagger" then
             gui.gdoverlay(145-13,11+11,gfx.axe[0])
         elseif weapons.currentname then
             if gfx.weapons[weapons.current] then gui.gdoverlay(145-5,11+16,gfx.weapons[weapons.current]) end
@@ -1128,7 +1432,7 @@ memory.registerexec(0xd7ea,1,
             memory.setregister("a",0)
             memory.writebyte(0x40e,0)
         end
-        if relics.currentname=="ring" and not abort then
+        if relics.name=="ring" and not abort then
             if a==0x02 then
                 memory.setregister("a",0)
                 if getCustomCount("axe")<3 then
@@ -1309,6 +1613,26 @@ end
 --    end
 --)
 
+-- set area on starting
+memory.registerexec(0xc5a1,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    if game.setArea==true then
+        memory.writebyte(0x30,area1)
+        memory.writebyte(0x50,area2)
+        memory.writebyte(0x51,area3)
+        memory.writebyte(0x004e, returnArea)
+        memory.writebyte(0x0458, returnScroll1)
+        memory.writebyte(0x046a, returnScroll2)
+        memory.writebyte(0x4a0, returnX)
+        memory.writebyte(0x4b2, returnY)
+        game.setArea=false
+    end
+end)
+--    memory.writebyte(0x0030, area1)
+--    memory.writebyte(0x0050, area2)
+--    memory.writebyte(0x0051, area3)
+
+
 -- set area after restart
 memory.registerexec(0xc521,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
@@ -1472,6 +1796,102 @@ memory.registerexec(0xe8a2,0, function()
 end)
 
 
+-- Relic check for eye
+memory.registerexec(0x8360,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    if relics.list.eye then
+        y=3
+    else
+        y=0
+    end
+    memory.setregister("y", y)
+end)
+
+-- Relic check for nail
+memory.registerexec(0xd625,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    if relics.list.nail then
+        a=4
+    else
+        a=0
+    end
+    memory.setregister("a", a)
+end)
+
+-- Relic check for rib
+memory.registerexec(0xd3c4,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    if relics.list.rib then
+        a=1
+    else
+        a=0
+    end
+    memory.setregister("a", a)
+end)
+
+-- Relic check for blue crystal
+memory.registerexec(0xadbe,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    if relics.list.blueCrystal then
+        a=6
+    else
+        a=0
+    end
+    memory.setregister("a", a)
+end)
+
+-- mode select: override to game start when password is selected
+memory.registerexec(0xc390,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+
+    if memory.readbyte(0x23)==0x01 then
+        -- We load once here just to display the right saved lives, but 
+        -- load again later to load all the rest of the data.
+        if loadGame(true) then
+            game.loadAgain = true
+        else
+            -- Not loaded; starts new game instead.
+        end
+    end
+    
+    --game.modeCounter =memory.readbyte(0x002a)
+    --memory.writebyte(0x002a, 0x01)
+    --emu.pause()
+    
+    a=0
+    memory.writebyte(0x23,0)
+    memory.setregister("a",a)
+end)
+
+
+-- Modify time to start game after pressing start on mode select
+memory.registerexec(0xc3ad+2,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    a=0x30
+    memory.setregister("a",a)
+end)
+
+
+-- sfx
+memory.registerexec(0xc118,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    --a=0
+    
+    if config.music == false then
+        if a==0x39 then a=0 end
+        if a==0x3d then a=0 end
+        if a==0x41 then a=0 end
+        if a==0x45 then a=0 end
+        if a==0x49 then a=0 end
+        if a==0x4d then a=0 end
+        if a==0x55 then a=0 end
+    end
+    
+    memory.setregister("a",a)
+    --emu.message(string.format("sfx=%02x",a))
+end)
+
+
 memory.registerexec(0xe38d,1,
     function()
         do return end
@@ -1596,6 +2016,9 @@ function romPatch()
 end
 
 function hasRelic(n)
+    if n==6 then return relics.list.whiteCrystal end
+    if n==7 then return relics.list.blueCrystal end
+    if n==8 then return relics.list.redCrystal end
     return (relics.main == bit.bor(relics.main, 2^(n-1)))
 end
 function hasItem(n)
@@ -1607,7 +2030,10 @@ emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
     lastinp=inp
     
-    --map.data=memory.readbyterange(0x05b0,0x100)
+    game.mode=memory.readbyte(0x0019)
+    game.mode2=memory.readbyte(0x00aa)
+    game.modeCounter =memory.readbyte(0x002a)
+    
     game.paused=(memory.readbyte(0x0026)==02)
     pausemenu=(memory.readbyte(0x0026)==01)
     subScreen.realCursorY = memory.readbyte(0x33)
@@ -1622,10 +2048,16 @@ function spidey.update(inp,joy)
     if action and memory.readbyte(0x002c)==0x02 then
         action = false
     end
+    
     --action=(memory.readbyte(0x001c)==0x01) -- not perfect; sometimes it can be 02 or 04
     area1=memory.readbyte(0x0030)
     area2=memory.readbyte(0x0050)
     area3=memory.readbyte(0x0051) % 0x80 --adds 0x80 if starting on right side
+    returnArea=memory.readbyte(0x004e)
+    returnScroll1 = memory.readbyte(0x0458)
+    returnScroll2 = memory.readbyte(0x046a)
+    returnX = memory.readbyte(0x04a0)
+    returnY = memory.readbyte(0x04b2)
     screenload=(memory.readbyte(0x0021)>01) --not perfect yet; goes off on some non-screen loads
     scrollx=memory.readbyte(0x0053)+memory.readbyte(0x0054)*0x100
     --scrolly=memory.readbyte(0x0056)+memory.readbyte(0x0057)*0x224
@@ -1656,13 +2088,31 @@ function spidey.update(inp,joy)
     
     relics.main = memory.readbyte(0x0091)
     relics.current=memory.readbyte(0x004F)
-    relics.currentname=relics.names[relics.current]
+    if cv2data.relics[relics.current] then
+        relics.name=cv2data.relics[relics.current].name
+        relics.displayName=cv2data.relics[relics.current].displayName or cv2data.relics[relics.current].name
+    else
+        --emu.message(string.format("%02x",relics.current))
+        relics.name=nil
+        relics.displayName = nil
+    end
+    
     relics.list = {}
     relics.list.rib = (relics.main == bit.bor(relics.main, 0x01))
     relics.list.heart = (relics.main == bit.bor(relics.main, 0x02))
     relics.list.eye = (relics.main == bit.bor(relics.main, 0x04))
     relics.list.nail = (relics.main == bit.bor(relics.main, 0x08))
     relics.list.ring = (relics.main == bit.bor(relics.main, 0x10))
+    
+    relics.list.whiteCrystal = (relics.main == bit.bor(relics.main, 0x20))
+    relics.list.blueCrystal = (relics.main == bit.bor(relics.main, 0x40))
+    
+    if relics.list.whiteCrystal and relics.list.blueCrystal then
+        relics.list.redCrystal = true
+        relics.list.whiteCrystal = nil
+        relics.list.blueCrystal = nil
+    end
+    
     relics.nParts = 0
     for k,v in pairs(relics.list) do
         if v== true then relics.nParts = relics.nParts + 1 end
@@ -1675,7 +2125,31 @@ function spidey.update(inp,joy)
     pattern1=memory.readbyte(0x0101)
     pattern2=memory.readbyte(0x0102)
     
+    
+    --gui.text(20,50,string.format("mode=%02x mode2=%02x",game.mode, game.mode2))
+    --if game.mode==0x04 and game.mode2==0x00 and game.modeCounter==0x80 then
+    --if game.mode==0x04 and game.mode2==0x00 and game.modeCounter==0x80 then
+    if game.mode==0x04 then
+        --gui.text(20,50,"mode screen")
+        drawfont(8*12,8*19,font[current_font], "Continue")
+    end
+    if game.mode==0x05 then
+        --game.mode=0x04
+        --memory.writebyte(0x0019, game.mode)
+        
+        game.modeCounter = 1
+        memory.writebyte(0x002a, game.modeCounter)
+        
+        memory.writebyte(0x0023, 0)
+    end
+    
     romPatch()
+    
+    if action and game.loadAgain then
+        loadGame(true) -- setArea=true
+        exitSubScreen() --needed to refresh weapon/relic stuff
+        game.loadAgain = nil
+    end
     
     if spidey.debug.enabled then gui.text(4,4+8*4,string.format('Pattern tables: %02X %02X',pattern1,pattern2)) end
     
@@ -1783,7 +2257,7 @@ function spidey.update(inp,joy)
 
         o.player.inBossRoom = false
         if spidey.debug.enabled then
-            drawfont(0,5+8*5,font[current_font],string.format('HP: %02X %02X',o.player.hp or 0,o.player.maxHp or 0) )
+            drawfont(0,5+8*5,font[current_font],string.format('HP: %02X %02X',o.player.hp or 0,o.player.maxHp or 0))
             drawfont(0,5+8*6,font[current_font],string.format('Relics: %02X',relics.nParts) )
         end
         
@@ -1808,30 +2282,83 @@ function spidey.update(inp,joy)
     if pausemenu then
         if not subScreen.cursorX then enterSubScreen() end
         if joy[1].up_press then
-            subScreen.cursorY = subScreen.cursorY - 1
+            if subScreen.showClues then
+            elseif subScreen.showRelics or subScreen.showItems then
+                if subScreen.subMenu.y==0 and subScreen.subMenu.scrollY>0 then
+                    subScreen.subMenu.scrollY=subScreen.subMenu.scrollY-1
+                end
+                subScreen.subMenu.y = math.max(0,subScreen.subMenu.y - 1)
+            else
+                subScreen.cursorY = math.max(1,subScreen.cursorY - 1)
+            end
         end
         if joy[1].down_press then
-            subScreen.cursorY = subScreen.cursorY + 1
+            if subScreen.showClues then
+            elseif subScreen.showRelics or subScreen.showItems then
+                if subScreen.subMenu.y==7 then
+                    subScreen.subMenu.scrollY=subScreen.subMenu.scrollY+1
+                end
+                subScreen.subMenu.y = math.min(7,subScreen.subMenu.y + 1)
+            else
+                subScreen.cursorY = math.min(4,subScreen.cursorY + 1)
+            end
         end
         if joy[1].left_press then
-            subScreen.cursorX = subScreen.cursorX - 1
+            if subScreen.showClues then
+                subScreen.clue=subScreen.clue-1
+                if subScreen.clue<1 then subScreen.clue = #subScreen.clues end
+            elseif subScreen.showRelics or subScreen.showItems then
+            else
+                subScreen.cursorX = subScreen.cursorX - 1
+            end
         end
         if joy[1].right_press then
-            subScreen.cursorX = subScreen.cursorX + 1
+            if subScreen.showClues then
+                subScreen.clue=subScreen.clue+1
+                if subScreen.clue>#subScreen.clues then subScreen.clue=1 end
+            elseif subScreen.showRelics or subScreen.showItems then
+            else
+                subScreen.cursorX = subScreen.cursorX + 1
+            end
         end
         if joy[1].B_press then
-            if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
-            if subScreen.cursorY == 2 then subScreen.weapon = subScreen.cursorX end
+            --if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
+            --if subScreen.cursorY == 2 then subScreen.weapon = subScreen.cursorX end
             if subScreen.cursorY == 0 and subScreen.cursorX == 1 then
                 o.player.whip = o.player.whip + 1
                 if o.player.whip > 4 then o.player.whip = 0 end
                 memory.writebyte(0x0434, o.player.whip)
             end
+            if subScreen.cursorY == 3 then
+                subScreen.showClues = not subScreen.showClues
+            end
+            if subScreen.cursorY == 2 then
+                if subScreen.showRelics then
+                    subScreen.subMenu.scrollY=0
+                    subScreen.relic = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
+                    --emu.message(string.format("%02x",subScreen.subMenu.y-subScreen.subMenu.scrollY+1))
+                end
+                subScreen.showRelics = not subScreen.showRelics
+            end
+            if subScreen.cursorY == 1 then
+                if subScreen.showItems then
+                    local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
+                    if itemList[i] and itemList[i].type=="weapon" then
+                        subScreen.weapon = itemList[i].index
+                    end
+                    --emu.message(string.format("%02x",subScreen.subMenu.y-subScreen.subMenu.scrollY+1))
+                    --emu.message(i)
+                end
+                subScreen.showItems = not subScreen.showItems
+            end
+            
         end
-        if subScreen.cursorY == 0 and subScreen.cursorX > 1 then subScreen.cursorX = 1 end
-        if subScreen.cursorY == 1 and subScreen.cursorX > 6 then subScreen.cursorX = 6 end
-        if subScreen.cursorY == 2 and subScreen.cursorX > 10 then subScreen.cursorX = 10 end
-        if subScreen.cursorX < 1 then subScreen.cursorX = 1 end
+--        if subScreen.cursorY == 0 and subScreen.cursorX > 1 then subScreen.cursorX = 1 end
+--        if subScreen.cursorY == 1 and subScreen.cursorX > 8 then subScreen.cursorX = 8 end
+--        if subScreen.cursorY == 2 and subScreen.cursorX > 10 then subScreen.cursorX = 10 end
+--        if subScreen.cursorX < 1 then subScreen.cursorX = 1 end
+--        if subScreen.cursorY == 3 and subScreen.cursorX > 1 then subScreen.cursorX = 1 end
+--        if subScreen.cursorY == 4 and subScreen.cursorX > 1 then subScreen.cursorX = 1 end
     end
     
     if (font_selector) then
@@ -2000,6 +2527,7 @@ function spidey.update(inp,joy)
                 memory.writebyte(0x0303+i,o.weapons[i].frame)
                 -- Replace old holy water sprite with blue bottle.
                 gui.gdoverlay(o.weapons[i].x-8, o.weapons[i].y-9, gfx.holywater.test)
+                --gui.gdoverlay(o.weapons[i].x-4, o.weapons[i].y-5, gfx.holywater.new)
             elseif o.weapons[i].type==0x05 then --diamond
                 o.weapons[i].frame=0
                 memory.writebyte(0x0303+i,o.weapons[i].frame)
@@ -2246,6 +2774,14 @@ function spidey.update(inp,joy)
                     memory.writebyte(0x03ba+i,o[i].type)
                     memory.writebyte(0x0306+i,o[i].frame)
                 end
+            elseif area1==1 and area2==9 and area3==03 then -- Brahm's
+                if hasRelic(3) then -- eye
+                    o[i].type=0
+                    o[i].frame=0
+                    memory.writebyte(0x03ba+i,o[i].type)
+                    memory.writebyte(0x0306+i,o[i].frame)
+                end
+
             end
         end
         
@@ -2289,12 +2825,19 @@ function spidey.update(inp,joy)
             o.player.inBossRoom=true
             o.boss.maxHp=240
             --gui.text(o[i].x,o[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x,o[i].y,signed8bit(o[i].xs),signed8bit(o[i].ys)))
-            o[i].move=o[i].move or ''
+            o[i].move=o[i].move or ""
             o[i].movec=o[i].movec or 0
-            if emu.framecount() % 4==0 then o[i].movec=o[i].movec+1 end
+            
+            --if emu.framecount() % 4==0 then o[i].movec=o[i].movec+1 end
+            if spidey.counter % 4==0 then o[i].movec=o[i].movec+1 end
+            
+            
             o[i].movename=''
-            o[i].state2=0xff
+            --o[i].movename=o[i].movename or ""
+            --o[i].state2=0xff
             o[i].draccount=memory.readbyte(0x04b6)
+            --o[i].draccount=(o[i].draccount or 1)
+            --o[i].draccount=1
             if o[i].frame==0x34 and not joy[2].B and not joy[2].idle then o[i].frame=0x33 end
             dracsp=2
             if joy[2].left then o[i].x=o[i].x-dracsp end
@@ -2324,6 +2867,7 @@ function spidey.update(inp,joy)
             end
             
             if o[i].move=='' and not o[i].moveindex==false then
+                emu.pause()
                 o[i].moveindex=(o[i].moveindex+1) % #o[i].movequeue
                 o[i].move=o[i].movequeue[o[i].moveindex]
                 o[i].movec=0
@@ -2386,7 +2930,8 @@ function spidey.update(inp,joy)
                 end
             end
             
-            if o[i].move=='sway' and emu.framecount() % 9==0 then
+            --if o[i].move=='sway' and emu.framecount() % 9==0 then
+            if o[i].move=='sway' and spidey.counter % 9==0 then
                 onum=getunusedcustom()
                 if (onum) then
                     o.custom[onum].type="fireball"
@@ -2503,7 +3048,10 @@ function spidey.update(inp,joy)
                 memory.writebyte(0x0324+6+i,o[i].y)
             end
             ]]--
-            if o[i].movename~='' then emu.message(o[i].movename) end
+            --if o[i].movename~='' then emu.message(o[i].movename) end
+            
+            drawfont(0,50,font[current_font], string.format("move=%s movec=%02x draccount=%02x",o[i].move, o[i].movec, o[i].draccount))
+            drawfont(0,50+8,font[current_font], string.format("moveindex=%02x",o[i].moveindex or 0))
         end
         
         if o[i].destroy then
@@ -2985,6 +3533,55 @@ function spidey.update(inp,joy)
       if memory.readbyte(0x007c) == 27 then memory.writebyte(0x0703,01) end
     end
     
+    if msgstatus==0x07 then
+        memory.writebyte(0x7000+3, 0x00)
+    end
+    
+    msgMode = memory.readbyte(0x7000+3)
+    msgChoice = memory.readbyte(0x7000+4)
+    
+    -- skip horrible night message
+--    if msgnum==0x00 and msgstatus<=0x08 then
+--        msgstatus=0x08
+--        memory.writebyte(0x007a, msgstatus)
+--    end
+    
+    -- church message
+    if not pausemenu and (msgstatus==0x03 or msgstatus==0x06) and msgnum==0x31 and msgindex == 0x16 then
+        --emu.pause()
+        if msgMode==0x00 and (joy[1].right_press or joy[1].left_press) then
+            msgChoice=(msgChoice+1) %2
+            memory.writebyte(0x7000+4, msgChoice)
+        end
+        if msgMode==0x00 and joy[1].B_press then
+            memory.writebyte(0x7000+3, 1)
+            msgstatus=0x05
+            memory.writebyte(0x007a, msgstatus)
+            if msgChoice==0x00 then
+                saveGame()
+            end
+        else
+            if msgMode == 0x01 then
+                msgstatus=0x04
+                memory.writebyte(0x007a, msgstatus)
+                memory.writebyte(0x7000+3, 0x02)
+            elseif msgMode==0x00 then
+                --emu.message(msgstatus)
+                msgstatus=0x05
+                memory.writebyte(0x007a, msgstatus)
+                drawfont(8*6,5+8*10,font[current_font], "Save?")
+                drawfont(8*9,5+8*12,font[current_font], "Yes   No")
+                
+                if msgChoice == 0x00 then
+                    gui.gdoverlay(8*9,5+8*11,gfx.arrowcursor)
+                    --drawfont(8*09,5+8*11,font[current_font], "x")
+                else
+                    gui.gdoverlay(8*15,5+8*11,gfx.arrowcursor)
+                    --drawfont(8*15,5+8*11,font[current_font], "x")
+                end
+            end
+        end
+    end
     
     -- draw G for gold over heart icon (needs work)
 --    if (msgnum==0x33 or msgnum==0x30) and msgstatus~=0x0b then
@@ -3034,7 +3631,7 @@ function spidey.update(inp,joy)
     
     --memory.writebyte(0x0245,0x1d) --hit box test
     --memory.writebyte(0x018b,0xc1) --hit box test **this makes it so you start low on screen after death 0x186 does too
-    if (cheats.active) then
+    if action and (cheats.active) then
         if joy[1].A_press and joy[1].B and joy[1].down then
             
 --            c0=hex2bin('80'..nespalette[0x0f]:sub(2,2+6))
@@ -3212,6 +3809,9 @@ function spidey.update(inp,joy)
         memory.writebyte(0x0086,0x06) --hours = 06
         memory.writebyte(0x0085,0x01) --minutes = 00
         
+        o.player.gold = math.max(o.player.gold, 5000)
+        memory.writeword(0x7000+1, o.player.gold)
+        
         if cheats.refightbosses then refight_bosses=true end
         
     end
@@ -3249,10 +3849,14 @@ function spidey.draw()
     end
     
     if (action or pausemenu) and o.player.inBossRoom==true then
-        gui.gdoverlay(0,13+16*10,gfx.block)
-        gui.gdoverlay(0,13+16*11,gfx.block)
-        gui.gdoverlay(16*15,13+16*10,gfx.block)
-        gui.gdoverlay(16*15,13+16*11,gfx.block)
+        if displayarea=="Castlevania" then
+            -- Don't bother with blocks for final Dracula fight
+        else
+            gui.gdoverlay(0,13+16*10,gfx.block)
+            gui.gdoverlay(0,13+16*11,gfx.block)
+            gui.gdoverlay(16*15,13+16*10,gfx.block)
+            gui.gdoverlay(16*15,13+16*11,gfx.block)
+        end
     end
 end
 

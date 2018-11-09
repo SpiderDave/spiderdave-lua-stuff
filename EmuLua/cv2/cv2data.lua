@@ -1,8 +1,22 @@
 local cv2={}
 
 cv2.relics = {
-    names = {'rib','heart','eye','nail','ring','crystal'}
+    [0]= {},
+    [1] = {name = "rib"},
+    [2] = {name = "heart"},
+    [3] = {name = "eye"},
+    [4] = {name = "nail"},
+    [5] = {name = "ring"},
+    [6] = {name = "white crystal", displayName="crystal"},
+    [7] = {name = "blue crystal", displayName="crystal"},
+    [8] = {name = "red crystal", displayName="crystal"},
 }
+
+for i=1,8 do
+    local n = cv2.relics[i].name
+    cv2.relics[i].displayNameLong = string.gsub(" "..n, "%W%l", string.upper):sub(2)
+    
+end
 
 cv2.weapons = {
     {name = "Dagger", cost = 1},
@@ -244,6 +258,29 @@ locations[4][1]={[0]='Deborah Cliff','Jam Wasteland'}
 locations[4][2]={[0]='Wicked Ditch'}
 locations[4][3]={[0]='Vrad Graveyard','West Bridge'}
 locations[5][0]={[0]='Castlevania (Pt1)','Castlevania (Pt2)'}
+
+for a1=0,5 do
+    for a2=0,255 do
+        if locations[a1][a2] then
+            for a3=0,255 do
+                if locations[a1][a2][a3] then
+                    locations[a1][a2][a3]={
+                        name = locations[a1][a2][a3],
+                        displayName = string.gsub(locations[a1][a2][a3], '%s%(Pt[1234]%)',''),
+                    }
+                end
+            end
+        end
+    end
+end
+
+locations.getAreaName = function(a1,a2,a3)
+    if locations[a1] and locations[a1][a2] and locations[a1][a2][a3] then
+        return locations[a1][a2][a3].displayName
+    else
+        return string.format('%s %s %s',a1,a2,a3)
+    end
+end
 
 cv2.locations=locations
 
