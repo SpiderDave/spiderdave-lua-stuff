@@ -1,2 +1,3 @@
 cheats=false
-music=true
+//music=false
+//graphics_mode=gd

@@ -368,7 +368,7 @@ function memory.writebytesppu(a,str)
     local i
     for i = 0, #str-1 do
         memory.readbyte(0x2002) -- PPUSTATUS (reset address latch)
-        memory.writebyte(0x2006,math.floor((a+i)/0x100)) -- PPUADDR high byte
+        memory.writebyte(0x2006,math.floor((a+i)/0x100)) -- PPUADDR hig9h byte
         memory.writebyte(0x2006,(a+i) % 0x100) -- PPUADDR low byte
         memory.writebyte(0x2007,string.byte(str,i+1)) -- PPUDATA
     end
@@ -2159,6 +2159,19 @@ function spidey.writeToFile(file, data)
     f:write(data)
     f:close()
 end
+
+function spidey.makeNesFloat(n)
+    local b1,b2
+    if n<0 then
+        b1 = 0x100-math.ceil(-n)
+        b2 = 0x100 - (-n *0x100) % 0x100
+    else
+        b1 = math.floor(n)
+        b2 = (n *0x100) % 0x100
+    end
+    return b1,b2
+end
+
 spidey.getFileContents = getfilecontents
 
 spidey.imgEdit.captureWindow=captureWindow
