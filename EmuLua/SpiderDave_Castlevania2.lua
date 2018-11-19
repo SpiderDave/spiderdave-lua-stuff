@@ -397,6 +397,7 @@ end
 getfilecontents=oldgetfilecontents
 
 local subScreen = {}
+subScreen.submenu={scrollY=0}
 
 subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
 subScreen.clue = 1
@@ -526,7 +527,8 @@ if false then
      end
 end
 
-temp=getfilecontents('cv2/cv2.dat')
+--temp=getfilecontents('cv2/cv2.dat')
+temp = false
 if temp then
     temp=TSerial.unpack(temp)
     game.data=temp
@@ -694,7 +696,7 @@ function saveGame(slot)
     slot = slot or 1
     
     local itemList2 = {}
-    for k,v in pairs(itemList) do
+    for k,v in ipairs(itemList) do
         --itemList2[#itemList2+1] = {v.name, v.type, v.amount}
         --itemList2[#itemList2+1] = {name=v.name, type=v.type, amount=v.amount}
         itemList2[#itemList2+1] = {index=v.index}
@@ -778,6 +780,14 @@ function loadGame(slot, setArea)
     o.player.armor = saveData.armor
     itemList = saveData.itemList or itemList
     
+    local txt=""
+    for k,v in ipairs(itemList) do
+        txt=txt..v.index..", "
+    end
+    
+    --emu.message(#itemList)
+    emu.message(txt)
+    
     area1=saveData.area1
     area2=saveData.area2
     area3=saveData.area3
@@ -814,6 +824,7 @@ function loadGame(slot, setArea)
     memory.writebyte(0x004c, o.player.laurels)
     memory.writebyte(0x004d, o.player.garlic)
     memory.writeword(0x7000+10, o.player.armor or 0)
+    
     updateItems()
     
     game.setArea = setArea
@@ -827,7 +838,13 @@ function loadGame(slot, setArea)
         memory.writebyte(0x4a0, returnX)
         memory.writebyte(0x4b2, returnY)
     end
-    
+    --emu.message("loaded "..slot)
+--    if #itemList==0 then
+--        emu.pause()
+--    end
+    --emu.message(itemList[1].name or "none")
+--    emu.message(type(itemList[1].index))
+    subScreen.submenu.scrollY = 0
     return true
 end
 
@@ -892,6 +909,29 @@ function updateItems()
         memory.writebyte(0x7200+i*2+1, 0)
     end
     
+    -- update data for items
+    for i=1,#itemList do
+        if itemList[i].name and not itemList[i].type then
+            local index = items.index[itemList[i].name]
+            if index then
+                itemList[i] = items[index]
+            end
+        elseif itemList[i].index then
+            if items[itemList[i].index] then
+                itemList[i] = items[itemList[i].index]
+            end
+        end
+        
+        if itemList[i].type=="weapon" then
+            itemList[i].name = cv2data.weapons[itemList[i].weaponIndex].name
+            itemList[i].gfx = gfx.weapons[itemList[i].weaponIndex]
+        end
+        
+        if itemList[i].type=="whip" then
+            itemList[i].gfx = gfx.whipicon
+        end
+    end
+    
     -- add items and write to memory
     for i,v in ipairs(itemList) do
         local itemIndex
@@ -906,35 +946,12 @@ function updateItems()
         memory.writebyte(0x7200+i*2-2, itemIndex)
         memory.writebyte(0x7200+i*2-2+1, itemAmount)
     end
-    
-    -- update data for items
-    for i=1,#itemList do
-        if itemList[i].name and not itemList[i].type then
-            local index = items.index[itemList[i].name]
-            if index then
-                itemList[i] = items[index]
-            end
-        elseif itemList[i].index then
-            if items.index[itemList[i].index] then
-                itemList[i] = items[itemList[i].index]
-            end
-        end
-        
-        if itemList[i].type=="weapon" then
-            itemList[i].name = cv2data.weapons[itemList[i].weaponIndex].name
-            itemList[i].gfx = gfx.weapons[itemList[i].weaponIndex]
-        end
-        
-        if itemList[i].type=="whip" then
-            itemList[i].gfx = gfx.whipicon
-        end
-    end
-
 end
 
 function getExtraData()
     itemList = {}
     if memory.readbyte(0x7000) ~= 0x42 then
+        --emu.message("init")
         -- initialize
         for i=1,0x1000-1 do
             memory.writebyte(0x7000+i,0)
