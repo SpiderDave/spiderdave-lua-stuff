@@ -38,30 +38,77 @@ cv2.whips = {
 }
 
 cv2.enemies = {
-    [0x00] = {name="Nothing", exp=1},
-    [0x01] = {name="Town Raven", exp=1},
+    [0x00] = {
+        name="Nothing",
+        exp=1,
+    },
+    [0x01] = {
+        name="Town Raven",
+        exp=1,
+    },
     [0x02] = {name="Swamp Worm", exp=1},
-    [0x03] = {name="Skeleton", exp=1},
-    [0x04] = {name="Fishman", exp=1},
+    [0x03] = {
+        name="Skeleton",
+        exp=1,
+        attack = 7,
+    },
+    [0x04] = {
+        name="Fishman",
+        exp=1,
+        attack = 5,
+    },
     [0x05] = {name="Pitchfork Armor", exp=1},
-    [0x06] = {name="Snakeman", exp=3},
+    [0x06] = {
+        name="Snakeman",
+        exp=3,
+        attack = 14,
+        hp=30,
+    },
     [0x07] = {name="Splash", exp=0},
     [0x08] = {name="Eyeball", exp=1},
-    [0x09] = {name="Bat", exp=1},
-    [0x0A] = {name="Medusa", exp=1},
+    [0x09] = {
+        name="Bat",
+        exp=1,
+        attack = 3,
+    },
+    [0x0A] = {
+        name="Medusa",
+        exp=1,
+    },
     [0x0B] = {name="?", exp=1},
     [0x0C] = {name="Skeleton Bone", exp=0},
-    [0x0D] = {name="Jumping Skeleton", exp=3},
+    [0x0D] = {
+        name="Jumping Skeleton",
+        exp=3,
+        attack = 7,
+    },
     [0x0E] = {name="Spider", exp=1},
     [0x0F] = {name="Gargoyle", exp=3},
     [0x10] = {name="Skull", exp=2},
-    [0x11] = {name="Hanging Bat", exp=1},
-    [0x12] = {name="Wolf", exp=2},
-    [0x13] = {name="Werewolf", exp=2},
+    [0x11] = {
+        name="Hanging Bat",
+        exp=1,
+        attack = 3,
+    },
+    [0x12] = {
+        name="Wolf",
+        exp=2,
+        attack = 11,
+        hp = 10,
+    },
+    [0x13] = {
+        name="Werewolf",
+        exp=2,
+        attack = 8,
+    },
     [0x14] = {name="Mansion Zombie", exp=1},
     [0x15] = {name="Swamp Ghost", exp=1},
     [0x16] = {name="Freddie", exp=2},
-    [0x17] = {name="Zombie", exp=1},
+    [0x17] = {
+        name="Zombie",
+        exp=1,
+        attack = 5,
+    },
     [0x18] = {name="Swamp Ghoul", exp=1},
     [0x19] = {name="Skeledrag Segment", exp=1},
     [0x1A] = {name="Skeledrag Segment", exp=1},
@@ -347,6 +394,11 @@ cv2.messages = {
             text="LEFT: \nWICKED DITCH\n\nRIGHT: \nNORTH BRIDGE",
         },
     },
+    [0x57]={
+        {
+            text="IF YOU ARE\nTIRED OR IN\nPAIN, VISIT\nTHE CHURCH.",
+        },
+    },
     [0x5e]={
         {
             cycle = true,
@@ -358,6 +410,22 @@ cv2.messages = {
         {
             cycle = true,
             text={"IT'S NOT SAFE\nHERE ANYMORE.","THIS IS \nYOUR FAULT.","LEAVE THIS \nPLACE AND \nNEVER RETURN!"},
+            notes = "",
+        },
+    },
+    [0x55]={
+        {
+            text="I'LL GIVE YOU\nA BLUE\nCRYSTAL.",
+        },
+    },
+    [0x6b]={
+        {
+            condition=function() return relics.list.blueCrystal end,
+            text="THE BLUE\nCRYSTAL CAN\nREVEAL A \nHIDDEN \nPATH.",
+        },
+        {
+            condition=function() return not relics.list.whiteCrystal and not relics.list.blueCrystal end,
+            text="I HAVE A BLUE\nCRYSTAL.",
             notes = "",
         },
     },
@@ -476,6 +544,7 @@ cv2.placedItems = {
     {x=0x3e8, y=0x9d, area = {0x00,0x00,0x00}, name="Gold", location="jova top right side."},
     {x=0xd8, y=0x5d, area = {0x00,0x07,0x00, 0x05}, name="Church's Chicken", location="church in doina."},
     {x=0x58, y=0xbd, area = {0x00,0x08,0x00, 0x00}, name="Gold", location="room with thorn whip in jova."},
+    {x=0xb8, y=0x9d, area = {0x00,0x07,0x00, 0x00}, name="Axe", location="church in jova."},
 }
 
 cv2.story = [[
