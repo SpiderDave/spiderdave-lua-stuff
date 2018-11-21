@@ -84,4 +84,11 @@ function util.join(a,str)
     return out
 end
 
+function util.copyTable(t)
+  if type(t) ~= 'table' then return t end
+  local res = {}
+  for k, v in pairs(t) do res[util.copyTable(k)] = util.copyTable(v) end
+  return res
+end
+
 return util
