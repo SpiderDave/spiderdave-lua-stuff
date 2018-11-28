@@ -12,6 +12,14 @@ cv2.relics = {
     [8] = {name = "red crystal", displayName="crystal", varName = "redCrystal"},
 }
 
+cv2.mansions = {
+    {name="Berkeley",relic="rib", orbValue = 24},
+    {name="Rover",relic="heart", orbValue = 25},
+    {name="Braham",relic="eye", orbValue = 26},
+    {name="Bodley",relic="nail", orbValue = 27},
+    {name="Laruba",relic="ring", orbValue = 28},
+}
+
 for i=1,8 do
     local n = cv2.relics[i].name
     cv2.relics[i].displayNameLong = string.gsub(" "..n, "%W%l", string.upper):sub(2)
@@ -20,17 +28,17 @@ for i=1,8 do
 end
 
 cv2.weapons = {
-    {name = "Dagger", cost = 1},
-    {name = "Silver Dagger", cost = 2},
-    {name = "Golden Dagger", cost = 3},
-    {name = "Holy Water", cost = 2},
-    {name = "Diamond", cost = 3},
-    {name = "Sacred Flame", cost = 4},
-    {name = "Oak Stake", cost =0},
-    {name = "Laurel", cost = 0},
-    {name = "Garlic", cost = 0},
-    {name = "Banshee Boomerang", cost = 4},
-    {name = "Axe", cost = 1},
+    {name = "Dagger"},
+    {name = "Silver Dagger"},
+    {name = "Golden Dagger"},
+    {name = "Holy Water"},
+    {name = "Diamond"},
+    {name = "Sacred Flame"},
+    {name = "Oak Stake"},
+    {name = "Laurel"},
+    {name = "Garlic"},
+    {name = "Banshee Boomerang"},
+    {name = "Axe"},
 }
 
 cv2.whips = {
@@ -46,18 +54,29 @@ cv2.enemies = {
         name="Town Raven",
         exp=1,
     },
-    [0x02] = {name="Swamp Worm", exp=1},
+    [0x02] = {
+        name="Swamp Worm",
+        exp=1,
+        attack=10,
+        hp=1,
+    },
     [0x03] = {
         name="Skeleton",
         exp=1,
         attack = 7,
+        hp = 15,
     },
     [0x04] = {
         name="Fishman",
         exp=1,
         attack = 5,
+        hp = 9,
     },
-    [0x05] = {name="Pitchfork Armor", exp=1},
+    [0x05] = {
+        name="Pitchfork Armor",
+        exp=1,
+        hp=40,
+    },
     [0x06] = {
         name="Snakeman",
         exp=3,
@@ -70,6 +89,7 @@ cv2.enemies = {
         name="Bat",
         exp=1,
         attack = 3,
+        hp=1,
     },
     [0x0A] = {
         name="Medusa",
@@ -81,14 +101,24 @@ cv2.enemies = {
         name="Jumping Skeleton",
         exp=3,
         attack = 7,
+        hp = 13,
     },
-    [0x0E] = {name="Spider", exp=1},
-    [0x0F] = {name="Gargoyle", exp=3},
+    [0x0E] = {
+        name="Spider",
+        exp=1,
+        attack=8,
+        hp=1,
+    },
+    [0x0F] = {
+        name="Gargoyle",
+        exp=3,
+    },
     [0x10] = {name="Skull", exp=2},
     [0x11] = {
         name="Hanging Bat",
         exp=1,
         attack = 3,
+        hp=1,
     },
     [0x12] = {
         name="Wolf",
@@ -100,50 +130,76 @@ cv2.enemies = {
         name="Werewolf",
         exp=2,
         attack = 8,
+        hp = 35,
     },
     [0x14] = {name="Mansion Zombie", exp=1},
-    [0x15] = {name="Swamp Ghost", exp=1},
+    [0x15] = {
+        name="Swamp Ghost",
+        exp=1,
+        attack=7,
+        hp=12,
+    },
     [0x16] = {name="Freddie", exp=2},
     [0x17] = {
         name="Zombie",
         exp=1,
         attack = 5,
     },
-    [0x18] = {name="Swamp Ghoul", exp=1},
+    [0x18] = {
+        name="Swamp Ghoul",
+        exp=1,
+        attack=7,
+        hp=32,
+    },
     [0x19] = {name="Skeledrag Segment", exp=1},
     [0x1A] = {name="Skeledrag Segment", exp=1},
     [0x1B] = {name="Eagle", exp=1},
     [0x1C] = {name="Deborah Cliff Tornado ", exp=0},
     [0x1D] = {name="Flameman", exp=2},
-    [0x1E] = {name="Secret Merchant", exp=0},
+    [0x1E] = {name="Secret Merchant", exp=0, hp=0},
     [0x1F] = {name="Blob", exp=1},
-    [0x20] = {name="Spikeshot", exp=0},
-    [0x21] = {name="Sideways block", exp=0},
-    [0x22] = {name="Floating block", exp=0},
+    [0x20] = {name="Spikeshot", exp=0, hp="initial"},
+    [0x21] = {name="Sideways block", exp=0, hp="initial"},
+    [0x22] = {name="Floating block", exp=0, hp="initial"},
     [0x23] = {name="?", exp=0},
-    [0x24] = {name="Sign", exp=0},
+    [0x24] = {
+        name="Sign",
+        exp=0,
+        hp=0,
+    },
     [0x25] = {name="Orb", exp=0},
     [0x26] = {name="Sacred Flame", exp=0},
-    [0x27] = {name="Book", exp=0},
-    [0x28] = {name="Town Man", exp=0},
-    [0x29] = {name="Town Woman", exp=0},
-    [0x2A] = {name="Town Man", exp=0},
-    [0x2B] = {name="Town Man", exp=0},
-    [0x2C] = {name="Town Old Woman", exp=0},
-    [0x2D] = {name="Priest", exp=0},
-    [0x2E] = {name="Merchant", exp=0},
-    [0x2F] = {name="Town Knight", exp=0},
+    [0x27] = {name="Book", exp=0, hp="initial"},
+    [0x28] = {name="Town Man", exp=0, hp=0},
+    [0x29] = {name="Town Woman", exp=0, hp=0},
+    [0x2A] = {name="Town Man", exp=0, hp=0},
+    [0x2B] = {name="Town Man", exp=0, hp=0},
+    [0x2C] = {name="Town Old Woman", exp=0, hp=0},
+    [0x2D] = {name="Priest", exp=0, hp=0},
+    [0x2E] = {name="Merchant", exp=0, hp=0},
+    [0x2F] = {name="Town Knight", exp=0, hp=0},
     [0x30] = {name="Fireball", exp=0},
     [0x31] = {name="Fireball", exp=0},
     [0x32] = {name="Fireball (from flame man)", exp=0},
-    [0x33] = {name="Spider Web", exp=0},
+    [0x33] = {
+        name="Spider Web",
+        exp=0,
+        hp=1,
+        attack=5,
+    },
     [0x34] = {name="Single Floating Block", exp=0},
-    [0x35] = {name="Town Old Man", exp=1},
+    [0x35] = {name="Town Old Man", exp=1, hp=0},
     [0x36] = {name="Flame after killing enemy", exp=0},
-    [0x37] = {name="Heart after killing enemy", exp=0},
+    [0x37] = {name="Heart", exp="initial"},
     [0x38] = {name="Hand", exp=1},
-    [0x39] = {name="Ghost", exp=2},
-    [0x3A] = {name="Mummy", exp=4},
+    [0x39] = {
+        name="Ghost",
+        exp=2,
+    },
+    [0x3A] = {
+        name="Mummy",
+        exp=4,
+    },
     [0x3B] = {name="Eagleman", exp=2},
     [0x3C] = {name="Ferry Man", exp=0},
     [0x3D] = {name="Ferry Boat", exp=0},
@@ -152,11 +208,19 @@ cv2.enemies = {
     [0x40] = {name="Swamp Worm (high)", exp=1},
     [0x41] = {name="High Jump Blob", exp=1},
     [0x42] = {name="Camilla", exp=50},
-    [0x43] = {name="Marsh", exp=0},
+    [0x43] = {
+        name="Marsh",
+        exp=0,
+        hp=0,
+        },
     [0x44] = {name="Death", exp=100},
     [0x45] = {name="Camilla drops", exp=0},
     [0x46] = {name="Death hatchet", exp=0},
-    [0x47] = {name="Dracula", exp=0},
+    [0x47] = {
+        name="Dracula",
+        exp=0,
+        hp=255,
+    },
     [0x48] = {name="Dracula shot", exp=0},
     [0x49] = {name="Item after killing boss", exp=1},
     [0x4A] = {name="Skeledrag", exp=2},
@@ -313,10 +377,15 @@ for a1=0,5 do
         if locations[a1][a2] then
             for a3=0,255 do
                 if locations[a1][a2][a3] then
+                    local name = locations[a1][a2][a3]
+                    local displayName = string.gsub(name, '%s%(Pt[1234]%)','')
+                    displayName = string.gsub(displayName, "'s",'')
+                    
                     locations[a1][a2][a3]={
-                        name = locations[a1][a2][a3],
-                        displayName = string.gsub(locations[a1][a2][a3], '%s%(Pt[1234]%)',''),
+                        name = name,
+                        displayName = displayName,
                     }
+                    
                 end
             end
         end

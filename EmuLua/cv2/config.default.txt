@@ -1,0 +1,34 @@
+// Don't modify config.default.txt.  Instead make a file config.txt.
+
+// Graphics mode.  gd assumes the gd library is present, allowing .png loading.
+//graphics_mode=gd
+
+// Setting to false disables music
+music=true
+
+// Allow debugging stuff.  Setting this to false removes the select menu.
+debug = false
+
+// Turn on cheats
+//cheats=true
+
+//cheats_leftClick = warp
+cheats_leftClick = item
+//cheats_leftClick = candle
+
+// turn on quick day/night transition (needs work)
+quickDayNight=false
+
+// fix so you don't get knocked off stairs (needs work)
+stairsFix=false
+
+// turn on stuff to test stats and damage specifically
+testStats = false
+
+// Fix it so your jumping y velocity doesn't change based 
+// on the velocity of a moving platform.  This needs a
+// few stage edits so you can make certain jumps.
+platformVelocityFix=false
+
+// Make the merchant stop moving around.
+stationaryMerchant=true

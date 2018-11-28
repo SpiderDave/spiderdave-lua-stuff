@@ -12,40 +12,47 @@ local items = {
         type = "weapon",
         desc = "",
         weaponIndex = 1,
+        heartCost = 1,
     },
     {
         name = "Silver Dagger",
         type = "weapon",
         desc = "",
         weaponIndex = 2,
+        heartCost = 2,
     },
     {
         name = "Golden Dagger",
         type = "weapon",
         desc = "",
         weaponIndex = 3,
+        heartCost = 3,
     },
     {
         name = "Holy Water",
         type = "weapon",
         desc = "Can be used to discover \nfalse bricks.",
         weaponIndex = 4,
+        heartCost = 2,
     },
     {
         name = "Diamond",
         type = "weapon",
         desc = "Ricochets around the area.",
         weaponIndex = 5,
+        heartCost = 3,
     },
     {
         name = "Sacred Flame",
         type = "weapon",
         desc = "",
         weaponIndex = 6,
+        heartCost = 4,
     },
     {
         name = "Oak Stake",
         type = "weapon",
+        stack = 99,
         desc = "",
         weaponIndex = 7,
     },
@@ -66,6 +73,8 @@ local items = {
         type = "weapon",
         desc = "",
         weaponIndex = 10,
+        weaponBase = 1,
+        heartCost = 4,
     },
     {
         name = "Classic Tunic",
@@ -201,10 +210,12 @@ local items = {
         type = "weapon",
         desc = "",
         weaponIndex = 11,
+        weaponBase = 1,
+        heartCost = 1,
     },
     {
         name = "Grab Bag",
-        type = "stuff",
+        type = "bag",
         desc = "",
         bagList = {
             "Classic Tunic",
@@ -220,9 +231,15 @@ local items = {
             "Morning Star",
             "Flame Whip",
             "Poison Whip",
+            "Cross",
         }
     },
-
+    {
+        name = "Cross",
+        type = "accessory",
+        damageReduction = 1,
+        desc = "Reduce all damage by 1.",
+    },
 }
 
 

@@ -91,4 +91,11 @@ function util.copyTable(t)
   return res
 end
 
+function util.extract(t)
+    for k,v in pairs(t) do
+        _G[k] = v
+    end
+end
+
+
 return util
