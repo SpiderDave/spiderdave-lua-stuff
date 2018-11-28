@@ -84,6 +84,10 @@ registerExec(0x88f4+2,3,1,"onSetJumpSpeedY")
 registerExec(0xe855+2,7,1,"onPlaceStageTile")
 registerExec(0x896c+2,1,1,"onEnemyStun")
 registerExec(0x875c,1,1,"onHeartPickup")
+registerExec(0xd7ea,7,1,"onThrowWeapon")
+
+registerExec(0xf24c,7,1,"onSetWeaponLeft")
+registerExec(0xf295,7,1,"onSetWeaponRight")
 
 
 
@@ -257,3 +261,32 @@ function _onHeartPickup(address,len,t)
     end
 end
 
+function _onThrowWeapon(address,len,t)
+    if type(onThrowWeapon)=="function" then
+        local weaponType=memory.readbyte(0x03ba+t.y-6)
+        
+        local weaponType, abort = onThrowWeapon(weaponType, t.a)
+        if abort then
+            memory.setregister("a",0)
+            memory.writebyte(0x40e,0)
+        end
+        
+        if weaponType then
+            memory.writebyte(0x03ba+t.y-6, weaponType)
+        end
+    end
+end
+
+function _onSetWeaponLeft(address,len,t)
+    if type(onSetWeapon)=="function" then
+        local y = onSetWeapon(t.y)
+        if y then memory.setregister("y", y) end
+    end
+end
+
+function _onSetWeaponRight(address,len,t)
+    if type(onSetWeapon)=="function" then
+        local y = onSetWeapon(t.y)
+        if y then memory.setregister("y", y) end
+    end
+end

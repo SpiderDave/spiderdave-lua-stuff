@@ -2120,6 +2120,11 @@ function onHeartPickup(n)
     return n
 end
 
+function onSetWeapon(w)
+    w=memory.readbyte(0x90)
+    return w
+end
+
 -- cancel a message
 memory.registerexec(0xce38+0,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
@@ -2559,7 +2564,66 @@ function onSetWhipFrameDelay(delay, whipState)
     return delay
 end
 
-memory.registerexec(0xd7ea,1,
+function onThrowWeapon(weaponType, abort)
+    local a,x,y,s,p,pc=memory.getregisters()
+    local t=memory.readbyte(0x03ba+y-6)
+    
+    local weaponName = items[o.player.weaponItem].name
+    
+    -- heart cost
+    local cost = items[o.player.weaponItem].heartCost or 0
+    
+    if o.player.armor == items.index["Adventure Armor"] then
+        if cost>1 then cost = cost-1 end
+    end
+    
+    if o.player.weaponItem and items[o.player.weaponItem].stack then
+        removeItem(items[o.player.weaponItem].name,1)
+    end
+    
+    local abort = false
+
+
+    -- abort throwing of holy water if fire is on ground
+    if getCustomCount("holyfire")>0 then
+        abort = true
+    end
+
+    if cost > o.player.hearts then
+        -- abort weapon
+        abort = true -- use this to cancel axes/boomerang
+    end
+--        if o.player.hearts==0 then
+--            memory.setregister("a",0)
+--            memory.writebyte(0x40e,0)
+--        end
+    
+    -- Banshee Boomerang
+    if weaponName=="Banshee Boomerang" and a==0x01 and not abort then
+        memory.setregister("a",0)
+        if getCustomCount("bansheeboomerang")<3 then
+            createBoomerang(o.player.x,o.player.y)
+        else
+            abort = true
+        end
+    end
+    if weaponName=="Axe" and a==0x01 and not abort then
+        memory.setregister("a",0)
+        if getCustomCount("axe")<3 then
+            createAxe(o.player.x,o.player.y)
+        else
+            abort = true
+        end
+    end
+    
+    if not abort then
+        -- spend hearts
+        setHearts(o.player.hearts - cost)
+    end
+
+end
+
+memory.registerexec(0xd7ea,0,
     function()
         local a,x,y,s,p,pc=memory.getregisters()
         local t=memory.readbyte(0x03ba+y-6)
