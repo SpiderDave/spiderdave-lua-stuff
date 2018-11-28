@@ -2240,7 +2240,9 @@ memory.registerexec(0x891e-1,1,function()
     
     local damage = stats.damage
     memory.writebyte(0x13,damage)
-    emu.message(string.format("whip damage %d, item=%d",damage, o.player.whipItem or 0))
+    if config.testStats then
+        emu.message(string.format("whip damage %d, item=%d",damage, o.player.whipItem or 0))
+    end
     --memory.writebyte(0x13,0x0f)
     --memory.writebyte(0x13,0xff)
     --memory.writebyte(0x13,0x01)
