@@ -295,7 +295,7 @@ mnu.items={
 --                    | level 99     | 2            | 1            | 1            | 1            | 1            | 1            |
 --                    +--------------+--------------+--------------+--------------+--------------+--------------+--------------+
                     
-                    if e.hp then
+                    if type(e.hp)=="number" then
                     
                         out = out.."+"..string.rep(string.rep("-",14).."+", #whips+1).."\n"
                         
@@ -1177,10 +1177,11 @@ function getExtraData()
         relics.list.blueCrystal = (relics.main == bit.bor(relics.main, 0x40))
         
         -- red crystal gives white and blue when initializing
-        if relics.list.whiteCrystal and relics.list.blueCrystal then
-            relics.list.redCrystal = true
-            --relics.list.whiteCrystal = nil
-            --relics.list.blueCrystal = nil
+        if relics.list.redCrystal then
+            relics.list.blueCrystal = true
+        end
+        if relics.list.blueCrystal then
+            relics.list.whiteCrystal = true
         end
         
         for i,v in ipairs(cv2data.relics) do
@@ -1243,8 +1244,15 @@ function getExtraData()
     if relics.list.nail then relics.main = bit.bor(relics.main, 0x08) end
     if relics.list.ring then relics.main = bit.bor(relics.main, 0x10) end
     if relics.list.whiteCrystal then relics.main = bit.bor(relics.main, 0x20) end
-    if relics.list.blueCrystal then relics.main = bit.bor(relics.main, 0x40) end
-    if relics.list.redCrystal then relics.main = bit.bor(relics.main, 0x60) end
+    if relics.list.blueCrystal then
+        -- this removes the white crystal
+        relics.main = bit.bor(relics.main, 0x60)-0x20
+    end
+    if relics.list.redCrystal then
+        relics.main = bit.bor(relics.main, 0x60)
+    end
+
+
     memory.writebyte(0x0091, relics.main)
     
     for i,v in ipairs(cv2data.relics) do
@@ -2120,8 +2128,15 @@ function onHeartPickup(n)
     return n
 end
 
+function onGetRedCrystal()
+    relics.list.redCrystal = true
+    setRelicState("redCrystal",true)
+    createItemPopUp("Red Crystal")
+end
+
 function onSetWeapon(w)
-    w=memory.readbyte(0x90)
+    --w=memory.readbyte(0x90)
+    w=1
     return w
 end
 
@@ -3168,7 +3183,7 @@ end)
 -- Relic check for nail
 memory.registerexec(0xd625,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
-    if relics.list.nail and relics.on.eye then
+    if relics.list.nail and relics.on.nail then
         a=4
     else
         a=0

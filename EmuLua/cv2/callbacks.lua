@@ -89,6 +89,8 @@ registerExec(0xd7ea,7,1,"onThrowWeapon")
 registerExec(0xf24c,7,1,"onSetWeaponLeft")
 registerExec(0xf295,7,1,"onSetWeaponRight")
 
+registerExec(0x9096,1,1,"onGetRedCrystal")
+
 
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
@@ -289,4 +291,8 @@ function _onSetWeaponRight(address,len,t)
         local y = onSetWeapon(t.y)
         if y then memory.setregister("y", y) end
     end
+end
+
+function _onGetRedCrystal(address,len,t)
+    if type(onGetRedCrystal)=="function" then onGetRedCrystal() end
 end

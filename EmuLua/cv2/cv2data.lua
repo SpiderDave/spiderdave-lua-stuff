@@ -167,8 +167,8 @@ cv2.enemies = {
         exp=0,
         hp=0,
     },
-    [0x25] = {name="Orb", exp=0},
-    [0x26] = {name="Sacred Flame", exp=0},
+    [0x25] = {name="Orb", exp=0, hp="initial"},
+    [0x26] = {name="Sacred Flame", exp=0, hp="initial"},
     [0x27] = {name="Book", exp=0, hp="initial"},
     [0x28] = {name="Town Man", exp=0, hp=0},
     [0x29] = {name="Town Woman", exp=0, hp=0},
@@ -487,13 +487,27 @@ cv2.messages = {
             text="I'LL GIVE YOU\nA BLUE\nCRYSTAL.",
         },
     },
+    [0x56]={
+        {
+            text="I'LL GIVE YOU\nA RED\nCRYSTAL.",
+        },
+    },
     [0x6b]={
         {
-            condition=function() return relics.list.blueCrystal end,
+            condition=function() return displayarea=="Alba" and relics.list.redCrystal end,
+            text="THE RED\nCRYSTAL CAN\nREVEAL A \nHIDDEN \nPATH.",
+        },
+        {
+            condition=function() return displayarea=="Aljiba" and relics.list.blueCrystal end,
             text="THE BLUE\nCRYSTAL CAN\nREVEAL A \nHIDDEN \nPATH.",
         },
         {
-            condition=function() return not relics.list.whiteCrystal and not relics.list.blueCrystal end,
+            condition=function() return displayarea=="Alba" and not relics.list.blueCrystal and not relics.list.redCrystal end,
+            text="I HAVE A RED\nCRYSTAL.",
+            notes = "",
+        },
+        {
+            condition=function() return displayarea=="Aljiba" and not relics.list.whiteCrystal and not relics.list.blueCrystal end,
             text="I HAVE A BLUE\nCRYSTAL.",
             notes = "",
         },
