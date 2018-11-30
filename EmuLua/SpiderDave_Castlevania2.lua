@@ -1,17 +1,17 @@
 -- Castlevania 2 Lua script by SpiderDave
 --
--- 2018.11.8
+-- 2018.28.11
 --
 -- Changes:
 --  * Message speed increased
 --  * New patterns for Dracula (needs work and balancing)
---  * Improved Death boss
---  * Improved Carmilla boss
+--  * Improved Death boss (broken atm)
+--  * Improved Carmilla boss (broken atm)
 --  * Skeletons can turn around
 --  * Skeletons now throw bones.  They throw more bones more frequently at night
 --  * Werewolves improved; rush and jump attack.  rush distance increased at night.
---  * Improved skulls, ghosts, medusa heads
---  * Improved floating eyes
+--  * Improved skulls, ghosts, medusa heads (broken atm)
+--  * Improved floating eyes (broken atm)
 --  * Hands are hidden until close.
 --  * All fireballs should now face proper direction
 --  * Don't re-fight Bosses
@@ -20,7 +20,7 @@
 --  * Most special weapons now have a heart cost.
 --  * Garlic disappears after a while.
 --  * Banshee Boomerang
---  * Equip Dracula's ring and white dagger to use axes
+--  * Axes
 --  * Fixed spelling "Prossess" -> "Possess"
 --  * New top display
 --  * Holy water burn effect. The bottle is also now blue.
@@ -31,7 +31,7 @@
 --    and the player flashes.
 --  * Relics are no longer equipped but turned on or off instead.  You can now have all 
 --    relics active at the same time.
---  * Crystals are seperate and no longer swapped (currently, trading one lets you keep the old).
+--  * Crystals are seperate and no longer swapped
 --  * Experience is now gained when killing enemies, and experience system is reworked.
 --  * Experience display shows total experience from all levels, not just current.
 --  * Start at level 1; maximum level is 99.
@@ -40,10 +40,13 @@
 --  * Hearts no longer give experience and are no longer used to buy items.
 --  * Maximum hearts lowered to 99 (these are now only used for special weapons).
 --  * New reworked Sub screen
---  * New items (armors, whips).  Currently, the inventory has all items.
+--  * New items (armors, whips).
 --  * Reduced stun time when using whip
+--  * slightly increased whip delay (to match other games)
 --  * Removed continue/password screen, added simple "game over" screen
---  * Dracula's eye now shows fake blocks
+--  * Dracula's eye now shows fake blocks and breakable blocks
+--  * New Save/Load system
+--  * Adjusted handling of velocity when jumping while on a moving platform.
 --
 -- Debug and experimental stuff (may not be in the final version):
 --  * Cheats
@@ -94,18 +97,27 @@
 --  * create a town warp for debugging
 --  * audit/test getting all items
 --     - aljiba guy gives diamond instead of laurels
---  * rover mansion crash on dracula part
---  * don't make werewolf rush in the wrong direction
---  * item bags don't load on state load
+--       + fixed
+--     - free laurel guy doesn't give laurels
 --  * bug where enemies can sometimes be unkillable
 --  * rework all memory.registerexec functions to use custom callbacks.  safer, better.
 --     - did some of them
 --  * add confirmation of equipping an item (sound, flash, etc)
 --  * make it so when hands hit you you don't get knocked back.
---  * make the npc slow or stop
 --  * prevent talking to npcs in the air
---  * bug - clues are wrong
 --  * bug - password text is wrong (can't get to password screen anyway but still should track it down)
+--  * issue - can keep getting non-inventory custom items (like gold) over and over again
+--  * bug - free laurel guy doesn't give laurels
+--  * issue - boss doors don't reflect diamond or other collisions.
+--      - possible solution: adjust nametable data.
+--  * bug - can't get silk bag.
+--  * add collision boxes https://forum.speeddemosarchive.com/post/castlevania_ii_simons_quest_collision_box_viewer.html
+--      + done
+--  * restore hp after boss (or getting dracula relic?)
+--  * fix it so jumping into sideways spikes doesn't just make you stand on them.
+--  * animate water
+--  * add ability to stand up during early part of ducking whip
+--  * level up toast should go on top of everything else
 
 require ".Spidey.TSerial"
 
@@ -116,6 +128,7 @@ local cv2data=require("cv2.cv2data")
 local items=require("cv2.items")
 local util = require("spidey.util")
 require("cv2.callbacks")
+local hitboxes = require("cv2.hitboxes")
 local config={}
 
 
@@ -201,6 +214,7 @@ spidey.debug.enabled=false
 
 local msgChoice=0
 local msgMode=0
+local action
 
 classMenu=spidey.classes.Menu
 mnu=classMenu:new()
@@ -767,6 +781,17 @@ o.custom.isOnScreen=function(i)
     return (area1==o.custom[i].area[1] and area2==o.custom[i].area[2] and area3==o.custom[i].area[3] and returnArea==(o.custom[i].area[4] or returnArea))
 end
 
+
+function collision(t1,t2)
+    if not t1 or not t2 then return end
+    if #t1+#t2 ~=8 then return end
+    return t1[1] < t2[3] and
+         t2[1] < t1[3] and
+         t1[2] < t2[4] and
+         t2[2] < t1[4]
+end
+
+
 o.custom.createCandles = function()
     for k,v in ipairs(candles) do
         i=getunusedcustom()
@@ -838,6 +863,18 @@ function getCustomCount(t)
     return count
 end
 
+function isCustomDuplicate(i)
+    for k,v in ipairs(o.custom) do
+        if k~=i and v.active==1 and v.type==o.custom[i].type then
+            if v.originX == o.custom[i].originX and v.originY == o.custom[i].originY then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+
 
 function destroyEnemies()
     for i=0,o.count-1 do
@@ -904,6 +941,8 @@ function saveGame(slot)
         returnScroll2 = returnScroll2,
         returnX=returnX,
         returnY=returnY,
+        whipItem = o.player.whipItem,
+        weaponItem = o.player.weaponItem,
         armor=o.player.armor,
         accessory=o.player.accessory,
         itemList = itemList2,
@@ -911,6 +950,9 @@ function saveGame(slot)
     
     local t= TSerial.pack(saveData)
     writetofile(string.format("cv2/SaveGame%d.dat",slot), t)
+    if game.saveCache then
+        game.saveCache[game.saveSlot] = nil
+    end
     emu.message("saved. "..game.saveSlot)
 end
 
@@ -923,6 +965,7 @@ end
 
 function loadGame(slot, setArea)
     slot=slot or 1
+    --emu.message(slot)
 
     game.saveSlot = slot
     memory.writebyte(0x7400, game.saveSlot)
@@ -952,9 +995,12 @@ function loadGame(slot, setArea)
     o.player.exp = saveData.exp
     o.player.laurels = saveData.laurels
     o.player.garlic = saveData.garlic
+    o.player.weaponItem = saveData.weaponItem
+    o.player.whipItem = saveData.whipItem
     o.player.armor = saveData.armor
     o.player.accessory = saveData.accessory
-    itemList = saveData.itemList or itemList
+    --itemList = saveData.itemList or itemList
+    itemList = saveData.itemList
     
     area1=saveData.area1
     area2=saveData.area2
@@ -997,8 +1043,10 @@ function loadGame(slot, setArea)
     
     memory.writebyte(0x004c, o.player.laurels)
     memory.writebyte(0x004d, o.player.garlic)
-    memory.writeword(0x7000+10, o.player.armor or 0)
-    memory.writeword(0x7000+13, o.player.accessory or 0)
+    
+    
+    setWeapon(o.player.weaponItem)
+    setWhip(o.player.whipItem)
     setArmor(o.player.armor)
     setAccessory(o.player.accessory)
     
@@ -1173,6 +1221,7 @@ function getExtraData()
         relics.list.eye = (relics.main == bit.bor(relics.main, 0x04))
         relics.list.nail = (relics.main == bit.bor(relics.main, 0x08))
         relics.list.ring = (relics.main == bit.bor(relics.main, 0x10))
+        relics.list.allParts = (relics.list.rib and relics.list.heart and relics.list.eye and relics.list.nail and relics.list.ring)
         relics.list.whiteCrystal = (relics.main == bit.bor(relics.main, 0x20))
         relics.list.blueCrystal = (relics.main == bit.bor(relics.main, 0x40))
         
@@ -1284,10 +1333,25 @@ function getExtraData()
         end
     end
     updateItems()
+    
+    if hasInventoryItem("Laurel") then
+        memory.writebyte(0x004c, itemList[getInventoryIndex("Laurel")].amount or 0)
+    else
+        memory.writebyte(0x004c, 0)
+    end
+    if hasInventoryItem("Garlic") then
+        memory.writebyte(0x004d, itemList[getInventoryIndex("Garlic")].amount or 0)
+    else
+        memory.writebyte(0x004d, 0)
+    end
 end
 
 function setArmor(n)
     o.player.armor = n or o.player.armor
+    if (o.player.armor or 0) == 0 then
+        o.player.armor = items.index["Red Tunic"]
+    end
+    
     memory.writebyte(0x7000+10, o.player.armor or 0)
     if o.player.armor == 0 then 
         -- no armor
@@ -1312,6 +1376,10 @@ end
 
 function setWhip(n)
     o.player.whipItem = n or o.player.whipItem
+    if (o.player.whipItem or 0) == 0 then
+        o.player.whipItem = items.index["Leather Whip"]
+    end
+
     --emu.message(string.format("setwhip %d",o.player.whipItem))
     memory.writebyte(0x7000+11, o.player.whipItem)
     if o.player.whipItem == 0 then 
@@ -1325,8 +1393,9 @@ end
 
 function setWeapon(n)
     o.player.weaponItem = n or o.player.weaponItem
-    memory.writebyte(0x7000+12, o.player.weaponItem)
-    if o.player.weaponItem == 0 then 
+    memory.writebyte(0x7000+12, o.player.weaponItem or 0)
+    if not items[o.player.weaponItem] then
+    --if o.player.weaponItem == 0 then 
         -- no weapon
         o.player.weaponItem = nil
         weapons.current=0
@@ -1365,18 +1434,53 @@ function setRelicState(r,state)
 end
 
 function updateVisibleBlocks()
+--    for _,v in ipairs(cv2data.mansions) do
+    
+--    end
     for i=0,0x0f do
-        if relics.on.eye then
-            rom.writebyte(0x10+0x28000+0x10*0xd9+i, 0)
-            rom.writebyte(0x10+0x28000+0x10*0xdb+i, 0)
-            rom.writebyte(0x10+0x28000+0x10*0xda+i, 0)
-            rom.writebyte(0x10+0x28000+0x10*0xdc+i, 0)
-        else
-            rom.writebyte(0x10+0x28000+0x10*0xd9+i, rom.readbyte(0x10+0x28000+0x10*0xf6+i))
-            rom.writebyte(0x10+0x28000+0x10*0xdb+i, rom.readbyte(0x10+0x28000+0x10*0xf8+i))
-            rom.writebyte(0x10+0x28000+0x10*0xda+i, rom.readbyte(0x10+0x28000+0x10*0xf7+i))
-            rom.writebyte(0x10+0x28000+0x10*0xdc+i, rom.readbyte(0x10+0x28000+0x10*0xf9+i))
-        end
+        --for bank = 0,9 do
+        local bank = memory.readbyte(0x0101)
+            if relics.on.eye then
+                if inMansion then
+                    if i<8 then
+                        rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xd9+i, rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xd9+i+8))
+                        rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xdb+i, rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xdb+i+8))
+                        rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xda+i, rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xda+i+8))
+                        rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xdc+i, rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xdc+i+8))
+                    end
+                end
+
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfb+i, rom.readbyte(0x10+0x28000+0x10*0x47+i))
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfd+i, rom.readbyte(0x10+0x28000+0x10*0x49+i))
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfc+i, rom.readbyte(0x10+0x28000+0x10*0x4b+i))
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfe+i, rom.readbyte(0x10+0x28000+0x10*0x4c+i))
+
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfb+i, rom.readbyte(0x10+0x28000+0x10*0xf2+i))
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfd+i, rom.readbyte(0x10+0x28000+0x10*0xf3+i))
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfc+i, rom.readbyte(0x10+0x28000+0x10*0xf2+i))
+--                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfe+i, rom.readbyte(0x10+0x28000+0x10*0xf3+i))
+
+                if i <8 then
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfb+i, bit.band(rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfb+i), 0xff-rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfb+i+8)))
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfd+i, bit.band(rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfd+i), 0xff-rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfd+i+8)))
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfc+i, bit.band(rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfc+i), 0xff-rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfc+i+8)))
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfe+i, bit.band(rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfe+i), 0xff-rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xfe+i+8)))
+                end
+
+            else
+                if inMansion then
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xd9+i, rom.readbyte(0x10+0x28000+0x10*0xf6+i))
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xdb+i, rom.readbyte(0x10+0x28000+0x10*0xf8+i))
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xda+i, rom.readbyte(0x10+0x28000+0x10*0xf7+i))
+                    rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xdc+i, rom.readbyte(0x10+0x28000+0x10*0xf9+i))
+                end
+
+                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfb+i, rom.readbyte(0x10+0x28000+0x10*0xf6+i))
+                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfd+i, rom.readbyte(0x10+0x28000+0x10*0xf8+i))
+                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfc+i, rom.readbyte(0x10+0x28000+0x10*0xf7+i))
+                rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xfe+i, rom.readbyte(0x10+0x28000+0x10*0xf9+i))
+            end
+        --end
     end
 end
 
@@ -1846,6 +1950,18 @@ function drawHUD()
         drawfont(8*21-1,8+4,font[current_font], "time:"..time)
         --drawfont(256-4-8*5,8+4,font[current_font], time)
         
+        
+        if config.showRelicsInHUD then
+            for i,relic in ipairs(cv2data.relics) do
+                if relics.list[relic.varName] and gfx.relics[i] then
+                    gfx.draw(8*21-1+i*8-8,35,gfx.relics[i])
+                    if not relics.on[relic.varName] then
+                        gui.drawbox(8*21-1+i*8-8,35,8*21-1+i*8,35+8,"#000000c0","#000000c0")
+                    end
+                end
+            end
+        end
+        
 --        if relics.name then
 --            if gfx.relics[relics.current] then gfx.draw(8*21-1,35,gfx.relics[relics.current]) end
 --            drawfont(8*22,8*4+4,font[current_font], string.format('%s',relics.displayName))
@@ -1914,28 +2030,10 @@ memory.writebyte(0x0306+n, 0x9c) -- frame
 
 memory.writebyte(0x34e+n,simon_x)
 memory.writebyte(0x32a+n,simon_y)
---            o[n].type=memory.readbyte(0x03ba+n)
---            o[i].frame=memory.readbyte(0x0306+n)
---            o[i].x=memory.readbyte(0x0348+6+i)
---            o[i].y=memory.readbyte(0x0324+6+i)
---            o[i].ys=memory.readbyte(0x036c+6+i)
---            o[i].xs=memory.readbyte(0x0396+i)
---            o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
---            o[i].facing=memory.readbyte(0x0420+6+i)
---            o[i].stun=memory.readbyte(0x04fe+i)
---            o[i].state=memory.readbyte(0x044a+i) --sometimes it's counter
---            o[i].state2=memory.readbyte(0x046e+i)
---            o[i].statecounter=memory.readbyte(0x04b6+i) --used with drac, carmilla, others?
---            o[i].xdist=math.abs(o.player.x-o[i].x)
---            o[i].ydist=math.abs(o.player.y-o[i].y)
---            o[i].facingplayer=((o[i].x<o.player.x and o[i].facing==1) or (o[i].x>o.player.x and o[i].facing==0))
---            o[i].hp=memory.readbyte(0x04c8+i) --note: if hp==0, it can't be hit
-
-
 end
 
 
-function hurtplayer()
+function hurtplayer(data)
     --atm, we hurt the player by creating an unfriendly heart on top of him
     if o.player.inv>0 then return end --if he's invincible, don't bother.
     onum = getunused()
@@ -1946,7 +2044,8 @@ function hurtplayer()
     memory.writebyte(0x0327+3+onum,o.player.y)
     memory.writebyte(0x03de+onum,0x01) --not friendly
     memory.writebyte(0x03ed+3+onum,0x01) --helps to init it; frame?
-    memory.writebyte(0x0393+3+onum,0x00) --x speed
+    memory.writebyte(0x0396+onum,0x01) --x speed
+    memory.writebyte(0x036f+onum,data or 0) --y speed
     memory.writebyte(0x044a+onum,0x18) --make fire disappear faster
     return true
 end
@@ -2128,10 +2227,38 @@ function onHeartPickup(n)
     return n
 end
 
+function onEnding(n)
+    return n
+end
+
 function onGetRedCrystal()
     relics.list.redCrystal = true
     setRelicState("redCrystal",true)
     createItemPopUp("Red Crystal")
+end
+
+function onGetCross()
+    getItem("Cross", true)
+end
+
+function onGetDiamond()
+    if hasInventoryItem("Diamond") then return end
+    
+    -- He gives the item before the message, so we have to do this
+    game.getItemDelayed = "Diamond"
+    game.getItemDelayCounter=0x10
+end
+
+function onUseLaurel(n)
+    removeItem("Laurel", 1)
+    
+    if hasInventoryItem("Laurel") then
+        n = itemList[getInventoryIndex("Laurel")].amount
+    else
+        n = 0
+    end
+    
+    return n
 end
 
 function onSetWeapon(w)
@@ -2204,6 +2331,7 @@ memory.registerexec(0xeea4+2,1, function()
         memory.writebyte(0x7100+i-1, textMap2[m:sub(i,i)])
     end
     memory.writebyte(0x7100+#m, 0xff)
+    game.customMessage = m
 end)
 
 -- message rewriter
@@ -2480,8 +2608,19 @@ memory.registerexec(0x883a,1,
 )
 
 function enemyDamage(i,t,damage)
+
+    if cv2data.enemies[t].name=="Heart" then
+        -- Heart's x speed is 1 to indicate it's a reference to a normal 
+        -- enemy.  Later we'll add more flags to indicate custom stuff.
+        -- type is stored in heart's y speed
+        if memory.readbyte(0x0396+i) == 1 then
+            t = memory.readbyte(0x036f+i)
+        end
+    end
     
     damage = cv2data.enemies[t].attack or damage
+    
+
     
     local oldDamage = damage
     --damage=damage*2
@@ -2596,11 +2735,12 @@ function onThrowWeapon(weaponType, abort)
         removeItem(items[o.player.weaponItem].name,1)
     end
     
-    local abort = false
+    abort = false
 
 
     -- abort throwing of holy water if fire is on ground
     if getCustomCount("holyfire")>0 then
+        --emu.pause()
         abort = true
     end
 
@@ -2635,7 +2775,7 @@ function onThrowWeapon(weaponType, abort)
         -- spend hearts
         setHearts(o.player.hearts - cost)
     end
-
+    return weaponType, abort
 end
 
 memory.registerexec(0xd7ea,0,
@@ -2739,6 +2879,21 @@ memory.registerexec(0x817f,1, function()
     e.name = cv2data.enemies[e.type].name
     e.x=memory.readbyte(0x0348+6+x)
     e.y=memory.readbyte(0x0324+6+x)
+    
+    if config.replaceMedusaHeads and e.name=="Medusa" then
+        createMedusaHead(e.x+scrollx,e.y+scrolly,x)
+        e.type = 0
+        memory.writebyte(0x03ba+x,e.type)
+    end
+    
+    if e.name=="Blob" then
+        e.y=e.y+8+5
+        memory.writebyte(0x032a+x, e.y)
+    end
+    if e.name=="High Jump Blob" then
+        e.y=e.y+8
+        memory.writebyte(0x032a+x, e.y)
+    end
     
     --emu.message(e.name or "?")
     
@@ -2945,7 +3100,34 @@ function createBoomerang(x,y)
         end
         o.custom[i].ys=0
         o.custom[i].active=1
+    end
+end
+
+function createMedusaHead(x,y, enemyIndex)
+    i=getunusedcustom()
+    if (i) then
+        o.custom[i].type="medusahead"
+        o.custom[i].target = enemyIndex
+        o.custom[i].facing = o[enemyIndex].facing
+        o.custom[i].x=x+scrollx
+        o.custom[i].y=y+scrolly
+        --o.custom[i].facing=o.player.facing
+        
+        if o.custom[i].facing==1 then 
+            o.custom[i].xs=1 
+        else 
+            o.custom[i].xs=-1 
+        end
+        --o.custom[i].xs=0
+        o.custom[i].ys=0
+        o.custom[i].outscreen=true
         o.custom[i].active=1
+        o.custom[i].originX = x
+        o.custom[i].originY = y
+    end
+    
+    if isCustomDuplicate(i) then
+        o.custom[i].active=0
     end
 end
 
@@ -3007,14 +3189,26 @@ function onWalkStop()
     o.player.sp=0
 end
 
-function onJumpSpeed(speed)
-    return speed
+function onSetJumpSpeedX(v)
+    return v
 end
 
-
 function onSetJumpSpeedY(v, onPlatform)
-    --if config.platformVelocityFix and onPlatform then v=0xfc end
-    if config.platformVelocityFix and onPlatform then v=v*4 end
+    -- This should be 0xfc but it doesn't look right, but 0xfb does.
+    if config.platformVelocityFix then
+        if o.player.platformIndex then
+            -- Cancel x velocity of jumping straight up on a platform.
+            memory.writebyte(0x6c,0)
+            memory.writebyte(0x6d,0)
+            
+            if o[o.player.platformIndex].xs == 0 then
+                -- for some reason on the vertical platforms you gotta make it 0xfb not 0xfc
+                v=0xfb
+            else
+                v=0xfc
+            end
+        end
+    end
     return v
 end
 
@@ -3291,6 +3485,19 @@ memory.registerexec(0x86f2,1, function()
     memory.setregister("a", a)
 end)
 
+-- Relic check for west bridge
+memory.registerexec(0xa8fe+2,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    
+    a = 0x7f
+    for i=1,5 do
+        if not relics.list[cv2data.relics[i].name] or not relics.on[cv2data.relics[i].name] then
+            a = 0
+        end
+    end
+    memory.setregister("a", a)
+end)
+
 -- get a relic (mansions)
 memory.registerexec(0x8799,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
@@ -3344,10 +3551,30 @@ memory.registerexec(0xede9,1, function()
             getItem(cv2data.weapons[itemNum+1].name, true)
         end
     elseif address==0x92 then
-        if cv2data.weapons[itemNum+1] then
-            --getItem(cv2data.weapons[itemNum+1].name, true)
-            getItem(cv2data.weapons[n+1].name, true)
+        -- get relic, turn it on by default
+        
+        if itemNum == 0 then
+            --getItem("Silk Bag", true)
         end
+        if itemNum == 2 then
+            getItem("Laurel", true)
+            getItem("Laurel", false)
+            o.player.laurels = o.player.laurels +2
+            memory.writebyte(0x004c, o.player.laurels)
+        end
+        if itemNum == 3 then
+            getItem("Garlic", true)
+            getItem("Garlic", false)
+            o.player.garlic = o.player.garlic +2
+            memory.writebyte(0x004d, o.player.garlic)
+        end
+
+--        relics.list[cv2data.relics[itemNum+1].varName]=true
+--        setRelicState(cv2data.relics[itemNum+1].varName, true)
+
+--        if cv2data.weapons[itemNum+1] then
+--            getItem(cv2data.weapons[n+1].name, true)
+--        end
         --emu.message("test item thing: "..cv2data.weapons[n+1].name)
     end
     
@@ -3376,12 +3603,16 @@ memory.registerexec(0xd7ad,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
     if not config.quickDayNight then return end
     if a==0x06 then
+        memory.writebyte(0x002c, 0x06) -- day/night toggle thing
+        memory.writebyte(0x0088, 0x01) -- day/night toggle counter
+
+--        a=0
+--        emu.message("day")
+--        day = math.min(99, day+1)
+--        memory.writebyte(0x0083, day)
+--        game.applyDay = true
+--        memory.writebyte(0x0082, 0)
         a=0
-        emu.message("day")
-        day = math.min(99, day+1)
-        memory.writebyte(0x0083, day)
-        game.applyDay = true
-        memory.writebyte(0x0082, 0)
     end
     memory.setregister("a", a)
 end)
@@ -3390,11 +3621,14 @@ memory.registerexec(0xd7b1,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
     if not config.quickDayNight then return end
     if a==0x18 then
-        emu.message("night")
-        game.applyNight = true
-        memory.writebyte(0x0082, 1)
+        memory.writebyte(0x002c, 0x06) -- day/night toggle thing
+        memory.writebyte(0x0088, 0x01) -- day/night toggle counter
+        
+        --emu.message("night")
+        --game.applyNight = true
+        --memory.writebyte(0x0082, 1)
 
-        local address=0x3f09
+        --local address=0x3f09
 --        memory.writebyteppu(address+0,0x02)
 --        memory.writebyteppu(address+1,0x13)
 --        memory.writebyteppu(address+2,0x0c)
@@ -3406,7 +3640,6 @@ memory.registerexec(0xd7b1,1, function()
 --        memory.writebyteppu(address+0,0x02)
 --        memory.writebyteppu(address+1,0x13)
 --        memory.writebyteppu(address+2,0x0c)
-
     end
     a=0
     memory.setregister("a", a)
@@ -3416,7 +3649,7 @@ end)
 -- checking to see if bit 7 is set (vblank).  Basically it's 
 -- probably a safe place to do ppu writes.
 memory.registerexec(0xc04b,1, function()
-    if game.applyDay then
+    if game.applyDay and false then
         local address=0x3f09
         memory.writebyteppu(address+0,0x22)
         memory.writebyteppu(address+1,0x20)
@@ -3429,7 +3662,8 @@ memory.registerexec(0xc04b,1, function()
         end
 
     end
-    if game.applyNight then
+    
+    if game.applyNight and false then
     
         local address=0x3f09
         memory.writebyteppu(address+0,0x02)
@@ -3451,6 +3685,11 @@ memory.registerexec(0xc04b,1, function()
 end)
 
 memory.registerexec(0xc85a,1, function()
+    if (game.resetCounter or 0) > 0 then return end
+    
+    --if not (action or game.paused or game.pausemenu ) then return end
+    --emu.message(string.format("palette %d bank %02x", spidey.counter, getBank(0xc85a)))
+    
     local a,x,y,s,p,pc=memory.getregisters()
     
     o.player.palette = o.player.palette or cv2data.palettes.simon[1].palette 
@@ -3483,6 +3722,7 @@ memory.registerexec(0xc390,1, function()
         -- We load once here just to display the right saved lives, but 
         -- load again later to load all the rest of the data.
         if loadGame(game.saveSlot, true) then
+            game.loadTimer=5
             game.loadAgain = true
             memory.writebyte(0x7400, game.saveSlot)
         else
@@ -3537,7 +3777,7 @@ end)
 -- on music change
 memory.registerexec(0xcd2c+3,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
-    --emu.message(string.format("sfx=%02x",a))
+    --emu.message(string.format("music=%02x",a))
     
     if config.music == false then
         a=0
@@ -3549,7 +3789,16 @@ end)
 -- on sfx (can't change to 0 without muting music, use 0x62 instead)
 memory.registerexec(0xc127,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
-    --emu.message(string.format("sfx=%02x",a))
+    --spidey.message("sfx=%02x",a)
+    
+    -- Silence the item get sound from diamond guy if you already got it.
+    -- Note: you get the item before sfx plays so it's more 
+    -- complicated than using hasInventoryItem("Diamond").
+    if msgnum == 0x12 and a==0x22 and displayarea == "Vrad Mountain" then
+        if util.removeLineBreaks(game.customMessage) ~= "I'LL GIVE YOU A DIAMOND." then
+            a=0x62
+        end
+    end
     
     -- silence cursor on map screen
     if a==0x31 and game.map.visible then a=0x62 end
@@ -3804,17 +4053,40 @@ function hasItem(n)
     return (o.player.items == bit.bor(o.player.items, 2^(n-1)))
 end
 
+savestate.registerload(function()
+    o.custom.destroyall()
+    o.custom.createCandles()
+    o.custom.createLevelObjects()
+end)
+
 
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
+    hitboxes.update()
     lastinp=inp
+    
+    if config.testEnding then
+        if config.testEnding<1 or config.testEnding>3 then
+            spidey.message("Invalid testEnding value %s",testEnding)
+            config.testEnding=nil
+        else
+            memory.writebyte(0x0026, 0) -- make sure we remove pause
+            
+            -- apply number of days to select ending
+            --config.testEnding = math.max(1,math.min(3, config.testEnding))
+            --memory.writebyte(0x0083, (config.testEnding-1)*0x12)
+
+            memory.writebyte(0x0018,0x0c) -- set mode to ending
+            memory.writebyte(0x002a,0x01) -- set mode countdown to 1
+        end
+        config.testEnding=nil
+    end
     
     game.mode=memory.readbyte(0x0019)
     game.mode2=memory.readbyte(0x00aa)
     game.modeCursor=memory.readbyte(0x23) -- start or continue
     game.modeCounter =memory.readbyte(0x002a)
     game.resetCounter = memory.readword(0x7401)
-    
     
     game.paused=(memory.readbyte(0x0026)==02)
     pausemenu=(memory.readbyte(0x0026)==01)
@@ -3828,7 +4100,7 @@ function spidey.update(inp,joy)
     actionval=memory.readbyte(0x001c)
     actionval2=memory.readbyte(0x001a)
     action=(actionval==0x01 or (actionval==02 and actionval2==01) or (actionval==04 and actionval2==01))
-    if action and memory.readbyte(0x002c)==0x02 then
+    if action and (memory.readbyte(0x002c)==0x02) then
         action = false
     end
     
@@ -3922,6 +4194,7 @@ function spidey.update(inp,joy)
             game.resetCounter = 0
             memory.writeword(0x7401, game.resetCounter)
             emu.softreset()
+            --emu.poweron()
             emu.message("") -- suppress the "reset" message
         end
     end
@@ -4007,6 +4280,7 @@ function spidey.update(inp,joy)
         game.film.scroll = (game.film.scroll + 3) % 14
         gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
         gui.drawbox(0+8*2, 0, spidey.screenWidth-1-8*2, spidey.screenHeight-1, spidey.nes.palette[0x0c], spidey.nes.palette[0x0c])
+        --emu.message(string.format("%s", spidey.nes.palette[0x0c]))
         for i=1,17 do
             gui.drawbox(0+8*2+6,i*7*2-game.film.scroll, 0+8*2+6+11,i*7*2+7-game.film.scroll, "black", "black")
             gui.drawbox(0+8*2+6-1,i*7*2+1-game.film.scroll, 0+8*2+6+11+1,i*7*2+7-1-game.film.scroll, "black", "black")
@@ -4017,7 +4291,9 @@ function spidey.update(inp,joy)
         else
             memory.writebyte(0xfd,0xf0) -- prevent scrolling so intro lasts forever
         end
-        gui.drawbox(0,0, spidey.screenWidth,(8*34+3)-(game.film.y or 0), "black","black")
+        if game.film.y<=8*34+3 then
+            gui.drawbox(0,0, spidey.screenWidth,(8*34+3)-(game.film.y or 0), "black","black")
+        end
         
         --drawfont(100,100,font[5], string.format("%02x",game.film.y) )
         --game.film.y = 0x300
@@ -4035,10 +4311,21 @@ function spidey.update(inp,joy)
     
     romPatch()
     
+    if config.quickDayNight then
+        -- day/night toggle thing
+        if memory.readbyte(0x002c) == 0x07 then
+            memory.writebyte(0x0088, 0x00) -- day/night toggle counter
+        end
+    end
+    
     if action and game.loadAgain then
-        loadGame(game.saveSlot, true) -- setArea=true
-        exitSubScreen() --needed to refresh weapon/relic stuff
-        game.loadAgain = nil
+        if (game.loadTimer or 0) > 1 then
+            game.loadTimer = game.loadTimer-1
+        else
+            loadGame(game.saveSlot, true) -- setArea=true
+            --exitSubScreen() --needed to refresh weapon/relic stuff
+            game.loadAgain = nil
+        end
     end
     
     if spidey.debug.enabled then gui.text(4,4+8*9,string.format('Pattern tables: %02X %02X',pattern1,pattern2)) end
@@ -4114,8 +4401,6 @@ function spidey.update(inp,joy)
         o.player.items = memory.readbyte(0x004a)+memory.readbyte(0x0092)*0x100
         
         o.player.hasbag=hasItem(7)
-        o.player.hascross=hasItem(8)
-        
         
         -- new hp formula
         --o.player.maxHp=0x30+1*o.player.level+4*relics.nParts
@@ -4129,47 +4414,83 @@ function spidey.update(inp,joy)
         o.player.expNext = getExpNeeded()
         
         getExtraData()
+        
+        -- this is a first time thing
+        if not game.customLoaded then
+            o.custom.destroyall()
+            o.custom.createCandles()
+            o.custom.createLevelObjects()
+            game.customLoaded = true
+        end
     end
     if action then
-        --[[
-        for i=0,0x1FFF-1 do
-            --memory.writebyte(0x2001,0x00) -- Turn off rendering
-            memory.writebyte(0x2006,math.floor(i/0x100)) -- PPUADDR high byte
-            memory.writebyte(0x2006,i % 0x100) -- PPUADDR low byte
-            memory.writebyte(0x2007,0x00) -- PPUDATA
-            --memory.writebyte(0x2001,0x1e) -- Turn on rendering
-        end
-        ]]--
-        --gui.drawbox(0, 0, 256, 32, "black", "black")
---        o.player.hp=memory.readbyte(0x0080)
---        o.player.maxHp=memory.readbyte(0x0081)
---        o.player.level=memory.readbyte(0x008b)
---        o.player.lives=memory.readbyte(0x0031)
---        o.player.laurels = memory.readbyte(0x004c)
---        o.player.garlic = memory.readbyte(0x004d)
-
-
         o.player.inBossRoom = false
         if spidey.debug.enabled then
             drawfont(0,5+8*5,font[current_font],string.format('HP: %02X %02X',o.player.hp or 0,o.player.maxHp or 0))
             drawfont(0,5+8*6,font[current_font],string.format('Relics: %02X',relics.nParts) )
         end
-        
---         new hp formula
---        o.player.maxHp=0x30+1*o.player.level+4*relics.nParts
---        memory.writebyte(0x0081, o.player.maxHp)
     end
     
     gui.text(0,0, ""); -- force clear of previous text
     
     -- Hide graphics for HP
-    if action or pausemenu then
-        memory.writebyte(0x0203,0xff)
-        memory.writebyte(0x0207,0xff)
-        memory.writebyte(0x020b,0xff)
-    end
+--    if action or pausemenu then
+--        memory.writebyte(0x0203,0xff)
+--        memory.writebyte(0x0207,0xff)
+--        memory.writebyte(0x020b,0xff)
+--    end
     --if action or pausemenu then
     
+    if config.jumpTweak and action then
+        -- Increase downward velocity cap.  it makes you die in marsh if you fall far enough though.
+        rom.writebyte( 0xca0a, 0x06)
+        rom.writebyte( 0xca10, 0x06)
+
+        game.fallCounter = game.fallCounter or 0
+        game.jumpCounter = game.jumpCounter or 0
+        local vy = memory.readbyte(0x036c)
+        if vy==0 then game.jumpCounter = 0 end
+        if vy==0xfc then
+            game.jumpCounter = game.jumpCounter + 1
+            memory.writebyte(0x040e, 0x11)
+            if memory.readbyte(0x0300) ==0x05 then
+                memory.writebyte(0x0300, 0x04)
+            end
+        elseif vy==0xfd then
+            memory.writebyte(0x040e, 0x01)
+            if memory.readbyte(0x0300) ==0x04 then
+                memory.writebyte(0x0300, 0x05)
+            end
+        end
+        
+        if memory.readbyte(0x0068)==0x82 then
+            if game.fallCounter>07 then
+                memory.writebyte(0x040e, 0x11)
+                if memory.readbyte(0x0300) ==0x05 then
+                    memory.writebyte(0x0300, 0x04)
+                end
+            end
+            game.fallCounter = game.fallCounter + 1
+            --if game.fallCounter % 1==0 then
+                local vy = memory.readbyte(0x036c)
+                --vy=vy*1.06+.25
+                if vy>3 then vy=vy+1 end
+                --if vy>=5 then vy=vy+1 end
+                memory.writebyte(0x036c, vy)
+            --end
+        else
+            game.fallCounter = 0
+        end
+    end
+    
+    if game.getItemDelayed then
+        if (game.getItemDelayCounter or 0) >1 then
+            game.getItemDelayCounter = game.getItemDelayCounter - 1
+        else
+            getItem(game.getItemDelayed, true)
+            game.getItemDelayed = nil
+        end
+    end
     
     if game.mode==0x04 and game.modeCounter == 0x80 then
         if joy[1].right_press then game.saveSlot = math.min(99,game.saveSlot+1) end
@@ -4347,26 +4668,19 @@ function spidey.update(inp,joy)
         --memory.writebyte(0x00b4,0x1f)
     end
     
-    if (action and bat) then
+    if action and bat then
         memory.writebyte(0x0445,0x05) --disable whip
         
         simon_frame=memory.readbyte(0x0300)
-        if emu.framecount() % 20<10 then
+        if spidey.counter % 20<10 then
             simon_frame=0xc8
         else
             simon_frame=0xc9
         end
-        memory.writebyte(0x0300,simon_frame)
         
         memory.writebyte(0x037e,0x00) --no downward gravity
         
         memory.writebyte(0x036c,0x00)
-        if joy[1].up then
-            memory.writebyte(0x036c,0xfe)
-        end
-        if joy[1].down then
-            memory.writebyte(0x036c,0x02)
-        end
 
         memory.writebyte(0x006d,0x00)
         if joy[1].left then
@@ -4379,16 +4693,55 @@ function spidey.update(inp,joy)
             memory.writebyte(0x006d,0x02)
             memory.writebyte(0x0420,01) --face right
         end
+
+
+        if joy[1].left then
+            local ys = spidey.makeNesFloat(math.cos((joy[1].left_press_time-1) *.3)*1.5)+.5
+            memory.writebyte(0x037e,0)
+            memory.writebyte(0x036c,ys)
+        end
+        if joy[1].right then
+            local ys = spidey.makeNesFloat(math.cos((joy[1].right_press_time-1) *.3)*1.5)+.5
+            memory.writebyte(0x037e,0)
+            memory.writebyte(0x036c,ys)
+        end
+
+
+        if joy[1].left or joy[1].right then
+            if spidey.counter % 8<4 then
+                simon_frame=0xc8
+            else
+                simon_frame=0xc9
+            end
+        end
+
+        if joy[1].up then
+            memory.writebyte(0x036c,0xfe)
+            if spidey.counter % 6<3 then
+                simon_frame=0xc8
+            else
+                simon_frame=0xc9
+            end
+        end
+        if joy[1].down then
+            memory.writebyte(0x036c,0x02)
+            if spidey.counter % 15==2 then
+                simon_frame=0xc9
+            else
+                simon_frame=0xc8
+            end
+        end
+        
+        
+        
+        memory.writebyte(0x0300,simon_frame)
         
     end
     
     --destroy custom objects if going between screens
     if screenload then o.custom.destroyall() end
-    
-    
     if screenload then o.custom.createCandles() end
     if screenload then o.custom.createLevelObjects() end
-    
     
     if (action) then
         if o.player.lockPosition then
@@ -4426,12 +4779,25 @@ function spidey.update(inp,joy)
                 o.player.lockPosition = nil
             end
         end
-
-
+        
         o.player.x=memory.readbyte(0x0348)
         o.player.y=memory.readbyte(0x0324)
         o.player.inv=memory.readbyte(0x04f8)
         o.player.frame = memory.readbyte(0x0300)
+        
+        
+        if config.getItems then
+            for _,item in ipairs(util.split(config.getItems, ",")) do
+                item = util.trim(item)
+                if not hasInventoryItem(item) then
+                    getItem(item, true)
+                elseif (itemList[getInventoryIndex(item)].amount or 0) < (items[items.index[item]].stack or 0) then
+                    itemList[getInventoryIndex(item)].amount = items[items.index[item]].stack-1
+                    getItem(item, true)
+                end
+            end
+        end
+        
         
         -- Check if the player is in the in air hurt frame.  If so, reset 
         -- the invincible counter.  This way, you doesn't start flashing until
@@ -4453,11 +4819,11 @@ function spidey.update(inp,joy)
             memory.writebyte(0x03c6,0x00) -- render player on
         end
         
+        
         o.player.facing=memory.readbyte(0x0420)
         stuff=memory.readbyte(0x004a)
         o.player.hasgoldendagger=(stuff==bit.bor(stuff, 2^2))
         stuff=memory.readbyte(0x0092)
-        --o.player.hascross=(stuff==bit.bor(stuff, 2^1))
 
         for i=0,1 do
             o.whip[i].type=memory.readbyte(0x03b5+i)
@@ -4471,6 +4837,7 @@ function spidey.update(inp,joy)
                 if spidey.debug.enabled then gui.text(o.whip[i].x,o.whip[i].y, string.format("%u %02X\n(%3u,%3u) %2i %2i",i,o.whip[i].type,o.whip[i].x,o.whip[i].y,signed8bit(o.whip[i].xs),signed8bit(o.whip[i].ys)),"blue",'white') end
             end
         end
+        
         
         for i=0,2 do
             o.weapons[i].type=memory.readbyte(0x03b7+i)
@@ -4539,6 +4906,7 @@ function spidey.update(inp,joy)
             end
         end
         
+        o.player.platformIndex = nil
         for i=0,o.count-1 do
             o[i] = {}
             o[i].type=memory.readbyte(0x03ba+i)
@@ -4551,6 +4919,7 @@ function spidey.update(inp,joy)
             o[i].show=(memory.readbyte(0x03cc+i) <0x80)
             o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
             o[i].facing=memory.readbyte(0x0420+6+i)
+            o[i].carrying=memory.readbyte(0x0480+i) --platforms: 00 = not carrying simon, ff = carrying simon
             o[i].stun=memory.readbyte(0x04fe+i)
             o[i].palette=memory.readbyte(0x0318+i)
             o[i].state=memory.readbyte(0x044a+i) --sometimes it's counter
@@ -4560,6 +4929,12 @@ function spidey.update(inp,joy)
             o[i].ydist=math.abs(o.player.y-o[i].y)
             o[i].facingplayer=((o[i].x<o.player.x and o[i].facing==1) or (o[i].x>o.player.x and o[i].facing==0))
             o[i].hp=memory.readbyte(0x04c8+i) --note: if hp==0, it can't be hit
+            
+            if o[i].carrying == 0xff then
+                -- platform is carrying Simon
+                o.player.platformIndex = i
+            end
+            
             if o[i].type ~=0 and o[i].hp>0-1 and o[i].show then
                 --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",o[i].type,o[i].x,o[i].y,o[i].hp))
                 if spidey.debug.enabled then gui.text(o[i].x,o[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x+scrollx,o[i].y+scrolly,signed8bit(o[i].xs),signed8bit(o[i].ys))) end
@@ -4617,6 +4992,11 @@ function spidey.update(inp,joy)
                 end
             end
         end
+
+    if config.testMarker then gui.text(100,100,"test marker 1") end
+--    if o.player.platformIndex then
+--        spidey.message("%02x", o.player.platformIndex)
+--    end
     
     --do extra enemy stuff
     for i=0,o.count-1 do
@@ -4674,6 +5054,7 @@ function spidey.update(inp,joy)
             end
         end
         if o[i].name == "Heart" then
+            if o[i].xs==1 then return end -- we set this to mark it as custom damager heart
             -- hearts always small
             o[i].hp=0xef
             o[i].hp=1
@@ -4803,7 +5184,41 @@ function spidey.update(inp,joy)
                 memory.writebyte(0x0324+6+i,o[i].y)
         end
         
-        if o[i].type==0x0a then --medusa heads
+        if o[i].name == "MedusaX" then
+            --o[i].
+            
+            if o[i].state==0 then
+                o[i].state=o[i].x
+                o[i].state2=o[i].y
+                memory.writebyte(0x044a+i, o[i].state)
+                memory.writebyte(0x046e+i, o[i].state2)
+            end
+            
+            local x = o[i].state
+            local y = o[i].state2
+            
+            o[i].statecounter = ((o[i].statecounter or 0) +1) % 0x100
+            memory.writebyte(0x04b6+i, o[i].statecounter)
+--            y=y+math.cos(o[i].statecounter *.04)*2
+--            x=x-math.sin(o[i].statecounter *.01)*2
+            y=y+math.cos(o[i].statecounter *.04)*1
+            x=x-math.sin(o[i].statecounter *.01)*1
+
+            memory.writebyte(0x0348+6+i,x)
+            memory.writebyte(0x0324+6+i,y)
+            
+            memory.writebyte(0x044a+i,x)
+            memory.writebyte(0x046e+i,y)
+
+
+--            if o[i].state+o[i].state2+o[i].statecounter > 0 then
+--                emu.pause()
+                
+--            end
+            emu.message(string.format("%02x %02x %02x",o[i].state, o[i].state2, o[i].statecounter or 0))
+        end
+        
+        if o[i].type==0x0a and false then --medusa heads
                 --needs work but at least they're wavy
 --                emu.message(string.format("%02x",o[i].statecounter))
 --                emu.pause()
@@ -4908,7 +5323,7 @@ function spidey.update(inp,joy)
         end
         
         if o[i].type==0x49 then -- magic cross item
-            if o.player.hascross then
+            if hasInventoryItem("Cross") then
                 o[i].type=0
                 o[i].frame=0
                 memory.writebyte(0x03ba+i,o[i].type)
@@ -4918,7 +5333,7 @@ function spidey.update(inp,joy)
         
         if o[i].type==0x42 then --Carmilla (mask boss)
             o.boss.maxHp=240
-            if o.player.hascross and not refight_bosses then
+            if hasInventoryItem("Cross") and not refight_bosses then
                 --Only fight boss once
                 o[i].destroy = true
             end
@@ -5189,6 +5604,9 @@ function spidey.update(inp,joy)
         end
     end
     
+    if config.testMarker then gui.text(100,100+8,"test marker 2") end
+    
+    
     if inp.leftbutton_press then
         i=getunusedcustom()
         i=false --DISABLE
@@ -5205,55 +5623,6 @@ function spidey.update(inp,joy)
             o.custom[i].active=1
         end
     end
-
---[[
-    if inp.leftbutton_press then
-        e=getenemydata(6)
-        emu.message("get")
-    end
-    if inp.middlebutton_press then
-        setenemydata(6+getunused(),e)
-        emu.message("set")
-    end
-]]--
-    
-    if inp.leftbutton_press and false then
-            i=0
-            simon_x= memory.readbyte(0x0348)
-            simon_y= memory.readbyte(0x0324)
-            memory.writebyte(0x03b7+3,0x34) --21 22 34
-            memory.writebyte(0x034b+3,simon_x)
-            memory.writebyte(0x0327+3,simon_y)
-            memory.writebyte(0x03ed+3,0x01) --helps to init it; frame?
-            memory.writebyte(0x0393+3,0x00) --x speed
-            memory.writebyte(0x03ba,52) --x speed 2?
-            --memory.writebyte(0x044a,0x18) --make fire disappear faster
-            
-            memory.writebyte(0x01da,0xFE) --platform moves?
-            memory.writebyte(0x033e,0x80) --platform moves?
-            memory.writebyte(0x0384,0xf0) --platform moves?
-            memory.writebyte(0x0386,0x80) --platform moves?
-            memory.writebyte(0x03f7,0x09) --platform moves?
-            memory.writebyte(0x0417,0x20) --platform moves?
-            memory.writebyte(0x0438,0x04) --platform moves?
-            memory.writebyte(0x04c8,0x20) --platform moves?
-            o[i].frame=0x43
-            memory.writebyte(0x0306+i,o[i].frame)
-        --[[
-        i=getunused()
-        if (i) then
-            --o.custom[i].type="fireball"
-            o[i].type=0x22
-            --o.custom[i].x=inp.xmouse+scrollx
-            --o.custom[i].y=inp.ymouse+scrolly
-            o[i].x=inp.xmouse
-            o[i].y=inp.ymouse
-        end
-        ]]--
-    end
-    
---    o.player.gold = 9999
---    memory.writeword(0x7000+1, o.player.gold)
     
     if cheats.active and (cheats.battest or cheats.leftClick == "battest") and inp.leftbutton_press then
         i=getunusedcustom()
@@ -5311,8 +5680,6 @@ function spidey.update(inp,joy)
 --        x=(spidey.debug.levelEdit.screen-game.scrollScreen.value)*16*16+spidey.debug.levelEdit.cursorX*16-game.scrollX.value
 --        y=spidey.debug.levelEdit.cursorY*16-game.scrollY.value
 --        gui.drawbox(x, y, x+16, y+16, "clear", "blue")
-
-
     end
     
     --if inp.leftbutton_press then game.applyNight=true end
@@ -5383,9 +5750,6 @@ function spidey.update(inp,joy)
     end
     
     
-    if cheats.bonetest and inp.leftbutton_press then
-    end
-    
     --if cheats.active and not cheats.battest and inp.leftbutton_press then
     --if cheats.bonetest and inp.leftbutton_press then
     if cheats.active and inp.leftbutton_press and cheats.leftClick =="bone" then
@@ -5404,7 +5768,7 @@ function spidey.update(inp,joy)
             o.custom[i].active=1
         end
     end
-
+    
     for i=0,o.custom.count-1 do
         o.custom[i].xdist=math.abs(o.player.x-o.custom[i].x+scrollx)
         o.custom[i].ydist=math.abs(o.player.y-o.custom[i].y+scrolly)
@@ -5413,6 +5777,7 @@ function spidey.update(inp,joy)
         else
             o.custom[i].alivetime=0
         end
+        
         if o.custom[i].active==1 then
             --gui.drawrect(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, o.custom[i].x+2-scrollx, o.custom[i].y+2-scrolly, "yellow","red")
             --gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
@@ -5698,6 +6063,35 @@ function spidey.update(inp,joy)
                     --o.custom[i].active=0
                     hurtplayer()
                 end
+            
+            elseif o.custom[i].type=="medusahead" then
+                if o.custom[i].onScreen then o.custom[i].outscreen=false end
+                if o.custom[i].alivetime == 2 then
+                    o.custom[i].y=o.player.y+16
+                end
+                
+                o.custom[i].y=o.custom[i].y+math.cos((o.custom[i].alivetime+10) *.056)*2
+                
+                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly-8, gfx.whitecrystal)
+                
+                if (o.custom[i].hurtTimer or 0) > 0 then
+                    o.custom[i].hurtTimer=(o.custom[i].hurtTimer or 0)-1
+                elseif o.custom[i].xdist<10 and o.custom[i].ydist<10 then
+                    --o.custom[i].active=0
+                    o.custom[i].hurtTimer=15
+                    hurtplayer(0x0a)
+                end
+                
+                
+                local x=o.custom[i].x-scrollx
+                local y=o.custom[i].y-scrolly
+                local rect = {x-5,y-4-8,x+7,y+7-8}
+                gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
+                
+                if collision(rect, hitboxes.whip.rect) then
+                    o.custom[i].active = 0
+                end
+                
             elseif o.custom[i].type=="bansheeboomerang" then
                 
                 f=math.floor(o.custom[i].alivetime/5) % 3
@@ -5746,8 +6140,14 @@ function spidey.update(inp,joy)
                 gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
             end
             
-            if not o.custom[i].outscreen then
-                if o.custom[i].x-scrollx<0 or o.custom[i].y-scrolly<0 or o.custom[i].x-scrollx>255 or o.custom[i].y-scrolly>255  then o.custom[i].active=0 end
+            if o.custom[i].x-scrollx<0 or o.custom[i].y-scrolly<0 or o.custom[i].x-scrollx>255 or o.custom[i].y-scrolly>255  then
+                if o.custom[i].outscreen then
+                    o.custom[i].onScreen = false
+                else
+                    o.custom[i].active=0
+                end
+            else
+                o.custom[i].onScreen = true
             end
             
         end
@@ -6079,6 +6479,7 @@ function spidey.update(inp,joy)
                     getItem(item.name)
                 end
             end
+            updateItems()
         end
         if cheats.flamewhip then
             if not hasInventoryItem("Flame Whip") then
@@ -6168,6 +6569,10 @@ function spidey.draw()
                 end
             end
         end
+    end
+    
+    if action and config.hitboxes then
+        hitboxes.draw()
     end
     
     if action or (pausemenu and frame_tester) or (game.paused and not config.debug) then

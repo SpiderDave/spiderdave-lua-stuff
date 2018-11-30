@@ -2172,6 +2172,11 @@ function spidey.makeNesFloat(n)
     return b1,b2
 end
 
+function spidey.message(txt, ...)
+    local args = {...}
+    emu.message(string.format(txt, unpack(args)))
+end
+
 spidey.getFileContents = getfilecontents
 
 spidey.imgEdit.captureWindow=captureWindow

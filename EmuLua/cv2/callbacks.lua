@@ -33,7 +33,7 @@ local registerExec = function(address, bank, len, fName)
             emu.message(string.format("function %s bank %d",fName, getBank(address)))
         end
         --emu.message(string.format("_bank=%s bank=%s getBank=%s",_bank or "-", bank or "-",getBank(address) or "-"))
-        local a,x,y,s,p,pc=memory.getregisters()
+        local a,x,y,s,p,pc=spidey.getregisters()
         
         local f2=_G["_"..fName]
         
@@ -52,7 +52,9 @@ local registerExec = function(address, bank, len, fName)
             
             --local e=string.format('Error in callback "%s"', fName)
             if not xpcall(function()
+                --emu.message(string.format('Executing callback "%s"', fName))
                 local t2 = f2(address, len, t)
+                
             end, msgh) then
                 emu.message(string.format('Error in callback "%s"', fName))
             end
@@ -69,8 +71,8 @@ end
 registerExec(0x8757+2,3,1,"onWalkSpeedRight")
 registerExec(0x8771+2,3,1,"onWalkSpeedLeft")
 registerExec(0x877c+1,3,1,"onWalkStop")
-registerExec(0x891c+2,3,1,"onJumpSpeedRight")
-registerExec(0x8911+2,3,1,"onJumpSpeedLeft")
+registerExec(0x891c+2,3,1,"onSetJumpSpeedRight")
+registerExec(0x8911+2,3,1,"onSetJumpSpeedLeft")
 registerExec(0xd33e,7,1,"onEnterSubScreen")
 registerExec(0x80ec,1,1,"onCreateEnemy")
 registerExec(0xde7b,7,1,"onCreateEnemyProjectile")
@@ -85,12 +87,13 @@ registerExec(0xe855+2,7,1,"onPlaceStageTile")
 registerExec(0x896c+2,1,1,"onEnemyStun")
 registerExec(0x875c,1,1,"onHeartPickup")
 registerExec(0xd7ea,7,1,"onThrowWeapon")
-
 registerExec(0xf24c,7,1,"onSetWeaponLeft")
 registerExec(0xf295,7,1,"onSetWeaponRight")
-
 registerExec(0x9096,1,1,"onGetRedCrystal")
-
+registerExec(0x87c3,1,1,"onGetCross")
+registerExec(0xaa3e,1,1,"onGetDiamond")
+registerExec(0xd921+2,7,1,"onUseLaurel")
+registerExec(0xa17e+2,4,1,"onCheckDaysForEnding")
 
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
@@ -135,15 +138,15 @@ function _onWalkSpeedLeft(address,len,t)
     memory.setregister("y",y)
 end
 
-function _onJumpSpeedRight(address,len,t)
-    if type(onJumpSpeedRight)~="function" and type(onJumpSpeed)~="function" then return end
+function _onSetJumpSpeedRight(address,len,t)
+    if type(onSetJumpSpeedRight)~="function" and type(onSetJumpSpeedX)~="function" then return end
     
     local speed=1
-    if type(onJumpSpeed)=="function" then
-        speed = onJumpSpeed(speed) or speed
+    if type(onSetJumpSpeedX)=="function" then
+        speed = onSetJumpSpeedX(speed) or speed
     end
-    if type(onJumpSpeedRight)=="function" then
-        speed = onJumpSpeedRight(speed) or speed
+    if type(onSetJumpSpeedRight)=="function" then
+        speed = onSetJumpSpeedRight(speed) or speed
     end
     
     y,a = spidey.makeNesFloat(speed)
@@ -151,15 +154,15 @@ function _onJumpSpeedRight(address,len,t)
     memory.setregister("y",y)
 end
 
-function _onJumpSpeedLeft(address,len,t)
-    if type(onJumpSpeedLeft)~="function" and type(onJumpSpeed)~="function" then return end
+function _onSetJumpSpeedLeft(address,len,t)
+    if type(onSetJumpSpeedLeft)~="function" and type(onSetJumpSpeedX)~="function" then return end
     
     local speed=-1
-    if type(onJumpSpeed)=="function" then
-        speed = onJumpSpeed(speed) or speed
+    if type(onSetJumpSpeedX)=="function" then
+        speed = onSetJumpSpeedX(speed) or speed
     end
-    if type(onJumpSpeedLeft)=="function" then
-        speed = onJumpSpeedLeft(speed) or speed
+    if type(onSetJumpSpeedLeft)=="function" then
+        speed = onSetJumpSpeedLeft(speed) or speed
     end
     
     y,a = spidey.makeNesFloat(speed)
@@ -267,7 +270,7 @@ function _onThrowWeapon(address,len,t)
     if type(onThrowWeapon)=="function" then
         local weaponType=memory.readbyte(0x03ba+t.y-6)
         
-        local weaponType, abort = onThrowWeapon(weaponType, t.a)
+        local weaponType, abort = onThrowWeapon(weaponType, false)
         if abort then
             memory.setregister("a",0)
             memory.writebyte(0x40e,0)
@@ -295,4 +298,45 @@ end
 
 function _onGetRedCrystal(address,len,t)
     if type(onGetRedCrystal)=="function" then onGetRedCrystal() end
+end
+
+function _onGetCross(address,len,t)
+    if type(onGetCross)=="function" then onGetCross() end
+end
+
+function _onGetDiamond(address,len,t)
+    if type(onGetDiamond)=="function" then onGetDiamond() end
+end
+
+function _onUseLaurel(address,len,t)
+    if type(onUseLaurel)=="function" then
+        local n = memory.readbyte(0x4c)
+        local n2 = onUseLaurel(n)
+        if n2 then memory.writebyte(0x4c, n2) end
+    end
+end
+
+function _onCheckDaysForEnding(address,len,t)
+    if type(onEnding)=="function" then
+        local n
+        if t.a<8 then
+            n=3
+        elseif t.a<20 then
+            n=2
+        else
+            n=1
+        end
+        
+        local endingNum = onEnding(n)
+        if endingNum then
+            if endingNum == 1 then
+                a = 21
+            elseif endingNum == 2 then
+                a = 9
+            elseif endingNum == 3 then
+                a = 0
+            end
+            memory.setregister("a", a)
+        end
+    end
 end

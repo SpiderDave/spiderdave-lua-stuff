@@ -48,7 +48,7 @@ cv2.whips = {
 cv2.enemies = {
     [0x00] = {
         name="Nothing",
-        exp=1,
+        exp=1,attack=0
     },
     [0x01] = {
         name="Town Raven",
@@ -94,6 +94,8 @@ cv2.enemies = {
     [0x0A] = {
         name="Medusa",
         exp=1,
+        attack=7,
+        hp=1,
     },
     [0x0B] = {name="?", exp=1},
     [0x0C] = {name="Skeleton Bone", exp=0},
@@ -396,7 +398,7 @@ locations.getAreaName = function(a1,a2,a3)
     if locations[a1] and locations[a1][a2] and locations[a1][a2][a3] then
         return locations[a1][a2][a3].displayName
     else
-        return string.format('%s %s %s',a1,a2,a3)
+        return string.format('%s %s %s',a1 or 0,a2 or 0,a3 or 0)
     end
 end
 
@@ -419,15 +421,41 @@ cv2.map = {
     locations = {
         {x=87, y=209, text="Jova"},
         {x=0x76, y=0xb8, text="Jova Woods"},
-        {x=40, y=193, text="Belasco Marsh"},
+        {x=40, y=0xb0, text="Belasco Marsh"},
         {x=0xb5, y=0xbc, text="South Bridge"},
         {x=0xe0, y=0xdb, text="Veros"},
         {x=0xf7, y=0xc6, text="Veros Woods"},
+        {x=0x0e, y=0x64, text="Dead River"},
+        {x=0x0e, y=0x55, text="Alba"},
+        {x=0x25, y=0x7a, text="Bhram's\n Mansion"},
+        {x=0x5a, y=0x89, text="Castlevania"},
+        {x=0xfd, y=0xaa, text="Berkeley\n Mansion"},
+        {x=0x19e, y=0xbd, text="Rover\n Mansion"},
+        {x=0x191, y=0xd5, text="Yuba Lake"},
+        {x=0x121, y=0x98, text="Denis\n Woods"},
+        {x=0xfc, y=0x8f, text="Denis\n Marsh"},
+        {x=0xf3, y=0x7d, text="East Bridge"},
+        {x=0x57, y=0x9e, text="Vrad Mountain"},
     }
 }
 
 
 cv2.messages = {
+    [0x0b]={
+        {
+            text = "SURE I'LL\nTAKE YOU TO\nA GOOD\nPLACE. HEH,\nHEH.",
+            notes = "toned down the laughing and !!.  why is he shouting?",
+        }
+    },
+    [0x12]={
+        {
+            condition=function() return hasInventoryItem("Diamond")==true end,
+            text="DIAMONDS ARE\nFOREVER.",
+        },
+        {
+            text = "I'LL GIVE\nYOU A\nDIAMOND.",
+        }
+    },
     [0x38]={
         {
             condition=function() return relics.list.whiteCrystal end,
@@ -463,6 +491,16 @@ cv2.messages = {
             text="LEFT: \nWICKED DITCH\n\nRIGHT: \nNORTH BRIDGE",
         },
     },
+    [0x55]={
+        {
+            text="I'LL GIVE YOU\nA BLUE\nCRYSTAL.",
+        },
+    },
+    [0x56]={
+        {
+            text="I'LL GIVE YOU\nA RED\nCRYSTAL.",
+        },
+    },
     [0x57]={
         {
             text="IF YOU ARE\nTIRED OR IN\nPAIN, VISIT\nTHE CHURCH.",
@@ -482,15 +520,15 @@ cv2.messages = {
             notes = "",
         },
     },
-    [0x55]={
+    [0x66]={
         {
-            text="I'LL GIVE YOU\nA BLUE\nCRYSTAL.",
-        },
-    },
-    [0x56]={
-        {
-            text="I'LL GIVE YOU\nA RED\nCRYSTAL.",
-        },
+            cycle = true,
+            text = {
+                "GET A SILK\nBAG FROM A\nMAN IN\nSTORIGORI\nGRAVEYARD.",
+                "A SILK BAG\nCAN BE USED\nTO CARRY\nLAURELS.",
+                "I HATE DUCKS.\nDUCKS SCARE\nME MORE THAN\nDRACULA.",
+            }
+        }
     },
     [0x6b]={
         {

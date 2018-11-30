@@ -61,12 +61,14 @@ local items = {
         type = "weapon",
         desc = "",
         weaponIndex = 8,
+        stack = 99,
     },
     {
         name = "Garlic",
         type = "weapon",
         desc = "",
         weaponIndex = 9,
+        stack = 99,
     },
     {
         name = "Banshee Boomerang",

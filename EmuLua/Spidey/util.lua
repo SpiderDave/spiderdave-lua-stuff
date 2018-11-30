@@ -97,5 +97,21 @@ function util.extract(t)
     end
 end
 
+function util.collision(t1,t2)
+  local x1,y1,w1,h1 = t1[1],t1[2],t1[3],t1[4]
+  local x2,y2,w2,h2 = t2[1],t2[2],t2[3],t2[4]
+  
+  return x1 < x2+w2 and
+         x2 < x1+w1 and
+         y1 < y2+h2 and
+         y2 < y1+h1
+end
+
+function util.removeLineBreaks(s)
+    s = s:gsub(" \n"," ")
+    s = s:gsub("\n"," ")
+    s = s:gsub("\r","")
+    return s
+end
 
 return util

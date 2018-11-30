@@ -1,4 +1,4 @@
-// Don't modify config.default.txt.  Instead make a file config.txt.
+// Don't modify this file; Instead make a file config.txt with just the items you want.
 
 // Graphics mode.  gd assumes the gd library is present, allowing .png loading.
 //graphics_mode=gd
@@ -9,6 +9,9 @@ music=true
 // Allow debugging stuff.  Setting this to false removes the select menu.
 debug = false
 
+// display hitboxes
+hitboxes=false
+
 // Turn on cheats
 //cheats=true
 
@@ -16,8 +19,8 @@ debug = false
 cheats_leftClick = item
 //cheats_leftClick = candle
 
-// turn on quick day/night transition (needs work)
-quickDayNight=false
+// turn on quick day/night transition
+quickDayNight=true
 
 // fix so you don't get knocked off stairs (needs work)
 stairsFix=false
@@ -25,10 +28,21 @@ stairsFix=false
 // turn on stuff to test stats and damage specifically
 testStats = false
 
-// Fix it so your jumping y velocity doesn't change based 
-// on the velocity of a moving platform.  This needs a
-// few stage edits so you can make certain jumps.
-platformVelocityFix=false
+// Fix it so your jumping x or y velocity doesn't change based 
+// on the velocity of a moving platform.
+platformVelocityFix=true
 
 // Make the merchant stop moving around.
 stationaryMerchant=true
+
+// Replace Medusa Heads with custom object Medusa Heads (needs work).
+replaceMedusaHeads=false
+
+// Change jump animation and velocity.  It's buggy, don't enable it.
+jumpTweak = false
+
+// Test endings; set to 1, 2, or 3 and the ending will play when the script is loaded.
+//testEnding = 2
+
+// Show relic icons and if they're turned on in the HUD. The HUD is a little busy with this on.
+showRelicsInHUD=false

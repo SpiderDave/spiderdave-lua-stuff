@@ -94,3 +94,41 @@ function onHeartPickup(n)
     return n
 end
 
+-- Called when Simon throws a special weapon
+-- abort is always false when called, added as a convenience.
+function onThrowWeapon(weaponType, abort)
+    return weaponType, abort
+end
+
+-- Called when setting special weapon on the sub menu
+function onSetWeapon(weapon)
+    return weapon
+end
+
+-- Called when getting the RedCrystal
+function onGetRedCrystal()
+end
+
+-- Called when getting the Cross
+function onGetRedCross()
+end
+
+-- Called when getting the Diamond
+function onGetDiamond()
+end
+
+-- Called when using a laurel.  amount is the amount of 
+-- laurels to set to.
+function onUseLaurel(amount)
+    return amount
+end
+
+-- Called when the end credits start
+-- endingNum is the ending to show:
+--   1 (worst ending)
+--   2 (better ending)
+--   3 (best ending)
+function onEnding(endingNum)
+    return endingNum
+end
+
