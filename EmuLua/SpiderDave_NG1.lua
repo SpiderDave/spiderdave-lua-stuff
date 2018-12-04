@@ -58,6 +58,13 @@ mnu.items[#mnu.items+1]=
     end}
 cheatMenu.items=spidey.cheatEngine.menu.main
 
+memory.registerexec(0xeb8e,1,function()
+    if cheats.active and cheats.cantDie then
+        memory.setregister("a", 0)
+    end
+end)
+
+
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
     lastinp=inp
@@ -76,7 +83,7 @@ function spidey.update(inp,joy)
     if cheats.active then
         if cheats.hp then memory.writebyte(0x0065, 0x10) end
         if cheats.lives then memory.writebyte(0x0076, 0x09) end
-        if cheats.cantDie then memory.writebyte(0x008b, 0x01) end
+        --if cheats.cantDie then memory.writebyte(0x008b, 0x01) end
     end
     
     if spidey.debug.enabled then
