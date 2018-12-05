@@ -126,7 +126,9 @@ registerExec(0xd888,7,1,"onDeductHeartCost1")
 registerExec(0xd88c,7,1,"onDeductHeartCost2")
 registerExec(0xc04b,7,1,"onVBlank")
 registerExec(0x8941,3,1,"onWhipOrSubWeapon")
+registerExec(0xae16,1,1,"onGetSilverKnife")
 
+registerExec(0x934f,1,1,"onGetFreeLaurels")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -576,3 +578,12 @@ function _onWhipOrSubWeapon(address,len,t)
         end
     end
 end
+
+function _onGetSilverKnife(address,len,t)
+    if type(onGetSilverKnife)=="function" then onGetSilverKnife() end
+end
+
+function _onGetFreeLaurels(address,len,t)
+    if type(onGetFreeLaurels)=="function" then onGetFreeLaurels() end
+end
+

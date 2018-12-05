@@ -38,6 +38,13 @@ stationaryMerchant=true
 // Replace Medusa Heads with custom object Medusa Heads (needs work).
 replaceMedusaHeads=false
 
+// Use new pattern for floating eyes
+floatingEyes = true
+
+// Use new pattern for ghosts
+// currently broken
+ghosts = false
+
 // Change jump animation and velocity.  It's buggy, don't enable it.
 jumpTweak = false
 
@@ -64,3 +71,9 @@ noEnemies=false
 
 // Equip items when script is activated and not paused.
 //equip=Simon's Plate, Morning Star
+
+// Auto sort inventory by type
+sortInventory=true
+
+// candles drop hearts that replace with real hearts (buggy)
+candlesRealHearts=false

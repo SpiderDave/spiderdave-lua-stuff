@@ -15,14 +15,14 @@ local items = {
         heartCost = 1,
     },
     {
-        name = "Silver Dagger",
+        name = "Silver Knife",
         type = "weapon",
         desc = "",
         weaponIndex = 2,
         heartCost = 2,
     },
     {
-        name = "Golden Dagger",
+        name = "Golden Knife",
         type = "weapon",
         desc = "",
         weaponIndex = 3,
@@ -198,6 +198,7 @@ local items = {
     {
         name = "Pendant",
         type = "accessory",
+        desc = "allows safe passage\naccross Joma Marsh.",
     },
     {
         name = "Charm",
