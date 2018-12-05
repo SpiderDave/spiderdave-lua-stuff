@@ -132,3 +132,107 @@ function onEnding(endingNum)
     return endingNum
 end
 
+-- Called when a sub weapon cost is applied
+function onSubWeaponCost(cost)
+    return cost
+end
+
+-- Called when a sub weapon breaks
+function onSubWeaponBreak(weaponType, weaponIndex)
+    return weaponType
+end
+
+-- Called just after enemy creation is finished
+-- Suitable for manipulating enemy data.
+function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
+end
+
+-- Called continually when on continue screen
+function onContinueScreen()
+end
+
+-- Called just as a message is created, before it's displayed.
+-- Cancel only works for automatic messages.
+function onMessage(messageNum, cancel)
+    return messageNum, cancel
+end
+
+-- Called when a message is about to be printed.
+function onMessage2(messageNum)
+    return messageNum
+end
+
+-- Called as a message is printed, suitable for
+-- setting the address where the message starts.
+function onMessageWriteAddress(address)
+    return address
+end
+
+-- Called when setting the player's facing direction when hit.
+function onSetPlayerFacingWhenHit(newFacing, facing)
+    return newFacing
+end
+
+-- Called when setting the player's velocity when hit.
+-- Called for each axis.  Values for axis are strings: "x", "y".
+-- v1 and v2 are the two byte values for speed (major, minor)
+-- Alternately, return only v in place of v1, v2 to use the major value as a signed int.
+function onSetPlayerVelocityWhenHit(axis, v1, v2)
+    
+    -- return v
+    return v1, v2
+end
+
+-- Called when setting the player's state when hit.
+function onSetPlayerStateWhenHit(newState, state)
+    return newState
+end
+
+-- Called when setting the player's frame when hit.
+-- note, frame values dont' match.  the first one is more like an animation set
+function onSetPlayerFrameWhenHit(newFrame, frame)
+    return newFrame
+end
+
+-- Called when setting the player's starting lives.
+function onSetStartingLives(lives)
+    return lives
+end
+
+
+-- Called when an enemy deals damage.
+function onEnemyDamage(index,enemyType,damage)
+    return damage
+end
+
+-- Called when the player deals damage with the whip.
+function onWhipDamage(damage, target)
+    return damage
+end
+
+-- Called when a heart cost is checked (for buying or using sub weapon).
+function onHeartCost(cost)
+    return cost
+end
+
+-- Called when a heart cost is deducted (for buying or using sub weapon).
+-- There are two of these, for both bytes of the heart value.
+function onDeductHeartCost1(oldHeartValue, newHeartValue)
+    -- don't deduct hearts
+    return oldHeartValue
+end
+function onDeductHeartCost2(oldHeartValue, newHeartValue)
+    -- don't deduct hearts
+    return oldHeartValue
+end
+
+-- Called during vertical blanking.
+-- Suitable for things like ppu writes.
+function onVBlank()
+end
+
+-- Called when attacking to check if it's an attempt to
+-- use a sub weapon or whip.
+function onWhipOrSubWeapon(isSubWeapon)
+    return isSubWeapon
+end

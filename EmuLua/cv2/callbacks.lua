@@ -53,6 +53,9 @@ local registerExec = function(address, bank, len, fName)
             --local e=string.format('Error in callback "%s"', fName)
             if not xpcall(function()
                 --emu.message(string.format('Executing callback "%s"', fName))
+                
+                --spidey.appendToFile("cv2/log.txt", string.format('Executing callback "%s"\n', fName))
+                
                 local t2 = f2(address, len, t)
                 
             end, msgh) then
@@ -64,6 +67,15 @@ local registerExec = function(address, bank, len, fName)
     end
     memory.registerexec(address, len or 1, f)
 end
+
+
+savestate.registerload(function()
+    if type(onLoadState)=="function" then onLoadState() end
+end)
+
+savestate.registersave(function()
+    if type(onSaveState)=="function" then onSaveState() end
+end)
 
 -- Here we make the basic callbacks, with a few bells and whistles.
 -- If the bank is set to nil, it will display the function name and
@@ -94,6 +106,26 @@ registerExec(0x87c3,1,1,"onGetCross")
 registerExec(0xaa3e,1,1,"onGetDiamond")
 registerExec(0xd921+2,7,1,"onUseLaurel")
 registerExec(0xa17e+2,4,1,"onCheckDaysForEnding")
+registerExec(0xda69,7,1,"onSubWeaponBreak")
+registerExec(0xd858,7,1,"onSubWeaponCost")
+registerExec(0x817f,1,1,"onEnemyCreated")
+registerExec(0xc2d0+2,7,1,"onContinueScreen")
+registerExec(0x87a4+3,1,1,"onMessage")
+registerExec(0x884f,1,1,"onSetPlayerFacingWhenHit")
+registerExec(0xd37e,7,1,"onSetPlayerXVelocityWhenHit")
+registerExec(0xd385,7,1,"onSetPlayerYVelocityWhenHit")
+registerExec(0xd390+2,7,1,"onSetPlayerStateWhenHit")
+registerExec(0xd388+2,7,1,"onSetPlayerFrameWhenHit")
+registerExec(0xc552+2,7,1,"onSetStartingLives")
+registerExec(0x883a,1,1,"onEnemyDamage")
+registerExec(0xeea4+2,7,1,"onMessage2")
+registerExec(0xeeb6-2,7,1,"onMessageWriteAddress")
+registerExec(0x891e-1,1,1,"onWhipDamage")
+registerExec(0xd86b,7,1,"onHeartCost")
+registerExec(0xd888,7,1,"onDeductHeartCost1")
+registerExec(0xd88c,7,1,"onDeductHeartCost2")
+registerExec(0xc04b,7,1,"onVBlank")
+registerExec(0x8941,3,1,"onWhipOrSubWeapon")
 
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
@@ -183,7 +215,12 @@ end
 function _onCreateEnemy(address,len,t)
     if type(onCreateEnemy)=="function" then
         local a = onCreateEnemy(t.x-6, t.a)
-        memory.setregister("a", a)
+        if a then
+            memory.setregister("a", a)
+            if a==0 then
+                memory.writebyte(0x04c8+t.x-6, 0) -- hp
+            end
+        end
     end
 end
 
@@ -337,6 +374,205 @@ function _onCheckDaysForEnding(address,len,t)
                 a = 0
             end
             memory.setregister("a", a)
+        end
+    end
+end
+
+function _onSubWeaponBreak(address,len,t)
+    if type(onSubWeaponBreak)=="function" then
+        local currentWeapon=memory.readbyte(0x03b7+t.x-3)
+        local a = onSubWeaponBreak(currentWeapon, t.x-3)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSubWeaponcost(address,len,t)
+    if type(onSubWeaponcost)=="function" then
+        local a = onSubWeaponcost(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onEnemyCreated(address,len,t)
+    if type(onEnemyCreated)=="function" then
+        local enemyType = memory.readbyte(0x03ba+t.x-6)
+        local enemyX=memory.readbyte(0x0348+6+t.x-6)
+        local enemyY=memory.readbyte(0x0324+6+t.x-6)
+
+        onEnemyCreated(t.x-6, enemyType, enemyX, enemyY)
+        --if a then memory.setregister("a", a) end
+    end
+end
+
+function _onContinueScreen(address,len,t)
+    if type(onContinueScreen)=="function" then onContinueScreen() end
+end
+
+-- note, cancel only works for automatic messages
+function _onMessage(address,len,t)
+    if type(onMessage)=="function" then
+        local messageNum, cancel = onMessage(t.a, false)
+        if messageNum then
+            memory.setregister("a",messageNum)
+        end
+        if cancel then
+            memory.writebyte(0x3f,0)
+        end
+    end
+end
+
+function _onMessage2(address,len,t)
+    if type(onMessage2)=="function" then
+        -- use the message counter thing to only run this once
+        if memory.readbyte(0x7c)~=0 then return end
+
+        if type(onMessage2) == "function" then onMessage2(t.a) end
+    end
+end
+
+function _onMessageWriteAddress(address,len,t)
+    if type(onMessageWriteAddress)=="function" then
+        local address = memory.readbyte(0x01)*0x100+memory.readbyte(0x00)+t.y
+        
+        
+        if type(onMessageWriteAddress) == "function" then
+            local address2 = onMessageWriteAddress(address)
+            if address2 and (address~= address2) then
+                memory.writebyte(0x01, math.floor(address2 / 0x100))
+                memory.writebyte(0x00, address2 % 0x100)
+            end
+        end
+    end
+end
+
+
+function _onSetPlayerFacingWhenHit(address,len,t)
+    if type(onSetPlayerFacingWhenHit)=="function" then
+        local facing =memory.readbyte(0x0420)
+        
+        local y = onSetPlayerFacingWhenHit(t.y, facing)
+        if y then memory.setregister("y", y) end
+    end
+end
+
+
+function _onSetPlayerXVelocityWhenHit(address,len,t)
+    if type(onSetPlayerVelocityWhenHit)=="function" then
+        local v1, v2 = onSetPlayerVelocityWhenHit("x", t.y, t.a)
+        if v1 and v2 then
+            memory.setregister("y", v1)
+            memory.setregister("a", v2)
+        elseif v1 then
+            local v = tonumber(string.sub(string.format("%02x",v1), -2),16)
+            memory.setregister("y", v)
+            memory.setregister("a", 0)
+        end
+    end
+end
+
+function _onSetPlayerYVelocityWhenHit(address,len,t)
+    if type(onSetPlayerVelocityWhenHit)=="function" then
+        -- the order of arguments here is different.
+        local v1, v2 = onSetPlayerVelocityWhenHit("y", t.a, t.y)
+        if v1 and v2 then
+            memory.setregister("y", v1)
+            memory.setregister("a", v2)
+        elseif v1 then
+            local v = tonumber(string.sub(string.format("%02x",v1), -2),16)
+            memory.setregister("y", 0)
+            memory.setregister("a", v)
+        end
+    end
+end
+
+function _onSetPlayerStateWhenHit(address,len,t)
+    if type(onSetPlayerStateWhenHit)=="function" then
+        local oldState = memory.readbyte(0x3d8)
+        local a = onSetPlayerStateWhenHit(t.a, oldState)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+-- note, frame values dont' match.  the first one is more like an animation set
+function _onSetPlayerFrameWhenHit(address,len,t)
+    if type(onSetPlayerFrameWhenHit)=="function" then
+        local frame = memory.readbyte(0x300)
+        local a = onSetPlayerFrameWhenHit(t.a, frame)
+        if a then memory.setregister("a", a) end
+        --if a then memory.writebyte(0x300, a)         end
+    end
+end
+
+function _onSetStartingLives(address,len,t)
+    if type(onSetStartingLives)=="function" then
+        local a = onSetStartingLives(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onEnemyDamage(address,len,t)
+    if type(onEnemyDamage)=="function" then
+        local enemyType=memory.readbyte(0x03ba+t.x-6)
+        local a = onEnemyDamage(t.x-6, enemyType, t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onWhipDamage(address,len,t)
+    if type(onWhipDamage)=="function" then
+        local damage, target = onWhipDamage(memory.readbyte(0x0013), t.x-6)
+        if damage then memory.writebyte(0x13,damage) end
+    end
+end
+
+function _onHeartCost(address,len,t)
+    if type(onHeartCost)=="function" then
+        local cost = onHeartCost(tonumber(string.format("%02x%02x",memory.readbyte(0x05),memory.readbyte(0x09))))
+        
+        if cost then
+            memory.writebyte(0x05, tonumber(string.sub(string.format("%04d",cost),1,2),16))
+            memory.writebyte(0x09, tonumber(string.sub(string.format("%04d",cost),-2),16))
+        end
+    end
+end
+
+
+function _onDeductHeartCost1(address,len,t)
+    if type(onDeductHeartCost1)=="function" then
+        local oldHeartValue = tonumber(string.format("%02x",memory.readbyte(0x48)))
+        local newHeartValue = tonumber(string.format("%02x",t.a))
+        local h = onDeductHeartCost1(oldHeartValue, newHeartValue)
+        if h then
+            memory.setregister("a", tonumber(string.format("%02d",h),16))
+        end
+    end
+end
+
+function _onDeductHeartCost2(address,len,t)
+    if type(onDeductHeartCost2)=="function" then
+        local oldHeartValue = tonumber(string.format("%02x",memory.readbyte(0x49)))
+        local newHeartValue = tonumber(string.format("%02x",t.a))
+        local h = onDeductHeartCost2(oldHeartValue, newHeartValue)
+        if h then
+            memory.setregister("a", tonumber(string.format("%02d",h),16))
+        end
+    end
+end
+
+function _onVBlank(address,len,t)
+    if type(onVBlank)=="function" then onVBlank() end
+end
+
+function _onWhipOrSubWeapon(address,len,t)
+    if type(onWhipOrSubWeapon)=="function" then
+        local oldIsSub = (t.p ~= bit.bor(t.p,0x02))
+        local isSub = onWhipOrSubWeapon(oldIsSub)
+        if isSub~=nil then
+            if isSub then
+                memory.setregister("p", bit.bor(t.p,0x02)-2)
+            else
+                memory.setregister("p", bit.bor(t.p,0x02))
+            end
         end
     end
 end

@@ -116,14 +116,17 @@
 --  * restore hp after boss (or getting dracula relic?)
 --  * fix it so jumping into sideways spikes doesn't just make you stand on them.
 --  * animate water
+--  * remove water in towns.
 --  * add ability to stand up during early part of ducking whip
 --  * level up toast should go on top of everything else
+--  * fix bug where you can whip through edge of screen and break blocks on the other side.
+--  * add candles
+--  * fix bug where removed enemies/items can still be hit once. "phantom enemy" bug.
 
 require ".Spidey.TSerial"
 
 spidey=require "Spidey.SpideyStuff"
 local font=require "Spidey.default_font"
-local messages = require "cv2.messages"
 local cv2data=require("cv2.cv2data")
 local items=require("cv2.items")
 local util = require("spidey.util")
@@ -184,7 +187,7 @@ game.film = {
 
 enableddisabled={[true]="enabled",[false]="disabled"}
 
-if not messages then messages={} end
+--if not messages then messages={} end
 
 
 spidey.imgEdit.transparent = true
@@ -371,17 +374,6 @@ mnu.items={
             emu.setrenderplanes(true, not frame_tester)
         end
     },
-    {text='Save Messages',
-        action=function()
-            out='local messages={}\n'
-            for k,v in pairs(messages) do
-                out=out..string.format('messages[%s]=[[%s]]',k,v).."\n"
-            end
-            out=out.."return messages\n"
-            writetofile('cv2/messages.lua', out)
-            emu.message("saved.")
-        end
-    },
     {text="Save gfx",
     action=function()
         local t= TSerial.pack(gfx)
@@ -435,6 +427,18 @@ for _,item in ipairs(cv2data.placedItems) do
     c.active=1
     c.name = item.name
     levelObjects[#levelObjects+1] = c
+
+
+    local c = {}
+    c.type="candle"
+    c.area={item.area[1],item.area[2],item.area[3],item.area[4]}
+    c.x=item.x
+    c.y=item.y-0x30
+    c.outscreen=true
+    c.active=1
+    candles[#candles+1] = c
+
+
 end
 
 gfxFileList={}
@@ -743,6 +747,7 @@ o.boss={}
 
 o.player.gold = 0
 o.player.maxHearts = 99
+o.player.clues = {}
 
 for i=0,o.count-1 do
     o[i]={}
@@ -802,6 +807,7 @@ o.custom.createCandles = function()
                 [1]=v.area[1],
                 [2]=v.area[2],
                 [3]=v.area[3],
+                [4]=v.area[4],
             }
             o.custom[i].x = v.x
             o.custom[i].y = v.y
@@ -946,6 +952,7 @@ function saveGame(slot)
         armor=o.player.armor,
         accessory=o.player.accessory,
         itemList = itemList2,
+        clues = o.player.clues,
     }
     
     local t= TSerial.pack(saveData)
@@ -1010,6 +1017,8 @@ function loadGame(slot, setArea)
     returnScroll2 = saveData.returnScroll2
     returnX = saveData.returnX
     returnY = saveData.returnY
+    
+    o.player.clues = saveData.clues or {}
     
     --subScreen.relic = relics.current
     
@@ -1106,7 +1115,27 @@ function removeItem(name, amount)
     updateItems()
 end
 
-function getItem(n, showMessage)
+function equipItem(itemName)
+    --spidey.message("equip")
+    local item = items[items.index[itemName]]
+    if item.type=="armor" then setArmor(item.index) end
+    if item.type=="whip" then setWhip(item.index) end
+    if item.type=="weapon" then setWeapon(item.index) end
+    if item.type=="accessory" then setAccessory(item.index) end
+    updateItems()
+end
+
+function getItem(n, showMessage, delay)
+    if delay then
+        game.getItemDelayed = n
+        if type(delay) == "number" then
+            game.getItemDelayCounter=delay
+        else
+            game.getItemDelayCounter=0x10
+        end
+        return
+    end
+
     if not items.index[n] then
         --if showMessage then emu.message(string.format("you got %s", n)) end
         if showMessage then createItemPopUp(n) end
@@ -1276,7 +1305,8 @@ function getExtraData()
     --0x7000+20 to 0x7000+27 = relics list
     --0x7000+30 to 0x7000+37 = relics on/off state
     --0x7200 to 0x73ff items
-    --0x7400 = slot
+    --0x7400 = save slot
+    --0x7401 to 0x740e = clues
     
     for i,v in ipairs(cv2data.relics) do
         if memory.readbyte(0x7000+20+i-1)==1 then
@@ -1344,12 +1374,20 @@ function getExtraData()
     else
         memory.writebyte(0x004d, 0)
     end
+    
+    -- 13 clues 0x7401 to 0x740e
+    o.player.clues = {}
+    for i=1, 13 do
+        o.player.clues[i] = (memory.readbyte(0x7400+i)~=0)
+    end
+    
 end
 
 function setArmor(n)
     o.player.armor = n or o.player.armor
     if (o.player.armor or 0) == 0 then
-        o.player.armor = items.index["Red Tunic"]
+        o.player.armor = items.index["Red Plate"]
+        if not items.index["Red Plate"] then emu.pause() end
     end
     
     memory.writebyte(0x7000+10, o.player.armor or 0)
@@ -1404,6 +1442,14 @@ function setWeapon(n)
         weapons.current=items[o.player.weaponItem].weaponBase or items[o.player.weaponItem].weaponIndex or 0
         memory.writebyte(0x0090, weapons.current)
     end
+end
+
+function numClues()
+    local n=0
+    for k,clue in ipairs(o.player.clues) do
+        if clue then n=n+1 end
+    end
+    return n
 end
 
 function setRelic(n)
@@ -1597,7 +1643,11 @@ function drawSubScreen()
     
     drawfont(x+44,y+28+8*10,font[itemFont], "Equip")
     drawfont(x+44,y+28+8*12,font[itemFont], "Relics")
-    drawfont(x+44,y+28+8*14,font[itemFont], "Clues")
+    if numClues() > 0 then
+        drawfont(x+44,y+28+8*14,font[itemFont], "Clues")
+    else
+        drawfont(x+44,y+28+8*14,font[itemFont], "----")
+    end
     drawfont(x+44,y+28+8*16,font[itemFont], "Map")
     
     if o.player.armor then
@@ -1689,13 +1739,23 @@ function drawSubScreen()
         local h = 12
         local w = 14
 
+        subScreen.clues = cv2data.clues
+        subScreen.clue = subScreen.clue or 1
+        --subScreen.clue = 5
+
         gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
         gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
         gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
         
+        --drawfont(x+28,y+28+1,font[subScreenFont], string.format("Clues %d/13", numClues()))
         drawfont(x+28,y+28+1,font[subScreenFont], "Clues")
         drawfont(x+28,y+28+1+8*2,font[subScreenFont], string.format("- %02d -",subScreen.clue))
-        drawfont(x+28,y+28+1+8*4,font[current_font], messages[subScreen.clues[subScreen.clue]])
+        --if cv2data.clues[subScreen.clue] and o.player.clues[subScreen.clue] then
+        if cv2data.clues[subScreen.clue] and o.player.clues[subScreen.clue] then
+            local txt = cv2data.messages[subScreen.clues[subScreen.clue]][1].text
+            --txt = txt:gsub("\n", "\n\n")
+            drawfont(x+28,y+28+1+8*4,font[current_font], txt)
+        end
     end
     if subScreen.showRelics then
         local x=2
@@ -1706,9 +1766,6 @@ function drawSubScreen()
         gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
         gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
         gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
-        
-        subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
-        subScreen.clue = subScreen.clue or 1
         
         drawfont(x+28,y+28+1,font[subScreenFont], "Relics")
         for i=1,8 do
@@ -1780,9 +1837,6 @@ function drawSubScreen()
         gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
         gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
         
-        subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
-        subScreen.clue = subScreen.clue or 1
-        
         drawfont(x+28,y+28+1,font[subScreenFont], "Items")
         for i=1+subScreen.subMenu.scrollY,8+subScreen.subMenu.scrollY do
             local y2 = i-subScreen.subMenu.scrollY
@@ -1848,7 +1902,7 @@ function drawInventoryItemName(x,y,i)
     if (itemList[i].stack or 0) >0 then
         drawfont(x+8+4,y,font[itemFont], string.format("%s %d", itemList[i].name, itemList[i].amount or 0))
     else
-        local n = itemList[i].name
+        local n = itemList[i].shortName
         if n=="Laurel" then n=string.format("%s (%d)",n, o.player.laurels) end
         if n=="Garlic" then n=string.format("%s (%d)",n, o.player.garlic) end
         drawfont(x+8+4,y,font[itemFont], n)
@@ -2045,7 +2099,7 @@ function hurtplayer(data)
     memory.writebyte(0x03de+onum,0x01) --not friendly
     memory.writebyte(0x03ed+3+onum,0x01) --helps to init it; frame?
     memory.writebyte(0x0396+onum,0x01) --x speed
-    memory.writebyte(0x036f+onum,data or 0) --y speed
+    memory.writebyte(0x036f+onum, data or 0) --y speed
     memory.writebyte(0x044a+onum,0x18) --make fire disappear faster
     return true
 end
@@ -2137,21 +2191,18 @@ inp = input_read()
 emu.registerexit(function(x)
     emu.message("")
 end)
-savestate.registerload(o.custom.destroyall) --destroy custom objects if state loaded
 
+function onLoadState()
+    o.custom.destroyall()
+end
 
---function onRestart()
---end
---memory.registerexec(0xc521,1,onRestart)
-
---memory.registerexec(0xdf4f,1,spWeaponBreak)
-memory.registerexec(0xda69,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        local currentWeapon=memory.readbyte(0x03b7+x-3)
-        if spWeaponBreak then spWeaponBreak(currentWeapon, x-3) end
+-- check if attack is sub weapon or whip
+function onWhipOrSubWeapon(isSub)
+    if isSub and canThrowWeapon()==false then
+        isSub = false
+        return isSub
     end
-)
+end
 
 -- triggers when an enemy takes damage from whip
 --memory.registerexec(0x8920,1,
@@ -2188,33 +2239,38 @@ memory.registerexec(0xda69,1,
 --    memory.setregister("a",a)
 --end)
 
+-- block solidity check
+--memory.registerexec(0xea04+2,1, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    a=0
+--    memory.setregister("a",a)
+--end)
 
 
 -- fish man tweak
-memory.registerexec(0xa2bb+4,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    a=0xfd
-    y=0x70
-    memory.setregister("a",a)
-    memory.setregister("y",y)
-end)
+--memory.registerexec(0xa2bb+4,1, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    a=0xfd
+--    y=0x70
+--    memory.setregister("a",a)
+--    memory.setregister("y",y)
+--end)
 
 -- set mode to 0 on continue screen which freezes it.
-memory.registerexec(0xc2d0+2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onContinueScreen()
     memory.writebyte(0x19,0x00)
     if memory.readword(0x7401)==0 then
         memory.writeword(0x7401,0x190)
     end
-    --emu.softreset()
-end)
+end
 
 -- force continue
-memory.registerexec(0xc2f8,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    a=0
-    memory.setregister("a",a)
-end)
+--memory.registerexec(0xc2f8,1, function()
+--    emu.message("continue")
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    a=0
+--    memory.setregister("a",a)
+--end)
 
 -- enter sub screen
 function onEnterSubScreen()
@@ -2267,50 +2323,123 @@ function onSetWeapon(w)
     return w
 end
 
--- cancel a message
-memory.registerexec(0xce38+0,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    -- cancel sacred flame message
-    if msgnum==0x76 then
-        a=6
-    end
+--memory.registerexec(0x87a4+3,1, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    a=0
+--    a=0x38
+    --memory.writebyte(0x3f,0)
+--    memory.setregister("a",a)
+    --memory.setregister("x",0)
+--end)
 
-    -- cancel clue message
-    if msgnum==0x0d or msgnum==0x14 then
-        --a=6
+function onMessage(messageNum, cancel)
+    -- cancel sacred flame message, since we have the item popup.
+    if messageNum == 0x80 then cancel=true end
+    
+    for i,clue in ipairs(cv2data.clues) do
+        if messageNum == clue then
+            if o.player.clues[i] then
+                cancel = true
+            else
+                o.player.clues[i] = true
+                memory.writebyte(0x7400+i, 1)
+            end
+        end
     end
+    
+    --if messageNum == 0x0d
+    --spidey.message("%02x", messageNum)
+    
+    return messageNum, cancel
+end
 
-    memory.setregister("a",a)
-end)
+function onSetStartingLives(lives)
+    if config.saveLives and game.loadAgain then return end
+    if config.lives then return config.lives end
+end
+
+function onSetPlayerFacingWhenHit(newFacing, facing)
+    --spidey.message("%02x %02x",newFacing,facing)
+
+    -- Don't turn around when hit on stairs
+    if config.stairsFix then
+        local state = memory.readbyte(0x3d8)
+        if state==0x09 or state==0x0a then
+            -- return original direction
+            return facing
+        end
+    end
+end
+
+function onSetPlayerVelocityWhenHit(axis,v1, v2)
+--    if axis=="y" then
+--        return -6
+--    end
+--    if axis=="x" then
+--        return v1*4
+--    end
+    if config.stairsFix then
+        local state = memory.readbyte(0x3d8)
+        if state==0x09 or state==0x0a then
+            return 0
+        end
+    end
+end
+
+--memory.registerexec(0xd390+2,1, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    if config.stairsFix then
+--        local state = memory.readbyte(0x3d8)
+--        if state==0x09 or state==0x0a then
+--            a=state
+--            memory.setregister("a", a)
+--        end
+--    end
+--end)
+
+
+function onSetPlayerStateWhenHit(newState, state)
+    --spidey.message("%02x %02x",state, newState)
+    if config.stairsFix then
+        if state==0x09 or state==0x0a then
+            return state
+        end
+    end
+end
+
+function onSetPlayerFrameWhenHit(newFrame, frame)
+    --spidey.message("%02x %02x",frame, newFrame)
+    if config.stairsFix then
+        local state = memory.readbyte(0x3d8)
+        if state==0x09 or state==0x0a then
+            if frame==0x08 or frame==0x09 then
+                return 0x03
+            else
+                return 0x02
+            end
+        end
+    end
+end
 
 -- message change
-memory.registerexec(0xeea4+2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    
-    -- use the message counter thing to only run this once
-    if memory.readbyte(0x7c)~=0 then return end
-    
+function onMessage2(messageNum)
     if spidey.debug.enabled then
-        emu.message(string.format("Message = %02X",a))
+        emu.message(string.format("Message = %02X",messageNum))
     end
     
---    a=0
---    a=game.dumpMessageNum or 0
---    memory.setregister("a",a)
-    
     local m=""
-    if cv2data.messages[a] then
-        if type(cv2data.messages[a])=="table" then
-            for i,v in ipairs(cv2data.messages[a]) do
+    if cv2data.messages[messageNum] then
+        if type(cv2data.messages[messageNum])=="table" then
+            for i,v in ipairs(cv2data.messages[messageNum]) do
                 if v.condition then
                     if v.condition()==true then
                         m=v.text
                         break
                     end
                 elseif v.cycle then
-                    cv2data.messages[a][i].cycleIndex = (cv2data.messages[a][i].cycleIndex or 0) +1
-                    if cv2data.messages[a][i].cycleIndex > #v.text then cv2data.messages[a][i].cycleIndex = 1 end
-                    m=v.text[cv2data.messages[a][i].cycleIndex]
+                    cv2data.messages[messageNum][i].cycleIndex = (cv2data.messages[messageNum][i].cycleIndex or 0) +1
+                    if cv2data.messages[messageNum][i].cycleIndex > #v.text then cv2data.messages[messageNum][i].cycleIndex = 1 end
+                    m=v.text[cv2data.messages[messageNum][i].cycleIndex]
                 else
                     m=v.text
                     break
@@ -2319,99 +2448,45 @@ memory.registerexec(0xeea4+2,1, function()
         end
     else
         --m = "YAY I GOT\nTHIS MESSAGE\nREPLACER\nTHING WORKING"
-        --m=string.format("MESSAGE %02X",a)
-        --m=cv2data.defaultMessages[a]..string.format(" %02X",a)
+        --m=string.format("MESSAGE %02X",messageNum)
+        --m=cv2data.defaultMessages[messageNum]..string.format(" %02X",messageNum)
         --write 0xff to display original message instead
         memory.writebyte(0x7100, 0xff)
         return
     end
-    --m=string.format("MESSAGE %02X",a)
-    --m=string.format("MESSAGE %02X",a)
+    --m=string.format("MESSAGE %02X",messageNum)
+    --m=string.format("MESSAGE %02X",messageNum)
     for i=1,#m do
-        memory.writebyte(0x7100+i-1, textMap2[m:sub(i,i)])
+        memory.writebyte(0x7100+i-1, textMap2[m:sub(i,i)] or 0)
     end
     memory.writebyte(0x7100+#m, 0xff)
     game.customMessage = m
-end)
+end
 
--- message rewriter
-memory.registerexec(0xeeb6-2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    local address = memory.readbyte(0x01)*0x100+memory.readbyte(0x00)+y
+function onMessageWriteAddress(address)
+    -- If our custom message flag is set, then
+    -- change the message address to our custom message address.
     if memory.readbyte(0x7100)~=0xff then
-        memory.writebyte(0x01, 0x71)
-        memory.writebyte(0x00, 0x00)
+        address = 0x7100
     end
-    
-    
-    --y=0x00
-    
---    memory.writebyte(0x7100+0, 0x02)
---    memory.writebyte(0x7100+1, 0x03)
---    memory.writebyte(0x7100+2, 0xff)
-    
-    
-    
-    
-    if y==0 then
-        local m = ""
-        for i=0,100 do
-            local b = memory.readbyte(address+i)
-            if b==0xff then
-                break
-            elseif b==0xfe then
-                m=m .. "\n"
-            else
-                m=m .. textMap:sub(b+1,b+1)
-            end
-        end
-        --emu.message(string.format("%04x",address))
-        --emu.message(m)
-        --emu.message(string.format("%02x %s",memory.readbyte(0x7f),m))
-        --game.dumpMessageNum = (game.dumpMessageNum or-1)+ 1
-        --game.dumpMessage = (game.dumpMessage or "") .. "
---        if game.dumpMessageNum == 256 then
---            writetofile('cv2/messagenew.txt', game.dumpMessage)
---        end
-        
-    end
-    --a=0x00
-    --a=260 -- your level of skill has increased
-    memory.setregister("a",a)
-    memory.setregister("y",y)
-end)
+    return address
+end
 
 -- intercept whip damage
-memory.registerexec(0x891e-1,1,function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onWhipDamage(damage, target)
     local stats = getStats()
     
-    local damage = stats.damage
-    memory.writebyte(0x13,damage)
+    damage = stats.damage
+    
+    if o.player.whipItem == items.index["Poison Whip"] then
+        createPoison(target)
+    end
+    
     if config.testStats then
         emu.message(string.format("whip damage %d, item=%d",damage, o.player.whipItem or 0))
     end
-    --memory.writebyte(0x13,0x0f)
-    --memory.writebyte(0x13,0xff)
-    --memory.writebyte(0x13,0x01)
-end)
-
--- triggers when an enemy takes damage from whip
-memory.registerexec(0x8920,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        -- a register is enemy hp after the hit
---        memory.writebyte(0x4c2+x,40)
-        --memory.setregister("a",0x10)
-        --memory.setregister("a",0xff)
---        memory.setregister("y",0x00)
-        local i=x-6
-        
-        if o.player.whipItem == items.index["Poison Whip"] then
-            createPoison(i)
-        end
-    end
-)
+    return damage
+end
 
 
 --07:DC67: B9 E3 DC  LDA $DCE3,Y @ $DCE3 = #$0A
@@ -2420,7 +2495,6 @@ memory.registerexec(0x8920,1,
 --    local a,x,y,s,p,pc=memory.getregisters()
 --    memory.setregister("a",a)
 --end)
-
 
 function addExp(n)
     local e = tonumber(string.format("%02x%02x", memory.readbyte(0x47), memory.readbyte(0x46)))
@@ -2463,52 +2537,45 @@ end
 
 -- buying (cost)
 -- changes sp weapon cost too, but we fix that elsewhere
-memory.registerexec(0xd86b,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    local h1=memory.readbyte(0x05)
-    local h2=memory.readbyte(0x09)
-    
-    local cost = tonumber(string.format("%02x%02x",h1,h2))
+function onHeartCost(cost)
     if o.player.gold >= cost then
-        -- free
-        memory.writebyte(0x05, 0)
-        memory.writebyte(0x09, 0)
-        
         -- deduct from gold here
         o.player.gold = o.player.gold-cost
         memory.writeword(0x7000+1, o.player.gold)
+        
+        -- no heart cost
+        cost = 0
     else
         -- not buyable
-        memory.writebyte(0x05, 0xaa)
-        memory.writebyte(0x09, 0xaa)
+        cost = 0xaaaa
     end
-end)
+    return cost
+end
+
 
 -- buying (deduct)
 -- changes sp weapon cost too, but we fix that elsewhere
-memory.registerexec(0xd888,1, function()
+-- two of these for two bytes of heart cost.
+function onDeductHeartCost1(oldHeartValue, newHeartValue)
     -- don't deduct hearts
-    memory.setregister("a", memory.readbyte(0x48))
-end)
-memory.registerexec(0xd88c,1, function()
+    return oldHeartValue
+end
+function onDeductHeartCost2(oldHeartValue, newHeartValue)
     -- don't deduct hearts
-    memory.setregister("a", memory.readbyte(0x49))
-end)
+    return oldHeartValue
+end
 
 -- triggers when an enemy dies from whip
-memory.registerexec(0x8927,1,
-    function()
-        do return end -- disable
-        if not spidey.debug.enabled then return end
-        local a,x,y,s,p,pc=memory.getregisters()
-        local t = memory.readbyte(0x03b4+x)
-        if cv2data.enemies[t] then
-            emu.message(string.format("%02X %s",x,cv2data.enemies[t].name or "?"))
-        else
-            emu.message(string.format("%02X %02x",x,t))
-        end
-    end
-)
+--memory.registerexec(0x8927,1, function()
+--        if not spidey.debug.enabled then return end
+--        local a,x,y,s,p,pc=memory.getregisters()
+--        local t = memory.readbyte(0x03b4+x)
+--        if cv2data.enemies[t] then
+--            emu.message(string.format("%02X %s",x,cv2data.enemies[t].name or "?"))
+--        else
+--            emu.message(string.format("%02X %02x",x,t))
+--        end
+--end)
 
 -- triggers when an enemy dies from anything
 memory.registerexec(0x8948,1, function()
@@ -2530,84 +2597,48 @@ memory.registerexec(0x8948,1, function()
         end
 end)
 
-memory.registerexec(0x8918,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        --local currentWeapon=memory.readbyte(0x03b7+x-3)
-        --if spWeaponBreak then spWeaponBreak(currentWeapon, x-6) end
-        --emu.pause()
-        --memory.writebyte(0x4c2+x,40)
---        memory.setregister("a",0x10)
---        memory.setregister("y",0x00)
-        --local i=x-6
-        --emu.message(string.format("%02X %02X",o[i].type or 0,a))
-    end
-)
+-- ********** start of map stuff **********
+-- This section is stuff related to the map in this hack:
+-- http://www.romhacking.net/hacks/1032/
+--
+--memory.registerexec(0xff1a,1,
+--    function()
+--        local a,x,y,s,p,pc=memory.getregisters()
+--        mapmenu=true
+--    end
+--)
 
--- create a callback for manipulating initial hp values of enemies
---memory.registerexec(0x8147,1,
+-- map exit
+--memory.registerexec(0xff3c,1,
+--    function()
+--        local a,x,y,s,p,pc=memory.getregisters()
+--        mapmenu=false
+--        specialPause=true
+--        if exitSpecialPause then
+--            specialPause = false
+--            exitSpecialPause = false
+--        else
+--            specialPause=true
+--            memory.writebyte(0x007a,2) -- Prevent exit, but now we can use our cheat menu
+--        end
+        
+--    end
+--)
+-- ********** end of map stuff **********
+
+-- create a callback for manipulating enemy damage
+--memory.registerexec(0x883a,1,
 --    function()
 --        local a,x,y,s,p,pc=memory.getregisters()
 --        local t=memory.readbyte(0x03ba+x-6)
---        local night=(memory.readbyte(0x82)==0x01)
---        if initEnemyHp then
---            local a=initEnemyHp(x-6,t,a,night)
+--        if enemyDamage then
+--            local a = enemyDamage(x-6,t,a)
 --            if a then memory.setregister("a",a) end
 --        end
 --    end
 --)
 
---function initEnemyHp(i, t, hp, night)
-    --if game.night then hp=hp*.5 end
-    --if t==0x03 then hp=50 end
-    --emu.message(string.format("Enemy %02X Type %02X hp set to %02X",i,t,hp))
-    --return hp
---end
-
-
--- ********** start of map stuff **********
--- This section is stuff related to the map in this hack:
--- http://www.romhacking.net/hacks/1032/
---
-memory.registerexec(0xff1a,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        mapmenu=true
-    end
-)
-
--- map exit
-memory.registerexec(0xff3c,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        mapmenu=false
-        specialPause=true
-        if exitSpecialPause then
-            specialPause = false
-            exitSpecialPause = false
-        else
-            specialPause=true
-            memory.writebyte(0x007a,2) -- Prevent exit, but now we can use our cheat menu
-        end
-        
-    end
-)
--- ********** end of map stuff **********
-
--- create a callback for manipulating enemy damage
-memory.registerexec(0x883a,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        local t=memory.readbyte(0x03ba+x-6)
-        if enemyDamage then
-            local a = enemyDamage(x-6,t,a)
-            --a=20
-            if a then memory.setregister("a",a) end
-        end
-    end
-)
-
-function enemyDamage(i,t,damage)
+function onEnemyDamage(i,t,damage)
 
     if cv2data.enemies[t].name=="Heart" then
         -- Heart's x speed is 1 to indicate it's a reference to a normal 
@@ -2662,22 +2693,21 @@ function enemyDamage(i,t,damage)
 end
 
 
-memory.registerexec(0x8a5f,1,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        local t=memory.readbyte(0x03ba+y-6)
-        memory.setregister("x",0)
---        if enemyDamage then
---            local a = enemyDamage(x-6,t,a)
---            if a then memory.setregister("a",a) end
---        end
-    end
-)
+--memory.registerexec(0x8a5f,1, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    local t=memory.readbyte(0x03ba+y-6)
+--    memory.setregister("x",0)
+--    if enemyDamage then
+--        local a = enemyDamage(x-6,t,a)
+--        if a then memory.setregister("a",a) end
+--    end
+--end)
 
 -- remove heart use from sp weapons
-memory.registerexec(0xd858,1, function()
-    memory.setregister("a", 0)
-end)
+function onSubWeaponCost(cost)
+    cost=0
+    return cost
+end
 
 function _spWeaponUseHearts(address, len, t)
     memory.setregister("a", 0)
@@ -2718,10 +2748,26 @@ function onSetWhipFrameDelay(delay, whipState)
     return delay
 end
 
-function onThrowWeapon(weaponType, abort)
-    local a,x,y,s,p,pc=memory.getregisters()
-    local t=memory.readbyte(0x03ba+y-6)
+function canThrowWeapon()
+    if not o.player.weaponItem then return false end
+    local weaponName = items[o.player.weaponItem].name
+    local cost = items[o.player.weaponItem].heartCost or 0
+    if cost > o.player.hearts then return false end
     
+    if getCustomCount("holyfire")>0 then return false end
+    if weaponName=="Banshee Boomerang" and getCustomCount("bansheeboomerang")>=3 then return false end
+    if weaponName=="Axe" and getCustomCount("axe")>=3 then return false end
+    
+    return true
+end
+
+function onThrowWeapon(weaponType, abort)
+    --emu.pause()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    local t=memory.readbyte(0x03ba+y-6)
+    
+    -- used to abort the normal weapon creation but not the custom cost.
+    local abortWeaponOnly = false
     local weaponName = items[o.player.weaponItem].name
     
     -- heart cost
@@ -2754,16 +2800,17 @@ function onThrowWeapon(weaponType, abort)
 --        end
     
     -- Banshee Boomerang
-    if weaponName=="Banshee Boomerang" and a==0x01 and not abort then
-        memory.setregister("a",0)
+    --if weaponName=="Banshee Boomerang" and a==0x01 and not abort then
+    if weaponName=="Banshee Boomerang" and not abort then
+        abortWeaponOnly = true
         if getCustomCount("bansheeboomerang")<3 then
             createBoomerang(o.player.x,o.player.y)
         else
             abort = true
         end
     end
-    if weaponName=="Axe" and a==0x01 and not abort then
-        memory.setregister("a",0)
+    if weaponName=="Axe" and not abort then
+        abortWeaponOnly = true
         if getCustomCount("axe")<3 then
             createAxe(o.player.x,o.player.y)
         else
@@ -2775,78 +2822,24 @@ function onThrowWeapon(weaponType, abort)
         -- spend hearts
         setHearts(o.player.hearts - cost)
     end
-    return weaponType, abort
+    return weaponType, abort or abortWeaponOnly
 end
 
-memory.registerexec(0xd7ea,0,
-    function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        local t=memory.readbyte(0x03ba+y-6)
-        
-        local weaponName = items[o.player.weaponItem].name
-        
-        -- heart cost
-        local cost = items[o.player.weaponItem].heartCost or 0
-        
-        if o.player.armor == items.index["Adventure Armor"] then
-            if cost>1 then cost = cost-1 end
-        end
-        
-        if o.player.weaponItem and items[o.player.weaponItem].stack then
-            removeItem(items[o.player.weaponItem].name,1)
-        end
-        
-        local abort = false
-
-
-        -- abort throwing of holy water if fire is on ground
-        if getCustomCount("holyfire")>0 then
-            memory.setregister("a",0)
-            memory.writebyte(0x40e,0)
-            abort = true
-        end
-
-        if cost > o.player.hearts then
-            -- abort weapon
-            memory.setregister("a",0)
-            memory.writebyte(0x40e,0)
-            abort = true -- use this to cancel axes/boomerang
-        end
---        if o.player.hearts==0 then
---            memory.setregister("a",0)
---            memory.writebyte(0x40e,0)
---        end
-        
-        -- Banshee Boomerang
-        if weaponName=="Banshee Boomerang" and a==0x01 and not abort then
-            memory.setregister("a",0)
-            if getCustomCount("bansheeboomerang")<3 then
-                createBoomerang(o.player.x,o.player.y)
-            else
-                abort = true
-            end
-        end
-        if weaponName=="Axe" and a==0x01 and not abort then
-            memory.setregister("a",0)
-            if getCustomCount("axe")<3 then
-                createAxe(o.player.x,o.player.y)
-            else
-                abort = true
-            end
-        end
-        
-        if not abort then
-            -- spend hearts
-            setHearts(o.player.hearts - cost)
-        end
-    end
-)
-
+-- Note: changing an enemy type to 0 will make a phantom enemy if
+-- hp isn't set to 0.  You can't fix it here, have to clean it up
+-- in onEnemyCreated().
 function onCreateEnemy(i,enemyType)
     --if t==0x43 then t=0x3a end
     --if t==0x03 then t=0x13 end
     
     --if t==0x03 then t=0x0d end -- turn skeletons to jumping skeleton
+    
+    if config.noEnemies then
+        if cv2data.enemies[enemyType] and cv2data.enemies[enemyType].exp>0 then
+            enemyType = 0
+        end
+    end
+    
     
     if enemyType==0x26 and hasInventoryItem("Sacred Flame") then enemyType=0 end
     
@@ -2855,6 +2848,7 @@ function onCreateEnemy(i,enemyType)
         --t=0
     end
     
+    --if enemyType==0x27 then debugger.hitbreakpoint() end
     
     --if t==0x03 then t=0x3a end --turn skeletons into mummies
     
@@ -2870,38 +2864,32 @@ function onCreateEnemy(i,enemyType)
 end
 
 -- after enemy creation finished
-memory.registerexec(0x817f,1, function()
-    --do return end
-    local a,x,y,s,p,pc=memory.getregisters()
-    local e = {}
-    x=x-6
-    e.type=memory.readbyte(0x03ba+x)
-    e.name = cv2data.enemies[e.type].name
-    e.x=memory.readbyte(0x0348+6+x)
-    e.y=memory.readbyte(0x0324+6+x)
+function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
+    if enemyType==0 then
+        memory.writebyte(0x04c8+enemyIndex, 0) -- hp
+        return
+    end
+    local enemyName = cv2data.enemies[enemyType].name
     
-    if config.replaceMedusaHeads and e.name=="Medusa" then
-        createMedusaHead(e.x+scrollx,e.y+scrolly,x)
-        e.type = 0
-        memory.writebyte(0x03ba+x,e.type)
+    if config.replaceMedusaHeads and enemyName=="Medusa" then
+        createMedusaHead(enemyX+scrollx,enemyY+scrolly,enemyIndex)
+        enemyType = 0
+        memory.writebyte(0x03ba+enemyIndex,enemyType)
     end
     
-    if e.name=="Blob" then
-        e.y=e.y+8+5
-        memory.writebyte(0x032a+x, e.y)
+    if enemyName=="Blob" then
+        enemyY=enemyY+8+5
+        memory.writebyte(0x032a+enemyIndex, enemyY)
     end
-    if e.name=="High Jump Blob" then
-        e.y=e.y+8
-        memory.writebyte(0x032a+x, e.y)
+    if enemyName=="High Jump Blob" then
+        enemyY=enemyY+8
+        memory.writebyte(0x032a+enemyIndex, enemyY)
     end
     
-    --emu.message(e.name or "?")
-    
-    
-    eData = cv2data.enemies[e.type] or {}
+    eData = cv2data.enemies[enemyType] or {}
     
     -- adjust hp on creation
-    local hp = memory.readbyte(0x04c8+x)
+    local hp = memory.readbyte(0x04c8+enemyIndex)
     if eData.hp == "initial" then
         -- don't change hp.  some objects like platforms rely on it.
     elseif eData.hp then
@@ -2913,14 +2901,13 @@ memory.registerexec(0x817f,1, function()
         if config.testStats then
             --emu.message(string.format("%s needs hp set",e.name))
         end
-
     end
     
     --emu.message(string.format("%s hp: %d",e.name, hp))
     
     --emu.message(string.format("%02x %d",x, hp))
     
-    memory.writebyte(0x04c8+x, hp)
+    memory.writebyte(0x04c8+enemyIndex, hp)
     
     --emu.message(string.format("%s hp=%02x",e.name or "?",memory.readbyte(0x04c8+x)))
     
@@ -2928,9 +2915,9 @@ memory.registerexec(0x817f,1, function()
     
     i=getunusedcustom()
     o.custom[i].type = "marker"
-    o.custom[i].eName = e.name
-    o.custom[i].x=e.x+scrollx
-    o.custom[i].y=e.y+scrolly
+    o.custom[i].eName = enemyName
+    o.custom[i].x=enemyX+scrollx
+    o.custom[i].y=enemyY+scrolly
     o.custom[i].outscreen=true
     o.custom[i].active=1
     
@@ -2944,7 +2931,7 @@ memory.registerexec(0x817f,1, function()
     
     --emu.message(x)
 
-end)
+end
 
 function onCreateEnemyProjectile(i,t,x,y)
     if t==0x0c then
@@ -3020,7 +3007,6 @@ function createItemPopUp(text)
         o.custom[i].text=text
     end
 end
-
 
 function createBone(x,y)
     i=getunusedcustom()
@@ -3213,9 +3199,10 @@ function onSetJumpSpeedY(v, onPlatform)
 end
 
 -- Don't get knocked off stairs when hit; needs work
-memory.registerexec(0xd392,1, function()
+-- disabled
+memory.registerexec(0xd392,0, function()
     local a,x,y,s,p,pc=memory.getregisters()
-    if not config.starsFix then return end
+    if not config.stairsFix then return end
     local state = memory.readbyte(0x3d8)
     if state==0x09 or state==0x0a then
         a=0x0a
@@ -3353,6 +3340,13 @@ end)
 --    return tile
 --end
 
+--function onPlaceStageTile(tile)
+--    if tile==0xdb then tile=0 end
+--    if tile==0xda then tile=0 end
+--    return tile
+--end
+
+
 -- reduce enemy stun time from 0x10
 function onEnemyStun(stunTime)
     stunTime = 0x0b
@@ -3361,6 +3355,23 @@ function onEnemyStun(stunTime)
 --    end
     return stunTime
 end
+
+
+-- Whip check for getting flame whip
+memory.registerexec(0x8c72+3,1, function()
+    local a,x,y,s,p,pc=memory.getregisters()
+    if hasInventoryItem("Morning Star") then
+        a = 3
+        if not hasInventoryItem("Flame Whip") then
+            getItem("Flame Whip", true, true) -- delayed
+        end
+    else
+        a = 0
+    end
+    memory.setregister("a", a)
+end)
+
+
 
 -- Relic check for eye
 memory.registerexec(0x8360,1, function()
@@ -3648,7 +3659,7 @@ end)
 -- found this spot by doing a breakpoint on $2002 (PPUSTATU) and
 -- checking to see if bit 7 is set (vblank).  Basically it's 
 -- probably a safe place to do ppu writes.
-memory.registerexec(0xc04b,1, function()
+function onVBlank()
     if game.applyDay and false then
         local address=0x3f09
         memory.writebyteppu(address+0,0x22)
@@ -3682,7 +3693,7 @@ memory.registerexec(0xc04b,1, function()
         end
 
     end
-end)
+end
 
 memory.registerexec(0xc85a,1, function()
     if (game.resetCounter or 0) > 0 then return end
@@ -3798,6 +3809,16 @@ memory.registerexec(0xc127,1, function()
         if util.removeLineBreaks(game.customMessage) ~= "I'LL GIVE YOU A DIAMOND." then
             a=0x62
         end
+    end
+    
+    -- Flame whip guy sfx (just remove sfx completely for now)
+    if msgnum == 0x0e and a == 0x22 then
+        a=0x62
+    end
+    
+    -- Flame whip guy: remove "come back" sfx.
+    if msgnum == 0x75 and a == 0x22 then
+        a=0x62
     end
     
     -- silence cursor on map screen
@@ -3967,13 +3988,8 @@ local m = "THE QUICK, BROWN FOX JUMPS OVER THE LAZY DOG."
 
 
 -- Triggered when a sp weapon breaks
-function spWeaponBreak(currentWeapon, i)
+function onSubWeaponBreak(currentWeapon, i)
     if currentWeapon == 4 then
---        a = 0x09
---        memory.setregister("a", a)
-        --emu.pause()
-        
-        
         for j=0,0 do
             local onum=getunusedcustom()
             if (onum) then
@@ -4073,8 +4089,8 @@ function spidey.update(inp,joy)
             memory.writebyte(0x0026, 0) -- make sure we remove pause
             
             -- apply number of days to select ending
-            --config.testEnding = math.max(1,math.min(3, config.testEnding))
-            --memory.writebyte(0x0083, (config.testEnding-1)*0x12)
+            config.testEnding = math.max(1,math.min(3, config.testEnding))
+            memory.writebyte(0x0083, (config.testEnding-1)*0x12)
 
             memory.writebyte(0x0018,0x0c) -- set mode to ending
             memory.writebyte(0x002a,0x01) -- set mode countdown to 1
@@ -4330,20 +4346,19 @@ function spidey.update(inp,joy)
     
     if spidey.debug.enabled then gui.text(4,4+8*9,string.format('Pattern tables: %02X %02X',pattern1,pattern2)) end
     
-    if quickmessages==true and action and messages[msgnum] and memory.readbyte(0x003f)~=0 then --if close to message
-        quickMessagePopupWait = (quickMessagePopupWait or 0) + 1
-        if quickMessagePopupWait >=40 then
-            --gui.text(20,20,messages[msgnum])
-            local x=0
-            local y=32
-            gui.drawbox(x+28-8, y+28+1-8,x+ 24+8*13+8, y+24+8*08+8, "black", "black")
-            gui.drawbox(x+28-4, y+28-4, x+24+8*13+4,y+ 24+8*08+4+1, "black", "#0070EC")
-            gui.drawbox(x+28-4-1, y+28-4+1, x+24+8*13+4+1, y+24+8*08+4+1-1, "clear", "#0070EC")
-            drawfont(x+28,y+28,font[current_font], messages[msgnum])
-        end
-    else
-        quickMessagePopupWait = 0
-    end
+--    if quickmessages==true and action and messages[msgnum] and memory.readbyte(0x003f)~=0 then --if close to message
+--        quickMessagePopupWait = (quickMessagePopupWait or 0) + 1
+--        if quickMessagePopupWait >=40 then
+--            local x=0
+--            local y=32
+--            gui.drawbox(x+28-8, y+28+1-8,x+ 24+8*13+8, y+24+8*08+8, "black", "black")
+--            gui.drawbox(x+28-4, y+28-4, x+24+8*13+4,y+ 24+8*08+4+1, "black", "#0070EC")
+--            gui.drawbox(x+28-4-1, y+28-4+1, x+24+8*13+4+1, y+24+8*08+4+1-1, "clear", "#0070EC")
+--            drawfont(x+28,y+28,font[current_font], messages[msgnum])
+--        end
+--    else
+--        quickMessagePopupWait = 0
+--    end
 
     if msgstatus==08 then
         msg=''
@@ -4372,7 +4387,7 @@ function spidey.update(inp,joy)
         
         --drawfont(96,112,font[current_font], msg)
     elseif msgstatus==0x07 then
-        messages[msgnum]=msg
+        --messages[msgnum]=msg
         --emu.message(msg)
     end
     
@@ -4543,7 +4558,8 @@ function spidey.update(inp,joy)
         if joy[1].left_press then
             if subScreen.showClues then
                 subScreen.clue=subScreen.clue-1
-                if subScreen.clue<1 then subScreen.clue = #subScreen.clues end
+                --if subScreen.clue<1 then subScreen.clue = #subScreen.clues end
+                if subScreen.clue<1 then subScreen.clue = 1 end
             elseif subScreen.showRelics or subScreen.showItems then
                 if subScreen.subMenu.scrollY -8>= 0 then
                     subScreen.subMenu.scrollY=subScreen.subMenu.scrollY-8
@@ -4557,7 +4573,8 @@ function spidey.update(inp,joy)
         if joy[1].right_press then
             if subScreen.showClues then
                 subScreen.clue=subScreen.clue+1
-                if subScreen.clue>#subScreen.clues then subScreen.clue=1 end
+                --if subScreen.clue>#subScreen.clues then subScreen.clue=1 end
+                if subScreen.clue> 13 then subScreen.clue=13 end
             elseif subScreen.showRelics or subScreen.showItems then
                 subScreen.subMenu.scrollY=subScreen.subMenu.scrollY+8
             else
@@ -4567,10 +4584,15 @@ function spidey.update(inp,joy)
         if joy[1].A_press then
             if game.map.visible then
                 game.map.visible = false
-            elseif subScreen.cursorY == 2 then
-                if subScreen.showRelics then
-                    subScreen.showRelics = false
-                end
+            end
+            if subScreen.showItems then
+                subScreen.showItems = false
+            end
+            if subScreen.showRelics then
+                subScreen.showRelics = false
+            end
+            if subScreen.showClues then
+                subScreen.showClues = false
             end
         end
         if joy[1].B_press then
@@ -4585,7 +4607,9 @@ function spidey.update(inp,joy)
                 emu.pause()
             end
             if subScreen.cursorY == 3 then
-                subScreen.showClues = not subScreen.showClues
+                if subScreen.showClues or (numClues() > 0) then
+                    subScreen.showClues = not subScreen.showClues
+                end
             end
             if subScreen.cursorY == 2 then
                 if subScreen.showRelics then
@@ -4696,12 +4720,14 @@ function spidey.update(inp,joy)
 
 
         if joy[1].left then
-            local ys = spidey.makeNesFloat(math.cos((joy[1].left_press_time-1) *.3)*1.5)+.5
+            local ys = 0
+            if config.batWave then ys = spidey.makeNesFloat(math.cos((joy[1].left_press_time-1) *.3)*1.5)+.5 end
             memory.writebyte(0x037e,0)
             memory.writebyte(0x036c,ys)
         end
         if joy[1].right then
-            local ys = spidey.makeNesFloat(math.cos((joy[1].right_press_time-1) *.3)*1.5)+.5
+            local ys = 0
+            if config.batWave then ys = spidey.makeNesFloat(math.cos((joy[1].right_press_time-1) *.3)*1.5)+.5 end
             memory.writebyte(0x037e,0)
             memory.writebyte(0x036c,ys)
         end
@@ -4789,7 +4815,9 @@ function spidey.update(inp,joy)
         if config.getItems then
             for _,item in ipairs(util.split(config.getItems, ",")) do
                 item = util.trim(item)
-                if not hasInventoryItem(item) then
+                if not items.index[item] then
+                    spidey.message("Unknown item %s",item)
+                elseif not hasInventoryItem(item) then
                     getItem(item, true)
                 elseif (itemList[getInventoryIndex(item)].amount or 0) < (items[items.index[item]].stack or 0) then
                     itemList[getInventoryIndex(item)].amount = items[items.index[item]].stack-1
@@ -4798,6 +4826,24 @@ function spidey.update(inp,joy)
             end
         end
         
+        if config.equip then
+            for _,item in ipairs(util.split(config.equip, ",")) do
+                item = util.trim(item)
+                if not items.index[item] then
+                    spidey.message("Unknown item %s",item)
+                elseif not hasInventoryItem(item) then
+                    getItem(item, true)
+                    equipItem(item)
+                elseif (itemList[getInventoryIndex(item)].amount or 0) < (items[items.index[item]].stack or 0) then
+                    itemList[getInventoryIndex(item)].amount = items[items.index[item]].stack-1
+                    getItem(item, true)
+                    equipItem(item)
+                else
+                    equipItem(item)
+                end
+            end
+            config.equip = false
+        end
         
         -- Check if the player is in the in air hurt frame.  If so, reset 
         -- the invincible counter.  This way, you doesn't start flashing until
@@ -5035,6 +5081,16 @@ function spidey.update(inp,joy)
         end
         if o[i].name == "Jumping Skeleton" then
             --gui.text(o[i].x,o[i].y+8*2, string.format("state: %02x %02x %02x %d %d",o[i].state, o[i].state2, o[i].statecounter, o[i].xs, o[i].ys))
+        end
+        if o[i].name == "Book" then
+            for clueNum,clue in ipairs(cv2data.clues) do
+                if o[i].hp == clue and o.player.clues[clueNum] then
+                    o[i].type=0
+                    o[i].frame=0
+                    memory.writebyte(0x03ba+i,o[i].type)
+                    memory.writebyte(0x0306+i,o[i].frame)
+                end
+            end
         end
         if o[i].name == "Orb" then
             for _,v in ipairs(cv2data.mansions) do

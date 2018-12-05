@@ -15,9 +15,13 @@ cv2.relics = {
 cv2.mansions = {
     {name="Berkeley",relic="rib", orbValue = 24},
     {name="Rover",relic="heart", orbValue = 25},
-    {name="Braham",relic="eye", orbValue = 26},
+    {name="Brahm",relic="eye", orbValue = 26},
     {name="Bodley",relic="nail", orbValue = 27},
     {name="Laruba",relic="ring", orbValue = 28},
+}
+
+cv2.towns = {
+    {name = "Doina"},
 }
 
 for i=1,8 do
@@ -337,7 +341,7 @@ locations[0][15]={[0]='(room)','(room)'}
 locations[0][16]={[0]='(room)','(room)'}
 locations[0][17]={[0]='(room)','(room)'}
 locations[0][18]={[0]='(room)'}
-locations[0][19]={[0]='(room)'}
+locations[0][19]={[0]='(room)','(room)','(room)'}
 locations[0][20]={[0]='(room)'}
 locations[0][21]={[0]='(room)'}
 locations[0][22]={[0]='(room)'}
@@ -439,6 +443,9 @@ cv2.map = {
     }
 }
 
+-- Clue numbering based on this: http://castlevania.wikia.com/wiki/13_Clues
+-- which in turn was based on a Japanese guide book.
+cv2.clues = {0x1e, 0x1f, 0x20, 0x42, 0x0d, 0x22, 0x21, 0x5c, 0x24, 0x23, 0x14, 0x25, 0x11}
 
 cv2.messages = {
     [0x0b]={
@@ -447,13 +454,84 @@ cv2.messages = {
             notes = "toned down the laughing and !!.  why is he shouting?",
         }
     },
+    [0x0d]={
+        {
+            text = "KNEEL BY THE\nLAKE WITH THE\nBLUE CRYSTAL.",
+            notes = "no more sutff about replenishing earth.",
+        }
+    },
+    [0x0e]={
+        {
+            condition=function() return hasInventoryItem("Flame Whip") end,
+            text="GOOD LUCK.",
+        },
+        {
+            condition=function() return hasInventoryItem("Morning Star")==false end,
+            text="TO BREAK MY\nSPELL, COME\nBACK WITH A\nPOWERFUL\nWEAPON.",
+        },
+        {
+            text = "I'LL GIVE\nYOUR MORNING\nSTAR POWER\nTO BURN AWAY\nEVIL.",
+        }
+    },
+    [0x11]={
+        {
+            text = "DEATH'S\nHIDDEN\nKNIFE BLURS\nCARMILLA'S\nVISION.",
+        }
+    },
     [0x12]={
         {
             condition=function() return hasInventoryItem("Diamond")==true end,
             text="DIAMONDS ARE\nFOREVER.",
+            notes="Could use a better message here, or maybe just make the guy gone.",
         },
         {
             text = "I'LL GIVE\nYOU A\nDIAMOND.",
+        }
+    },
+    [0x14]={
+        {
+            text = "DRACULA'S\nNAIL MAY\nSOLVE\nTHE EVIL\nMYSTERY.",
+            notes = "Need something to indicate that it breaks walls.",
+        }
+    },
+    [0x1e]={
+        {
+            text = "A SYMBOL OF\nDRACULA WILL \nAPPEAR WHEN\nUSING THE\nSTAKE.",
+        }
+    },
+    [0x1f]={
+        {
+            text = "DESTROY THE\nCURSE AND\nYOU'LL RULE\nBRAHM'S\nMANSION.",
+        }
+    },
+    [0x20]={
+        {
+            text = "A FLAME\nFLICKERS\nINSIDE THE\nRING OF\nFIRE.",
+        }
+    },
+    [0x21]={
+        {
+            text = "GARLIC IN\nTHE\nGRAVEYARD\nSUMMONS A\nSTRANGER.",
+        }
+    },
+    [0x22]={
+        {
+            text = "DESTROY THE\nCURSE WITH\nDRACULA'S\nHEART.",
+        }
+    },
+    [0x23]={
+        {
+            text = "PLACE THE\nLAURELS IN A\nSILK BAG TO\nBRING THEM\nTO LIFE.",
+        }
+    },
+    [0x24]={
+        {
+            text = "KNEEL WITH\nA RED CRYSTAL\nAT DEBORAH\nCLIFF.",
+        }
+    },
+    [0x25]={
+        {
+            text = "THE CURSE\nHAS KILLED\nTHE LAUREL\nTREE.",
         }
     },
     [0x38]={
@@ -465,6 +543,16 @@ cv2.messages = {
         {
             text="FIRST THING\nTO DO IN\nTHIS TOWN IS\nBUY A WHITE\nCRYSTAL.",
         },
+    },
+    [0x42]={
+        {
+            text = "CLEAR A PATH\nAT BERKELEY\nMANSION WITH\nA WHITE\nCRYSTAL.",
+        }
+    },
+    [0x5c]={
+        {
+            text = "AN OLD GYPSY\nHOLDS A\nDIAMOND IN\nSOUTHERN JAM\nWASTELAND.",
+        }
     },
     [0x64]={
         {
@@ -660,7 +748,7 @@ cv2.defaultMessages = {
 }
 
 cv2.placedItems = {
-    {x=0x198, y=0x9d, area = {0x02,0x03,0x01}, name="Classic Tunic", location="dabis path on some bricks."},
+    {x=0x198, y=0x9d, area = {0x02,0x03,0x01}, name="Simon's Plate", location="dabis path on some bricks."},
     {x=0x38, y=0x13d, area = {0x02,0x03,0x03}, name="Night Armor", location="below aljiba woods to left of stairs."},
     {x=0x3e8, y=0x9d, area = {0x00,0x00,0x00}, name="Gold", location="jova top right side."},
     {x=0xd8, y=0x5d, area = {0x00,0x07,0x00, 0x05}, name="Church's Chicken", location="church in doina."},

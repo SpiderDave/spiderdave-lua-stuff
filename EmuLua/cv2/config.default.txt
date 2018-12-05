@@ -46,3 +46,21 @@ jumpTweak = false
 
 // Show relic icons and if they're turned on in the HUD. The HUD is a little busy with this on.
 showRelicsInHUD=false
+
+// Amount of lives to start with
+lives=3
+
+// Save lives with game save.  If set to false, the player will get starting amount of lives when continuing.
+saveLives=false
+
+// Bat mode flight is wavy.  It's can be annoying, especially with the scrolling.
+batWave=false
+
+// Remove all enemies
+noEnemies=true
+
+// Get items when script is activated and not paused.
+//getItems=Simon's Plate, Morning Star
+
+// Equip items when script is activated and not paused.
+//equip=Simon's Plate, Morning Star

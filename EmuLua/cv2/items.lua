@@ -72,6 +72,7 @@ local items = {
     },
     {
         name = "Banshee Boomerang",
+        shortName = "B. Boomerang",
         type = "weapon",
         desc = "",
         weaponIndex = 10,
@@ -79,23 +80,23 @@ local items = {
         heartCost = 4,
     },
     {
-        name = "Classic Tunic",
+        name = "Simon's Plate",
         type = "armor",
-        desc = "Classic tan leather tunic.",
+        desc = "Classic tan leather\nbreastplate.",
         palette = {0x0f, 0x08, 0x27, 0x37},
         ar = 10,
     },
     {
-        name = "Red Tunic",
+        name = "Red Plate",
         type = "armor",
-        desc = "A red and black tunic.",
+        desc = "Red and black breastplate.",
         palette = {0x0f, 0x0f, 0x16, 0x20},
         ar = 2,
     },
     {
-        name = "Red Tunic (remix)",
+        name = "Red Plate (remix)",
         type = "armor",
-        desc = "A red and black tunic, \nslightly muted colors.",
+        desc = "Red and black breastplate,\nslightly muted colors.",
         palette = {0x0f, 0x0f, 0x17, 0x37},
         ar = 6,
     },
@@ -220,9 +221,9 @@ local items = {
         type = "bag",
         desc = "",
         bagList = {
-            "Classic Tunic",
-            "Red Tunic",
-            "Red Tunic (remix)",
+            "Simon's Plate",
+            "Red Plate",
+            "Red Plate (remix)",
             "Night Armor",
             "Magic Armor",
             "Adventure Armor",
@@ -257,6 +258,10 @@ for i = 1, #items do
     items[i].index = i
 end
 
+
+for i = 1, #items do
+    items[i].shortName = items[i].shortName or items[i].name
+end
 
 
 return items

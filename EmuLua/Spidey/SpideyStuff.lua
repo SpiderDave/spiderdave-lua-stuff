@@ -860,6 +860,16 @@ function writetofile(path,stuff)
     return true
 end
 
+function spidey.appendToFile(path,stuff)
+    if not stuff then return end
+    local file = io.open(path,"ab")
+    io.output(file)
+    io.write(stuff)
+    io.close(file)
+    return true
+end
+
+
 -- draw font loaded with loadfont function
 function drawfont(x,y,font,str)
     if not str then return end
