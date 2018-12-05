@@ -57,7 +57,7 @@ saveLives=false
 batWave=false
 
 // Remove all enemies
-noEnemies=true
+noEnemies=false
 
 // Get items when script is activated and not paused.
 //getItems=Simon's Plate, Morning Star
