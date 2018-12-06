@@ -203,6 +203,7 @@ local items = {
     {
         name = "Charm",
         type = "accessory",
+        desc = "Reduces heart cost of \nsome weapons.",
     },
     {
         name = "Stackable Item",

@@ -77,3 +77,11 @@ sortInventory=true
 
 // candles drop hearts that replace with real hearts (buggy)
 candlesRealHearts=false
+
+// Maximum hearts
+maxHearts = 99
+
+// Reduce heart cost for special weapons
+//reduceHeartCost = 2
+
+

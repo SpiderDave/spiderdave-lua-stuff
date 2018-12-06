@@ -1,3 +1,8 @@
+--local xpcall = function(f)
+--    f()
+--    return true
+--end
+
 local callable=function(f)
     if type(f)~="function" then return true end
 end

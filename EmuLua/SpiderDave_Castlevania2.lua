@@ -11,7 +11,7 @@
 --  * Skeletons now throw bones.  They throw more bones more frequently at night
 --  * Werewolves improved; rush and jump attack.  rush distance increased at night.
 --  * Improved skulls, ghosts, medusa heads (broken atm)
---  * Improved floating eyes (broken atm)
+--  * Improved floating eyes
 --  * Hands are hidden until close.
 --  * All fireballs should now face proper direction
 --  * Don't re-fight Bosses
@@ -47,6 +47,7 @@
 --  * Dracula's eye now shows fake blocks and breakable blocks
 --  * New Save/Load system
 --  * Adjusted handling of velocity when jumping while on a moving platform.
+--  * Adjusted velocity when getting hit to be closer to other games.
 --
 -- Debug and experimental stuff (may not be in the final version):
 --  * Cheats
@@ -63,6 +64,7 @@
 --  * Blood Skeletons
 --  * Don't get items you already have (Dracula's parts, etc)
 --    + dracula parts finished
+--    + clues finished
 --  * replace hp graphics when unloading script
 --  * add mummy bandages
 --  * overhaul menu system, make new sub screen
@@ -78,17 +80,11 @@
 --  * make bordia mountains useful (put something there)
 --  * move respawn points to where you first entered the screen
 --  * add stopwatch
---  * loading a save state doesn't reset some script things, and causes issues
+--  * loading a save state doesn't reset some script things
 --  * resetting doesn't clear extra data
 --  * finish map labels
---  * make music change on custom night/day transition
---  * get proper palette for day/night transition
---  * day/night transition: avoid reload delay
---  * day/night transition: fix town transition, so you don't get ambushed by zombies immediately
 --  * make spikes kill you completely
 --  * make sure all items can be obtained properly
---  * show cross on sub screen or relics or somewhere
---     - now shows in item list
 --  * allow different configs for different save slots
 --  * starting a new game sometimes shows the wrong tunic color
 --  * skeletons sometimes throw bones from below you when they are above -- wrong bone placement
@@ -99,7 +95,7 @@
 --     - aljiba guy gives diamond instead of laurels
 --       + fixed
 --     - free laurel guy doesn't give laurels
---  * bug where enemies can sometimes be unkillable
+--       + fixed.  he now gives the pendant instead.
 --  * rework all memory.registerexec functions to use custom callbacks.  safer, better.
 --     - did some of them
 --  * add confirmation of equipping an item (sound, flash, etc)
@@ -107,12 +103,9 @@
 --  * prevent talking to npcs in the air
 --  * bug - password text is wrong (can't get to password screen anyway but still should track it down)
 --  * issue - can keep getting non-inventory custom items (like gold) over and over again
---  * bug - free laurel guy doesn't give laurels
 --  * issue - boss doors don't reflect diamond or other collisions.
 --      - possible solution: adjust nametable data.
 --  * bug - can't get silk bag.
---  * add collision boxes https://forum.speeddemosarchive.com/post/castlevania_ii_simons_quest_collision_box_viewer.html
---      + done
 --  * restore hp after boss (or getting dracula relic?)
 --  * fix it so jumping into sideways spikes doesn't just make you stand on them.
 --  * animate water
@@ -121,7 +114,6 @@
 --  * level up toast should go on top of everything else
 --  * fix bug where you can whip through edge of screen and break blocks on the other side.
 --  * add candles
---  * fix bug where removed enemies/items can still be hit once. "phantom enemy" bug.
 
 require ".Spidey.TSerial"
 
@@ -756,7 +748,7 @@ o.player = {}
 o.boss={}
 
 o.player.gold = 0
-o.player.maxHearts = 99
+o.player.maxHearts = config.maxHearts or 99
 o.player.clues = {}
 
 for i=0,o.count-1 do
@@ -2805,9 +2797,18 @@ function onThrowWeapon(weaponType, abort)
     -- heart cost
     local cost = items[o.player.weaponItem].heartCost or 0
     
+
     if o.player.armor == items.index["Adventure Armor"] then
         if cost>1 then cost = cost-1 end
     end
+    if o.player.accessory == items.index["Charm"] then
+        if cost>1 then cost = cost-1 end
+    end
+    
+    if config.reduceHeartCost then
+        if cost>1 then cost = math.max(1,cost-config.reduceHeartCost) end
+    end
+    
     
     if o.player.weaponItem and items[o.player.weaponItem].stack then
         removeItem(items[o.player.weaponItem].name,1)
@@ -5180,7 +5181,7 @@ function spidey.update(inp,joy)
             local interval = 120
 --            nBones=2
 --            interval=100
-            if o[i].statecounter % 120==0 then
+            if o[i].statecounter % 128==0 then
                 if game.night then
                     nBones = 2
                     interval = 100
@@ -6276,6 +6277,17 @@ function spidey.update(inp,joy)
                     o.custom[i].active=0
                     hurtplayer()
                 end
+
+                local x=o.custom[i].x-scrollx
+                local y=o.custom[i].y-scrolly
+                local rect = {x-5,y-4-8,x+7,y+7-8}
+                if config.hitboxes then
+                    gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
+                end
+                if collision(rect, hitboxes.whip.rect) then
+                    o.custom[i].active = 0
+                end
+
             elseif o.custom[i].type=="axe" then
                 o.custom[i].rnd=o.custom[i].rnd or math.random(0,90000)
                 f=math.floor((o.custom[i].alivetime+o.custom[i].rnd)/06) % 4
