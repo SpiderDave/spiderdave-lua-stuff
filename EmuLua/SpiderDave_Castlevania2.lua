@@ -582,6 +582,10 @@ gfx.candles = {}
 gfx.candles[0]=gfx.load("cv1candle1_1")
 gfx.candles[1]=gfx.load("cv1candle1_2")
 gfx.block = gfx.load("block")
+gfx.medusa = {
+    {gfx.load("medusa1"), gfx.load("medusa2")},
+    {gfx.load("medusa1h"), gfx.load("medusa2h")},
+}
 
 
 
@@ -654,6 +658,16 @@ if gd then
     end
     
     --emu.message(type(gd))
+    
+--    f="medusa1h.png"
+--    local img = gd.createFromPng("cv2/images/png/"..f)
+--    local newFile = string.gsub(f, "%.png", "%.gd")
+--    img:gd("cv2/images/gd/"..newFile)
+--    f="medusa2h.png"
+--    local img = gd.createFromPng("cv2/images/png/"..f)
+--    local newFile = string.gsub(f, "%.png", "%.gd")
+--    img:gd("cv2/images/gd/"..newFile)
+
     
     -- dump all png to gd
     if false then
@@ -839,7 +853,7 @@ end
 
 o.custom.createLevelObjects = function()
     for k,v in ipairs(levelObjects) do
-        i=getunusedcustom()
+        local i=getunusedcustom()
         if i then
             o.custom[i].type = v.type
             o.custom[i].area = {
@@ -1359,6 +1373,7 @@ function getExtraData()
     --0x7200 to 0x73ff items
     --0x7400 = save slot
     --0x7401 to 0x740e = clues
+    --0x7500 sfx thing
     
     for i,v in ipairs(cv2data.relics) do
         if memory.readbyte(0x7000+20+i-1)==1 then
@@ -2104,18 +2119,29 @@ function getheart()
     local i=getunused()
     --if n==-1 then n=0 end
 
+
+--                o[i].hp=0xef
+--                o[i].hp=1
+--                memory.writebyte(0x04c8+i, o[i].hp)
+--                o[i].frame=0x8b
+--                memory.writebyte(0x0306+i, o[i].frame)
+
+
     --type = 0x05
     memory.writebyte(0x3ba+i,0x37) --type
+    --memory.writebyte(0x3ba+i,0x36) --type
     memory.writebyte(0x3de+i,0x00) --team
-    memory.writebyte(0x4c8+i,0x01) --hp
-    memory.writebyte(0x44a+i,0x01) -- time to dissappear?
-    memory.writebyte(0x46e+i,0x00)
+    --memory.writebyte(0x4c8+i,0x01) --hp
+    
+    --memory.writebyte(0x44a+i,0x01) -- time to dissappear?
+    memory.writebyte(0x44a+i,0x18) -- time to dissappear?
+    memory.writebyte(0x46e+i,0x00) --state2
     memory.writebyte(0x0306+i, 0x9c) -- frame
     memory.writebyte(0x0306+i, 0) -- frame
 --    memory.writebyte(0x34e+i,o.player.x-scrollx)
 --    memory.writebyte(0x32a+i,o.player.y-scrolly)
-    memory.writebyte(0x34e+i,o.player.x+8)
-    memory.writebyte(0x32a+i,o.player.y+8)
+    memory.writebyte(0x34e+i,o.player.x)
+    memory.writebyte(0x32a+i,o.player.y)
     --o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
 end
 
@@ -2123,14 +2149,15 @@ end
 function hurtplayer(data)
     --atm, we hurt the player by creating an unfriendly heart on top of him
     if o.player.inv>0 then return end --if he's invincible, don't bother.
-    onum = getunused()
+    local onum = getunused()
     if not onum then return false end --should create an alternate method if it fails
-    --memory.writebyte(0x03b7+3+onum,0x36) --burn
-    memory.writebyte(0x03b7+3+onum,0x37) --heart
-    memory.writebyte(0x034b+3+onum,o.player.x)
-    memory.writebyte(0x0327+3+onum,o.player.y)
+    --memory.writebyte(0x03ba+onum,0x36) --burn
+    memory.writebyte(0x03ba+onum,0x37) --heart
+    --memory.writebyte(0x03ba+onum,0x38)
+    memory.writebyte(0x034e+onum,o.player.x)
+    memory.writebyte(0x032a+onum,o.player.y)
     memory.writebyte(0x03de+onum,0x01) --not friendly
-    memory.writebyte(0x03ed+3+onum,0x01) --helps to init it; frame?
+    memory.writebyte(0x03f0+onum,0x01) --helps to init it; frame?
     memory.writebyte(0x0396+onum,0x01) --x speed
     memory.writebyte(0x036f+onum, data or 0) --y speed
     memory.writebyte(0x044a+onum,0x18) --make fire disappear faster
@@ -2584,6 +2611,7 @@ function addExp(n)
         --emu.message("level up!")
         
         createLevelUpText()
+        playSound(0x27)
         
         e=e-need
         o.player.level = math.min(o.player.level+1, 99)
@@ -2609,6 +2637,23 @@ function addHearts(n)
     setHearts(o.player.hearts+n)
 end
 
+function playSound(n)
+    game.soundQueue=game.soundQueue or {}
+    game.soundQueue[#game.soundQueue+1] = n
+end
+
+function queueSound(n)
+    game.soundQueue=game.soundQueue or {}
+    game.soundQueue[#game.soundQueue+1] = n
+end
+
+function updateSoundQueue()
+    game.soundQueue=game.soundQueue or {}
+    if #game.soundQueue==0 then return end
+    if memory.readbyte(0x7500)==0 then
+        memory.writebyte(0x7500, table.remove(game.soundQueue, 1))
+    end
+end
 
 -- buying (cost)
 -- changes sp weapon cost too, but we fix that elsewhere
@@ -2967,7 +3012,7 @@ function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
     local enemyName = cv2data.enemies[enemyType].name
     
     if config.replaceMedusaHeads and enemyName=="Medusa" then
-        createMedusaHead(enemyX+scrollx,enemyY+scrolly,enemyIndex)
+        --createMedusaHead(enemyX+scrollx,enemyY+scrolly,enemyIndex)
         enemyType = 0
         --enemyType = 0x10
         memory.writebyte(0x03ba+enemyIndex,enemyType)
@@ -3009,7 +3054,7 @@ function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
     
     if not spidey.debug.enabled then return end
     
-    i=getunusedcustom()
+    local i=getunusedcustom()
     o.custom[i].type = "marker"
     o.custom[i].eName = enemyName
     o.custom[i].x=enemyX+scrollx
@@ -3070,7 +3115,7 @@ function onCreateEnemyProjectile(i,t,x,y)
 end
 
 function createDiamondTrail(x,y)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if (i) then
         o.custom[i].type="diamondtrail"
         o.custom[i].x=x+scrollx
@@ -3084,7 +3129,7 @@ function createDiamondTrail(x,y)
 end
 
 function createLevelUpText()
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if i then
         o.custom[i].type="levelup"
         o.custom[i].x=o.player.x+scrollx
@@ -3094,7 +3139,7 @@ function createLevelUpText()
 end
 
 function createItemPopUp(text)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if i then
         o.custom[i].type="itemPopUp"
         o.custom[i].x=o.player.x+scrollx
@@ -3105,7 +3150,7 @@ function createItemPopUp(text)
 end
 
 function createBone(x,y)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if (i) then
         o.custom[i].type="bone"
                 --o.custom[i].x=inp.xmouse+scrollx
@@ -3123,7 +3168,7 @@ function createBone(x,y)
 end
 
 function createPoison(enemyIndex)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if not i then return end
     
     o.custom[i].type = "poison"
@@ -3133,7 +3178,7 @@ function createPoison(enemyIndex)
 end
 
 function createPoisonDrip(target)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if not i then return end
     
     o.custom[i].type = "poisonDrip"
@@ -3145,7 +3190,7 @@ function createPoisonDrip(target)
 end
 
 function createAxe(x,y)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if (i) then
         o.custom[i].type="axe"
         o.custom[i].x=x+scrollx
@@ -3165,7 +3210,7 @@ function createAxe(x,y)
 end
 
 function createBoomerang(x,y)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if (i) then
         o.custom[i].type="bansheeboomerang"
         o.custom[i].rebound = false
@@ -3185,32 +3230,23 @@ function createBoomerang(x,y)
     end
 end
 
-function createMedusaHead(x,y, enemyIndex)
-    i=getunusedcustom()
-    if (i) then
-        o.custom[i].type="medusahead"
-        o.custom[i].target = enemyIndex
-        o.custom[i].facing = o[enemyIndex].facing
-        o.custom[i].x=x+scrollx
-        o.custom[i].y=y+scrolly
-        --o.custom[i].facing=o.player.facing
-        
-        if o.custom[i].facing==1 then 
-            o.custom[i].xs=1 
-        else 
-            o.custom[i].xs=-1 
-        end
-        --o.custom[i].xs=0
-        o.custom[i].ys=0
-        o.custom[i].outscreen=true
-        o.custom[i].active=1
-        o.custom[i].originX = x
-        o.custom[i].originY = y
-    end
+function createMedusaHead()
+    local x,y
     
-    if isCustomDuplicate(i) then
-        o.custom[i].active=0
+    y=scrolly+o.player.y-0x20
+    local facing = 1-o.player.facing
+    if facing==1 then 
+        x = scrollx+0x08
+    else 
+        x = scrollx+0x0ff-0x08
     end
+    local obj = createObject("medusahead",x,y)
+    obj.facing = facing
+    obj.xs=1.17
+    if obj.facing == 0 then obj.xs=obj.xs*-1 end
+    
+    --obj.outscreen=true
+    obj.outscreen=false
 end
 
 function createCustomHeart(x,y, floor)
@@ -3364,7 +3400,7 @@ end
 
 function getCurrentExp()
     local exp = o.player.exp
-    if i==0 then return exp end
+    --if i==0 then return exp end
     for i=0, o.player.level-1 do
        exp=exp + getExpNeeded(i)
     end
@@ -3468,18 +3504,6 @@ function onGetFreeLaurels()
     --spidey.message("%02x %02x", memory.getregister("a"),memory.readbyte(0x92))
     if not hasInventoryItem("Pendant") then getItem("Pendant", true, true) end --delayed
     memory.setregister("a", memory.readbyte(0x92)) -- cancel laurels
-end
-
-function onOutsideCheck(af)
-    --p = bit.bor(p, 0x02)-2
-    p = memory.getregister("p")
-    p = bit.bor(p, 0x02)-2
-    
-    p=0xff
-    
-    memory.setregister("p", p)
-    return 0x81
-
 end
 
 function onPlaceStageTile(tile)
@@ -4033,6 +4057,7 @@ memory.registerexec(0xc127,1, function()
     -- 15 sacred flame
     -- 16 holy water
     -- 18 hurt enemy
+    -- 19 fast whoosh sound
     -- 1a kill enemy
     -- 1d fall in water
     -- 1e destroy blocks
@@ -4202,6 +4227,13 @@ end
 
 
 function romPatch()
+    -- This adds a little patch that makes it so when you poke a value
+    -- to 0x7500 it plays a sound effect.  Currently it only works in game.
+    --put 1ce0e 20edfe
+    --put 1feed 203a86  48 ad0075 f008  2018c1 a900 8d0075  68 60
+    rom.writebytes(0x1ce0e+0x10, spidey.hex2bin("20edfe"))
+    rom.writebytes(0x1feed+0x10, spidey.hex2bin("203a8648ad0075f0082018c1a9008d00756860"))
+
     -- remove hp graphics
     rom.writebytes(0x21600+0x10, string.rep(string.char(0x00), 0x60))
     rom.writebytes(0x23600+0x10, string.rep(string.char(0x00), 0x60))
@@ -4524,6 +4556,8 @@ function spidey.update(inp,joy)
     
     romPatch()
     
+    updateSoundQueue()
+    
     if config.quickDayNight then
         -- day/night toggle thing
         if memory.readbyte(0x002c) == 0x07 then
@@ -4649,7 +4683,34 @@ function spidey.update(inp,joy)
         end
     end
     
-    gui.text(0,0, ""); -- force clear of previous text
+    if action then
+        game.medusa = game.medusa or {}
+        
+        game.medusa.enabled = false
+        
+        
+        if displayarea=="Vrad Mountain" and scrollx>=0x2e and scrollx<=0x286 then
+            game.medusa.enabled = true
+        end
+        
+        
+        if game.medusa.enabled then
+            game.medusaCounter = (game.medusaCounter or 0x20) + 1
+            local medusaLimit = 2
+            if game.night then medusaLimit=4 end
+            if game.night and game.medusaCounter == 0x90 then
+                if getCustomCount("medusahead") < medusaLimit then
+                    createMedusaHead()
+                end
+            end
+            if game.medusaCounter >=0xb0 then
+                if getCustomCount("medusahead") < medusaLimit then
+                    createMedusaHead()
+                end
+                game.medusaCounter = 0
+            end
+        end
+    end
     
     -- Hide graphics for HP
 --    if action or pausemenu then
@@ -4835,15 +4896,19 @@ function spidey.update(inp,joy)
                     if item then
                         if item.type=="armor" then
                             setArmor(item.index)
+                            --playSound(0x11)
                         end
                         if item.type=="whip" then
                             setWhip(item.index)
+                            --playSound(0x11)
                         end
                         if item.type=="weapon" then
                             setWeapon(item.index)
+                            --playSound(0x11)
                         end
                         if item.type=="accessory" then
                             setAccessory(item.index)
+                            --playSound(0x11)
                         end
                     end
                     --emu.message(string.format("%02x",subScreen.subMenu.y-subScreen.subMenu.scrollY+1))
@@ -5314,13 +5379,15 @@ function spidey.update(inp,joy)
         end
         if o[i].name == "Heart" then
             --spidey.message("%02x",o[i].team)
-            if o[i].xs==1 then return end -- we set this to mark it as custom damager heart
-            -- hearts always small
-            o[i].hp=0xef
-            o[i].hp=1
-            memory.writebyte(0x04c8+i, o[i].hp)
-            o[i].frame=0x8b
-            memory.writebyte(0x0306+i, o[i].frame)
+            if o[i].xs==1 then -- we set this to mark it as custom damager heart
+            else
+                -- hearts always small
+                o[i].hp=0xef
+                o[i].hp=1
+                memory.writebyte(0x04c8+i, o[i].hp)
+                o[i].frame=0x8b
+                memory.writebyte(0x0306+i, o[i].frame)
+            end
         elseif o[i].name == "Werewolf" then
             -- The werewolf's senses are better at night; greater rush distance and they can turn to rush at night.
             local rushDistance = 0x32
@@ -5931,13 +5998,14 @@ function spidey.update(inp,joy)
             memory.writebyte(0x0306+i,o[i].frame)
             memory.writebyte(0x04c8+i, o[i].hp)
         end
+        if config.testMarker then gui.text(100,100+8*2,"test marker 3") end
     end
     
     if config.testMarker then gui.text(100,100+8,"test marker 2") end
     
     
     if inp.leftbutton_press then
-        i=getunusedcustom()
+        local i=getunusedcustom()
         i=false --DISABLE
         if (i) then
             --o.custom[i].type="fireball"
@@ -5954,7 +6022,7 @@ function spidey.update(inp,joy)
     end
     
     if cheats.active and (cheats.battest or cheats.leftClick == "battest") and inp.leftbutton_press then
-        i=getunusedcustom()
+        local i=getunusedcustom()
         if (i) then
             o.custom[i].type="bigbat"
             o.custom[i].x=inp.xmouse+scrollx
@@ -6019,7 +6087,9 @@ function spidey.update(inp,joy)
     end
     
     if cheats.active and inp.leftbutton_press and cheats.leftClick=="levelup" then
+    --if inp.leftbutton_press then
         createLevelUpText()
+        playSound(0x27)
     end
     
     
@@ -6029,7 +6099,7 @@ function spidey.update(inp,joy)
 --    end
     
     if cheats.active and inp.leftbutton_press and cheats.leftClick=="item" then
-        i=getunusedcustom()
+        local i=getunusedcustom()
 
         local c = {}
         c.type="item"
@@ -6085,6 +6155,14 @@ function spidey.update(inp,joy)
         end
     end
     
+    
+    if inp.leftclick then
+        --memory.writebyte(0x0169, 0x0f)
+        
+        -- force whip
+        --memory.writebyte(0x03ea, 0x80)
+        --memory.writebyte(0x03b5, 0xff)
+    end
     
     if config.editCandles and inp.doubleclick then
         if bat then
@@ -6150,7 +6228,7 @@ function spidey.update(inp,joy)
     --if cheats.bonetest and inp.leftbutton_press then
     if cheats.active and inp.leftbutton_press and cheats.leftClick =="bone" then
     --if cheats.active and cheats.bonetest and inp.leftbutton_press then
-        i=getunusedcustom()
+        local i=getunusedcustom()
         if (i) then
             o.custom[i].type="bone"
             o.custom[i].x=inp.xmouse+scrollx
@@ -6211,6 +6289,7 @@ function spidey.update(inp,joy)
                     gfx.draw(o.custom[i].x-scrollx-4, o.custom[i].y-scrolly+8, o.custom[i].gfx or gfx.items.bag)
                     if o.custom[i].xdist <= 8 and o.custom[i].ydist <= 8 then
                         o.custom[i].destroy = 1
+                        --playSound(0x10)
                         getItem(o.custom[i].itemName, true)
                         
 --                        for i=0,255 do
@@ -6234,13 +6313,7 @@ function spidey.update(inp,joy)
                     spidey.drawCircle(x+7,y+4,math.max(1,20-o.custom[i].alivetime*2), string.format("#ffff80%02x",math.max(0,0x3d+spidey.counter % 0x04 - o.custom[i].alivetime*2) ))
                 end
                 if o.custom[i].alivetime>0x10 then 
-                    o.custom[i].destroy = true
-                    if o.custom[i].item then
-                        local obj = createObject(o.custom[i].item.type,o.custom[i].item.x, o.custom[i].item.y)
-                        for k,v in pairs(o.custom[i].item) do
-                            obj[k]=v
-                        end
-                    end
+                    o.custom[i].die = true
                 end
             elseif o.custom[i].type=="candle" then
                 --if o.custom.isOnScreen(i) or true then
@@ -6281,7 +6354,7 @@ function spidey.update(inp,joy)
                     
                     if collision(rect, hitboxes.whip.rect) then
                         o.custom[i].destroy = true
-                        
+                        playSound(0x04)
                         local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
                         obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
 --                        floor = o.custom[i].floor
@@ -6346,6 +6419,7 @@ function spidey.update(inp,joy)
                         getheart()
                     else
                         addHearts(1)
+                        playSound(0x1f)
                     end
                 end
                 if o.custom[i].alivetime > 800 then
@@ -6547,13 +6621,14 @@ function spidey.update(inp,joy)
             
             elseif o.custom[i].type=="medusahead" then
                 if o.custom[i].onScreen then o.custom[i].outscreen=false end
-                if o.custom[i].alivetime == 2 then
-                    o.custom[i].y=o.player.y+16
-                end
+--                if o.custom[i].alivetime == 2 then
+--                    o.custom[i].y=o.player.y+16
+--                end
                 
-                o.custom[i].y=o.custom[i].y+math.cos((o.custom[i].alivetime+10) *.056)*2
+                o.custom[i].y=o.custom[i].y+math.cos((o.custom[i].alivetime+80) *.056)*2
                 
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly-8, gfx.whitecrystal)
+                local frame = math.floor(o.custom[i].aliveTime /10) % 2+1
+                gfx.draw(o.custom[i].x-scrollx-6, o.custom[i].y-scrolly-12, gfx.medusa[o.custom[i].facing+1][frame])
                 
                 if (o.custom[i].hurtTimer or 0) > 0 then
                     o.custom[i].hurtTimer=(o.custom[i].hurtTimer or 0)-1
@@ -6566,11 +6641,13 @@ function spidey.update(inp,joy)
                 
                 local x=o.custom[i].x-scrollx
                 local y=o.custom[i].y-scrolly
-                local rect = {x-5,y-4-8,x+7,y+7-8}
-                gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
+                local rect = {x-5,y-4-8,x+9,y+7-4}
+                if config.hitboxes then gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80") end
                 
                 if collision(rect, hitboxes.whip.rect) then
-                    o.custom[i].active = 0
+                    o.custom[i].die = true
+                    o.custom[i].deathSound = 0x1a
+                    o.custom[i].item = {type="poof", x=o.custom[i].x-4, y=o.custom[i].y-10}
                 end
                 
             elseif o.custom[i].type=="bansheeboomerang" then
@@ -6624,6 +6701,18 @@ function spidey.update(inp,joy)
             if o.custom[i].destroy then
                 o.custom[i].active = 0
             end
+            if o.custom[i].die then
+                if o.custom[i].deathSound then
+                    queueSound(o.custom[i].deathSound)
+                end
+                if o.custom[i].item then
+                    local obj = createObject(o.custom[i].item.type,o.custom[i].item.x, o.custom[i].item.y)
+                    for k,v in pairs(o.custom[i].item) do
+                        obj[k]=v
+                    end
+                end
+                o.custom[i].active = 0
+            end
             
             if o.custom[i].x-scrollx<0 or o.custom[i].y-scrolly<0 or o.custom[i].x-scrollx>255 or o.custom[i].y-scrolly>255  then
                 if o.custom[i].outscreen then
@@ -6640,7 +6729,7 @@ function spidey.update(inp,joy)
     
     if o[0].type==0x03 and false then
         if (emu.framecount() % 48)==0 then
-            i=getunused()
+            local i=getunused()
             if i~=-1 then
                 gui.text(20,20, string.format("%3u",i))
                 o[i].type=0x30
