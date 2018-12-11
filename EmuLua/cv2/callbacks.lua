@@ -135,6 +135,9 @@ registerExec(0xae16,1,1,"onGetSilverKnife")
 
 registerExec(0x934f,1,1,"onGetFreeLaurels")
 
+registerExec(0xc84b+3,7,1,"onPrintTitleText")
+registerExec(0x87a2,3,1,"onOutsideCheck")
+
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
 -- onWalkSpeed(speed)
@@ -592,3 +595,17 @@ function _onGetFreeLaurels(address,len,t)
     if type(onGetFreeLaurels)=="function" then onGetFreeLaurels() end
 end
 
+function _onPrintTitleText(address,len,t)
+    if type(onPrintTitleText)=="function" then
+        local address = memory.readbyte(0x01)*0x100+memory.readbyte(0x00)
+        local a = onPrintTitleText(t.a, address, t.y)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onOutsideCheck(address,len,t)
+    if type(onOutsideCheck)=="function" then
+        local a = onOutsideCheck(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end

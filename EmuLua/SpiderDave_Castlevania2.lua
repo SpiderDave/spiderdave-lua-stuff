@@ -88,6 +88,7 @@
 --  * allow different configs for different save slots
 --  * starting a new game sometimes shows the wrong tunic color
 --  * skeletons sometimes throw bones from below you when they are above -- wrong bone placement
+--  * skeletons throw bones while stunned.
 --  * make it so when you get hit on stairs, you don't get knocked off.
 --     - started work on it, buggy.
 --  * create a town warp for debugging
@@ -114,12 +115,14 @@
 --  * level up toast should go on top of everything else
 --  * fix bug where you can whip through edge of screen and break blocks on the other side.
 --  * add candles
+--  * adjust spawn point at top of screen so enemies don't appear behind the hud.
 
 require ".Spidey.TSerial"
 
 spidey=require "Spidey.SpideyStuff"
 local font=require "Spidey.default_font"
 local cv2data=require("cv2.cv2data")
+local candles = require("cv2.candles")
 local items=require("cv2.items")
 local util = require("spidey.util")
 require("cv2.callbacks")
@@ -195,7 +198,7 @@ show_cursor = true
 --quickmessages= true -- Displays idle messages; work in progress
 game.paused = false
 cheats={enabled=true,active=false,invincible=true,allitems=true,flamewhip=true,refightbosses=true,battest=false,bonetest=true}
-cheats.leftClick = config.cheats_leftClick
+cheats.leftClick = config.cheats_leftClick or config.leftClick
 
 
 if config.cheats==true then cheats.active=true end
@@ -223,6 +226,11 @@ mnu.items={
             bat=not bat;
             if bat then
                 memory.writebyte(0x03b5,0xff) --help disable whip
+            else
+                -- reenable whip better
+                whipframe=00
+                memory.writebyte(0x0445,whipframe)
+
             end
         end
     },
@@ -268,6 +276,22 @@ mnu.items={
             local t= TSerial.pack(game.data.warps)
             writetofile('cv2/warp.dat', t)
             emu.message("warp saved.")
+        end,
+    },
+    {text="Save candles",
+        condition=function() return config.editCandles end,
+        action=function()
+
+            local out = "local candles = {\n"
+            local formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
+            for _,c in ipairs(candles) do
+                out = out..string.format(formatText, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],c.floor,c.location)
+            end
+            out=out.."}\n\nreturn candles\n"
+            
+            writetofile('cv2/candles.backup.lua', spidey.getFileContents("cv2/candles.lua"))
+            writetofile('cv2/candles.lua', out)
+            emu.message("Candles exported to cv2/candles.lua")
         end,
     },
     {text="Damage list",
@@ -404,7 +428,6 @@ mnu.items[#mnu.items+1]=
     end}
 cheatMenu.items=spidey.cheatEngine.menu.main
 
-local candles={}
 --candles[1]={}
 --candles[1].xo = 0
 local levelObjects = {}
@@ -431,17 +454,18 @@ for _,item in ipairs(cv2data.placedItems) do
 --    candles[#candles+1] = c
 end
 
-for _,item in ipairs(cv2data.candles) do
-    local c = {}
-    c.type="candle"
-    c.area={item.area[1],item.area[2],item.area[3],item.area[4]}
-    c.x=item.x
-    c.y=item.y
-    c.outscreen=true
-    c.active=1
-    c.floor=item.floor
-    candles[#candles+1] = c
-end
+--for _,item in ipairs(candles) do
+--    local c = {}
+--    c.type="candle"
+--    c.area={item.area[1],item.area[2],item.area[3],item.area[4]}
+--    c.x=item.x
+--    c.y=item.y
+--    c.outscreen=true
+--    c.active=1
+--    c.floor=item.floor
+--    candles[#candles+1] = c
+--end
+
 
 gfxFileList={}
 oldgetfilecontents=getfilecontents
@@ -785,7 +809,7 @@ end
 
 o.custom.isOnScreen=function(i)
     if not o.custom[i].area then return false end
-    return (area1==o.custom[i].area[1] and area2==o.custom[i].area[2] and area3==o.custom[i].area[3] and returnArea==(o.custom[i].area[4] or returnArea))
+    return (area1==o.custom[i].area[1] and area2==o.custom[i].area[2] and area3==o.custom[i].area[3] and areaFlags==(o.custom[i].area[4] or areaFlags))
 end
 
 
@@ -801,21 +825,15 @@ end
 
 o.custom.createCandles = function()
     for k,v in ipairs(candles) do
-        i=getunusedcustom()
-        if i then
-            o.custom[i].type = v.type
-            --o.custom[i].area = v.area
-            o.custom[i].area = {
+        local candle = createObject("candle", v.x, v.y)
+        candle.area = {
                 [1]=v.area[1],
                 [2]=v.area[2],
                 [3]=v.area[3],
                 [4]=v.area[4],
-            }
-            o.custom[i].x = v.x
-            o.custom[i].y = v.y
-            o.custom[i].outscreen = v.outscreen
-            o.custom[i].active = v.active
-        end
+        }
+        candle.outscreen = true
+        candle.floor = v.floor
     end
 end
 
@@ -847,15 +865,16 @@ if _b>127 then return (255-_b)*-1 else return _b end
 end
 
 function getunusedcustom()
-    for _i=1,o.custom.count-1 do
-        if o.custom[_i].active==0 then
-            o.custom[_i] = {x=0,y=0}
-            o.custom[_i].outscreen=nil
-            o.custom[_i].alivetime=0
-            o.custom[_i].xs=0
-            o.custom[_i].ys=0
-            --o.custom[_i].textIndex=0
-            return _i
+    for i=1,o.custom.count-1 do
+        if o.custom[i].active==0 then
+            o.custom[i] = {x=0,y=0}
+            o.custom[i].originX = o.custom[i].x
+            o.custom[i].originY = o.custom[i].y
+            o.custom[i].outscreen=nil
+            o.custom[i].alivetime=0
+            o.custom[i].xs=0
+            o.custom[i].ys=0
+            return i
         end
     end
     return false
@@ -944,6 +963,7 @@ function saveGame(slot)
         area1=area1,
         area2=area2,
         area3=area3,
+        areaFlags=areaFlags,
         returnArea = returnArea,
         returnScroll1 = returnScroll1,
         returnScroll2 = returnScroll2,
@@ -1015,6 +1035,7 @@ function loadGame(slot, setArea)
     area2=saveData.area2
     area3=saveData.area3
     returnArea = saveData.returnArea
+    areaFlags = saveData.areaFlags or 1
     returnScroll1 = saveData.returnScroll1
     returnScroll2 = saveData.returnScroll2
     returnX = saveData.returnX
@@ -1980,17 +2001,18 @@ end
 
 
 function drawHUD()
-        displayarea = locations.getAreaName(area1,area2,area3)
+        displayarea = locations.getAreaName(area1,area2,area3,areaFlags)
         
         if spidey.debug.enabled then
             --spidey.debug.font=font[6]
             --spidey.debug.font=font[current_font]
             spidey.debug.font=font[5]
-            gui.drawbox(8*16, 8*5+5, 8*16+8*16, 8*5+5+8*4, "#40404080", "#40404080")
-            drawfont(8*16,8*5+5,spidey.debug.font, string.format("Area: %02x %02x %02x",area1,area2,area3))
-            drawfont(8*16,8*6+5,spidey.debug.font, string.format("Scroll: %02x %02x",scrollx, scrolly))
-            drawfont(8*16,8*7+5,spidey.debug.font, string.format("Player: %02x %02x",o.player.x, o.player.y))
-            drawfont(8*16,8*8+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
+            gui.drawbox(8*14, 8*5+5, 8*16+8*16, 8*5+5+8*4, "#40404080", "#40404080")
+            drawfont(8*14,8*5+5,spidey.debug.font, string.format("Area: %02x %02x %02x %02x",area1,area2,area3, returnArea))
+            drawfont(8*14,8*6+5,spidey.debug.font, string.format("Area flags: %02x", areaFlags))
+            drawfont(8*14,8*7+5,spidey.debug.font, string.format("Scroll: %02x %02x",scrollx, scrolly))
+            drawfont(8*14,8*8+5,spidey.debug.font, string.format("Player: %02x %02x",o.player.x, o.player.y))
+            drawfont(8*14,8*9+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
         end
         
         name = "^aH^ai"
@@ -2213,6 +2235,35 @@ function onWhipOrSubWeapon(isSub)
         isSub = false
         return isSub
     end
+end
+
+function onPrintTitleText(c,address, index)
+    if address == 0x840c then 
+        local m = "  PRESS START "
+--        for i=1,#m do
+--            memory.writebyte(0x7100+i-1, textMap2[m:sub(i,i)] or 0)
+--        end
+--        memory.writebyte(0x7100+#m, 0xff)
+        --game.customMessage = m
+        
+        --memory.writebyte(0x01, 0x71)
+        --memory.writebyte(0x00, 0x00)
+
+        if index>=3 then
+            c=textMap2[m:sub(index-2,index-2)]
+            if c==textMap2[" "] then c=0xc1 end
+        end
+    elseif address == 0x8356 then
+        -- story text
+        --if index>3 then c=0 end
+    elseif address == 0x8392 then
+        -- ??
+    elseif address == 0xcab7 then
+        -- ??
+    else
+        --spidey.message("%04x %02x %02x",address,c,index)
+    end
+    return c
 end
 
 -- triggers when an enemy takes damage from whip
@@ -3163,21 +3214,30 @@ function createMedusaHead(x,y, enemyIndex)
 end
 
 function createCustomHeart(x,y, floor)
-    i=getunusedcustom()
+    local i=getunusedcustom()
     if i then
         o.custom[i].type="heart"
         o.custom[i].facing = 1
-        o.custom[i].x=x+scrollx
-        o.custom[i].y=y+scrolly
+        o.custom[i].x=x
+        o.custom[i].y=y
         
-        o.custom[i].xs=0
-        o.custom[i].ys=2
-        --o.custom[i].outscreen=true
         o.custom[i].active=1
-        o.custom[i].originX = x
-        o.custom[i].originY = y
         o.custom[i].floor = floor
     end
+end
+
+function createObject(t,x,y)
+    local i=getunusedcustom()
+    if i then
+        o.custom[i].type = t
+        o.custom[i].facing = 1
+        o.custom[i].x = x or 0
+        o.custom[i].y = y or 0
+        o.custom[i].aliveTime=0
+        o.custom[i].active=1
+        return o.custom[i]
+    end
+    return false
 end
 
 
@@ -3406,8 +3466,20 @@ end)
 
 function onGetFreeLaurels()
     --spidey.message("%02x %02x", memory.getregister("a"),memory.readbyte(0x92))
-    if not hasInventoryItem("Pendant") then getItem("Pendant") end
+    if not hasInventoryItem("Pendant") then getItem("Pendant", true, true) end --delayed
     memory.setregister("a", memory.readbyte(0x92)) -- cancel laurels
+end
+
+function onOutsideCheck(af)
+    --p = bit.bor(p, 0x02)-2
+    p = memory.getregister("p")
+    p = bit.bor(p, 0x02)-2
+    
+    p=0xff
+    
+    memory.setregister("p", p)
+    return 0x81
+
 end
 
 function onPlaceStageTile(tile)
@@ -3886,6 +3958,7 @@ end)
 memory.registerexec(0xcd2c+3,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
     --emu.message(string.format("music=%02x",a))
+    if spidey.debug.enabled then emu.message(string.format("music=%02x",a)) end
     
     if config.music == false then
         a=0
@@ -3897,11 +3970,21 @@ end)
 -- on sfx (can't change to 0 without muting music, use 0x62 instead)
 memory.registerexec(0xc127,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
-    --spidey.message("sfx=%02x",a)
+    if spidey.debug.enabled then spidey.message("sfx=%02x",a) end
     
+    if bat then
+        -- disable whip sfx if bat mode
+        if a==0x0a then a=0x62 end
+        if a==0x0e then a=0x62 end
+        if a==0x0f then a=0x62 end
+    end
+    
+    -- Change Golden Knife sound effect
+    if a == 0x13 then a=0x11 end
     
     -- Dracula music
     if config.music == false and a==0x4d then a=0x62 end
+    if config.music == false and a==0x55 then a=0x62 end
     
     -- you know what?  get rid of all these dumb 'item get' sound effects for now.
     if a == 0x22 then a=0x62 end
@@ -3999,6 +4082,8 @@ end)
 -- sfx/music parts
 memory.registerexec(0xc118,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
+    --if spidey.debug.enabled then emu.message(string.format("sfx=%02x",a)) end
+
     do return end
     --a=0
     --config.music=true
@@ -4022,7 +4107,6 @@ memory.registerexec(0xc118,1, function()
     --if a==0x31 and game.map.visible then a=0 end
     
     memory.setregister("a",a)
-    --emu.message(string.format("sfx=%02x",a))
 end)
 
 
@@ -4140,7 +4224,7 @@ function romPatch()
     rom.writebyte(0x1d580+0x10, 0xea)
 
     -- Change golden dagger throw sfx
-    rom.writebyte(0x1d90c+0x10, 0x11)
+    --rom.writebyte(0x1d90c+0x10, 0x11)
     
     
 --    if tile==0xd9 then tile=0 end
@@ -4225,6 +4309,7 @@ function spidey.update(inp,joy)
     end
     
     --action=(memory.readbyte(0x001c)==0x01) -- not perfect; sometimes it can be 02 or 04
+    areaFlags=memory.readbyte(0x008f)
     area1=memory.readbyte(0x0030)
     area2=memory.readbyte(0x0050)
     area3=memory.readbyte(0x0051) % 0x80 --adds 0x80 if starting on right side
@@ -4345,8 +4430,13 @@ function spidey.update(inp,joy)
                 -- for now, always display return area since you only save inside church.
                 -- need to update this later for cheat saves where you save anywhere.
                 
-                --local displayarea = locations.getAreaName(s.area1,s.area2,s.area3)
-                local displayarea = locations.getAreaName(0,s.returnArea,0)
+                local displayarea
+                if areaFlags == 1 then
+                    displayarea = locations.getAreaName(0,s.returnArea,0)
+                else
+                    displayarea = locations.getAreaName(s.area1,s.area2,s.area3)
+                end
+                
                 --gui.text(20,50,string.format("Simon Level %d %s",s.level+1, displayarea))
 
                 gui.drawbox(x,y,x+8*30,y+8*4,"black",borderColor)
@@ -5346,10 +5436,10 @@ function spidey.update(inp,joy)
             memory.writebyte(0x04c8+i,o[i].hp)
         end
         
-        if config.floatingEyes and o[i].type==0x08 then --floating eyes
-                -- They first start by slowly heading towards you.
-                -- Then, they kite.
-                -- If you turn away, they strike periodically.
+        if config.floatingEyes and o[i].name=="Eyeball" then --floating eyes
+                -- They first start by slowly heading towards you (state=0).
+                -- Then, they kite (state=1).
+                -- If you turn away, they strike periodically (state=2).
                 
                 --o[i].skullc = ((o[i].skullc or 0) +1) % 1000
                 
@@ -5360,7 +5450,7 @@ function spidey.update(inp,joy)
                 
                 if o[i].state==0 then
                     if o[i].xdist < 0x40 and o[i].ydist < 0x40 then
-                        spidey.message("circle")
+                        --spidey.message("circle")
                         o[i].state = 1
                         memory.writebyte(0x044a+i, o[i].state)
                         --memory.writebyte(0x046e+i, o[i].state2)
@@ -5370,7 +5460,7 @@ function spidey.update(inp,joy)
                     if o[i].xdist < 0x60 and o[i].ydist < 0x60 then
                         --o[i].skullc = ((spidey.counter or 0) +1) % 1000
                         o[i].skullc = o[i].state2
-                        o[i].y=o[i].y+math.cos(o[i].skullc *.04)*1.5
+                        o[i].y=o[i].y+math.cos(o[i].skullc *.08)*2
                         
                         if o[i].facing==0 then
                             o[i].x=o[i].x+math.sin(o[i].skullc *.01)*2
@@ -5382,7 +5472,7 @@ function spidey.update(inp,joy)
                         
                         -- if player back turned
                         if (o[i].x<o.player.x and o.player.facing==1) or (o[i].x>o.player.x and o.player.facing==0) then
-                            if o[i].state2 % 30 ==0x10 then
+                            if o[i].state2 % 28 ==0x10 then
                                 o[i].state = 2
                                 memory.writebyte(0x044a+i, o[i].state)
                                 o[i].state2=0x2d
@@ -5394,7 +5484,7 @@ function spidey.update(inp,joy)
                     o[i].state2=o[i].state2-1
                     memory.writebyte(0x046e+i, o[i].state2)
 
-                    spidey.message("attack")
+                    --spidey.message("attack")
                     if o[i].xdist>0x0e then
                         if o[i].facing==1 then
                             o[i].x=o[i].x+2
@@ -5402,6 +5492,14 @@ function spidey.update(inp,joy)
                             o[i].x=o[i].x-2
                         end
                     end
+                    
+                        -- if player facing the eye
+                        if (o[i].x<o.player.x and o.player.facing==0) or (o[i].x>o.player.x and o.player.facing==1) then
+                            o[i].state = 1
+                            memory.writebyte(0x044a+i, o[i].state)
+
+                        end
+                    
                     --o[i].y=o[i].y+math.cos(o[i].state2 *.04)*2
                     memory.writebyte(0x0348+6+i,o[i].x)
                     memory.writebyte(0x0324+6+i,o[i].y)
@@ -5409,7 +5507,7 @@ function spidey.update(inp,joy)
                         o[i].state = 1
                         memory.writebyte(0x044a+i, o[i].state)
                     end
-
+                    
                 end
         end
         
@@ -5958,31 +6056,93 @@ function spidey.update(inp,joy)
     end
     
     
-    if inp.leftbutton_press and cheats.leftClick=="candle" then
-        i=getunusedcustom()
-
-        local c = {}
-        c.type="candle"
-        c.area={area1,area2,area3,returnArea}
-        c.x=math.floor((inp.xmouse+scrollx)/16)*16
-        c.y=math.floor((inp.ymouse+scrolly)/16)*16
-        c.outscreen=true
-        c.active=1
-        c.floor = o.player.y
-        candles[#candles+1] = c
-        
-        if i then
-            o.custom[i].type="candle"
-            o.custom[i].area={area1,area2,area3}
-            o.custom[i].x=math.floor((inp.xmouse+scrollx)/16)*16
-            o.custom[i].y=math.floor((inp.ymouse+scrolly)/16)*16
-            o.custom[i].outscreen=true
-            o.custom[i].active=1
-            o.custom[i].floor = o.player.y+12
+    --if inp.leftbutton_press and cheats.leftClick=="candle" then
+    
+    if config.editCandles then
+        if inp.middlebutton_press then
+            local x=math.floor((inp.xmouse)/16)*16
+            local y=math.floor((inp.ymouse)/16)*16
+            local areaX = math.floor((inp.xmouse+scrollx)/16)*16
+            local areaY = math.floor((inp.ymouse+scrolly)/16)*16
+            
+            local candleIndex = false
+            for i,candle in ipairs(candles) do
+                if candle.area[1]==area1 and candle.area[2]==area2 and candle.area[3]==area3 and candle.area[4]==areaFlags and candle.x == areaX and candle.y==areaY then
+                    candleIndex = i
+                end
+            end
+            
+            if candleIndex then
+                table.remove(candles, candleIndex)
+                spidey.message("Candle removed %02x %02x",x,y)
+                
+                for i,obj in ipairs(o.custom) do
+                    if obj.type=="candle" and obj.active==1 and o.custom.isOnScreen(i) and obj.x==areaX and obj.y==areaY then
+                        obj.destroy = true
+                    end
+                end
+            end
         end
-        local txt = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
-        
-        spidey.appendToFile("cv2/candles.txt", string.format(txt, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],o.player.y,displayarea))
+    end
+    
+    
+    if config.editCandles and inp.doubleclick then
+        if bat then
+            spidey.message("Error: Cannot place candle in bat mode.",x,y)
+        else
+            local i=getunusedcustom()
+            local x=math.floor((inp.xmouse)/16)*16
+            local y=math.floor((inp.ymouse)/16)*16
+            
+            local areaX = math.floor((inp.xmouse+scrollx)/16)*16
+            local areaY = math.floor((inp.ymouse+scrolly)/16)*16
+            
+            local candleIndex = false
+            for i,candle in ipairs(candles) do
+                if candle.area[1]==area1 and candle.area[2]==area2 and candle.area[3]==area3 and candle.area[4]==areaFlags and candle.x == areaX and candle.y==areaY then
+                    candleIndex = i
+                end
+            end
+            
+            if candleIndex then
+                table.remove(candles, candleIndex)
+                spidey.message("Candle replaced %02x %02x",x,y)
+                
+                for i,obj in ipairs(o.custom) do
+                    if obj.type=="candle" and obj.active==1 and o.custom.isOnScreen(i) and obj.x==areaX and obj.y==areaY then
+                        obj.destroy = true
+                    end
+                end
+            end
+            
+            --spidey.message("%02x %02x",x,y)
+            
+
+            local c = {}
+            c.type="candle"
+            c.area={area1,area2,area3,areaFlags}
+            c.x=math.floor((inp.xmouse+scrollx)/16)*16
+            c.y=math.floor((inp.ymouse+scrolly)/16)*16
+            c.outscreen=true
+            c.active=1
+            c.floor = o.player.y+scrolly+12
+            c.location = displayarea
+            candles[#candles+1] = c
+            
+            if i then
+                o.custom[i].type="candle"
+                o.custom[i].area={area1,area2,area3,areaFlags}
+                o.custom[i].x=math.floor((inp.xmouse+scrollx)/16)*16
+                o.custom[i].y=math.floor((inp.ymouse+scrolly)/16)*16
+                o.custom[i].outscreen=true
+                o.custom[i].active=1
+                --o.custom[i].floor = o.player.y+12
+                o.custom[i].floor = c.floor
+            end
+            --local txt = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
+            
+            --spidey.appendToFile("cv2/candles.txt", string.format(txt, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],o.player.y,displayarea))
+        end
     end
     
     
@@ -6006,15 +6166,14 @@ function spidey.update(inp,joy)
     end
     
     for i=0,o.custom.count-1 do
-        o.custom[i].xdist=math.abs(o.player.x-o.custom[i].x+scrollx)
-        o.custom[i].ydist=math.abs(o.player.y-o.custom[i].y+scrolly)
-        if o.custom[i].active==1 then
-            o.custom[i].alivetime=math.min((o.custom[i].alivetime or 0)+1,100000)
-        else
-            o.custom[i].alivetime=0
+        if o.custom[i].active==0 then
+            --o.custom[i].aliveTime=0
         end
-        
         if o.custom[i].active==1 then
+            o.custom[i].xdist=math.abs(o.player.x-o.custom[i].x+scrollx)
+            o.custom[i].ydist=math.abs(o.player.y-o.custom[i].y+scrolly)
+            o.custom[i].aliveTime=math.min((o.custom[i].aliveTime or 0)+1,100000)
+            o.custom[i].alivetime = o.custom[i].aliveTime
             --gui.drawrect(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, o.custom[i].x+2-scrollx, o.custom[i].y+2-scrolly, "yellow","red")
             --gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
             
@@ -6025,7 +6184,7 @@ function spidey.update(inp,joy)
                 gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
                 o.custom[i].ys=o.custom[i].ys+.1
                 if o.custom[i].xdist<10 and o.custom[i].ydist<10 then
-                    o.custom[i].active=0
+                    o.custom[i].destroy = true
                     hurtplayer()
                 end
             elseif o.custom[i].type=="marker" then
@@ -6051,7 +6210,7 @@ function spidey.update(inp,joy)
                     local x,y=o.custom[i].x-scrollx, o.custom[i].y-scrolly
                     gfx.draw(o.custom[i].x-scrollx-4, o.custom[i].y-scrolly+8, o.custom[i].gfx or gfx.items.bag)
                     if o.custom[i].xdist <= 8 and o.custom[i].ydist <= 8 then
-                        o.custom[i].active = 0
+                        o.custom[i].destroy = 1
                         getItem(o.custom[i].itemName, true)
                         
 --                        for i=0,255 do
@@ -6069,6 +6228,20 @@ function spidey.update(inp,joy)
 --                        end
                     end
                 end
+            elseif o.custom[i].type=="poof" then
+                local x,y=o.custom[i].x-scrollx+1, o.custom[i].y-scrolly
+                if o.custom[i].alivetime<0x0e then 
+                    spidey.drawCircle(x+7,y+4,math.max(1,20-o.custom[i].alivetime*2), string.format("#ffff80%02x",math.max(0,0x3d+spidey.counter % 0x04 - o.custom[i].alivetime*2) ))
+                end
+                if o.custom[i].alivetime>0x10 then 
+                    o.custom[i].destroy = true
+                    if o.custom[i].item then
+                        local obj = createObject(o.custom[i].item.type,o.custom[i].item.x, o.custom[i].item.y)
+                        for k,v in pairs(o.custom[i].item) do
+                            obj[k]=v
+                        end
+                    end
+                end
             elseif o.custom[i].type=="candle" then
                 --if o.custom.isOnScreen(i) or true then
                 if o.custom.isOnScreen(i) then
@@ -6084,16 +6257,17 @@ function spidey.update(inp,joy)
 --                    spidey.drawCircle(x+7+3,y+4,3, "#FFFF9910")
                     if ((o.custom[i].flicker or 0) == 0) or o.custom[i].alivetime %4>=1 then
                         --spidey.drawCircle(x+7,y+4,40, "#FFFF9910")
-                        
-                        spidey.drawCircle(x+7,y+4,30+(math.floor(spidey.counter * .25) % 3)*2, string.format("#ffff80%02x",0x0d+spidey.counter % 0x04 ))
-                        
+                        if config.qualityPreset == "high" then
+                            spidey.drawCircle(x+7,y+4,30+(math.floor(spidey.counter * .25) % 3)*2, string.format("#ffff80%02x",0x0d+spidey.counter % 0x04 ))
+                        end
                         --spidey.drawCircle(x+7,y+4,6, "#FFFF9950")
-                        spidey.drawCircle(x+7,y+4,6, "#FFFF9930")
+                        if config.qualityPreset ~= "low" then
+                            spidey.drawCircle(x+7,y+4,6, "#FFFF9930")
+                        end
                     else
-                        spidey.drawCircle(x+7,y+4,5, "#FFFF9920")
-                    end
-                    if gui.circle then 
-                        emu.pause()
+                        if config.qualityPreset ~= "low" then
+                            spidey.drawCircle(x+7,y+4,5, "#FFFF9920")
+                        end
                     end
                     o.custom[i].flicker = math.max(o.custom[i].flicker - 1,0)
                     gfx.draw(o.custom[i].x-scrollx+1, o.custom[i].y-scrolly-4, gfx.candles[f])
@@ -6106,8 +6280,13 @@ function spidey.update(inp,joy)
                     end
                     
                     if collision(rect, hitboxes.whip.rect) then
-                        o.custom[i].active = 0
-                        createCustomHeart(o.custom[i].x-scrollx, o.custom[i].y-scrolly, o.custom[i].floor)
+                        o.custom[i].destroy = true
+                        
+                        local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
+                        obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+--                        floor = o.custom[i].floor
+                        --local h = createObject("heart",o.custom[i].x, o.custom[i].y)
+                        --h.floor = o.custom[i].floor
                     end
 
                 end
@@ -6132,19 +6311,34 @@ function spidey.update(inp,joy)
                     end
                 end
                 if o.custom[i].alivetime > 55 then
-                    o.custom[i].active=0
+                    o.custom[i].destroy=1
                 end
             elseif o.custom[i].type=="heart" then
                 gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, gfx.cv2heart)
                 --o.custom[i].ys=o.custom[i].ys+.1
+
+                if o.custom[i].alivetime == 1 then
+                    o.custom[i].ys = .1
+                    o.custom[i].falling = true
+                end
+                
+                if o.custom[i].falling then
+                    o.custom[i].ys = math.min(.7, o.custom[i].ys * 1.05)
+                    o.custom[i].x = o.custom[i].x+math.sin(o.custom[i].alivetime *.09)*1
+                end
+                
+
+
                 if o.custom[i].floor then
                     if o.custom[i].y>o.custom[i].floor then
                         o.custom[i].y=o.custom[i].floor
                         o.custom[i].ys = 0
+                        o.custom[i].falling=false
                     end
                 elseif o.custom[i].y>o.custom[i].originY+0x10*3+12 then
                     o.custom[i].y=o.custom[i].originY+0x10*3+12
                     o.custom[i].ys = 0
+                    o.custom[i].falling=false
                 end
                 if o.custom[i].xdist<11 and o.custom[i].ydist<18 then
                     o.custom[i].active=0
@@ -6153,6 +6347,9 @@ function spidey.update(inp,joy)
                     else
                         addHearts(1)
                     end
+                end
+                if o.custom[i].alivetime > 800 then
+                    o.custom[i].destroy = true
                 end
             elseif o.custom[i].type=="diamondtrail" then
                 if o.custom[i].alivetime == 1 then o.custom[i].fade = 0xff end
@@ -6243,6 +6440,7 @@ function spidey.update(inp,joy)
 
                 if o.custom[i].alivetime % 3 ==0 then
                     createPoisonDrip(target)
+                    --local obj = createObject("poof",o[o.custom[i].target].x+scrollx-8, o[o.custom[i].target].y+scrolly-8)
                 end
                 
                 if o.custom[i].alivetime % 90 == 0 and o[target].hp>0 then
@@ -6274,7 +6472,7 @@ function spidey.update(inp,joy)
                 o.custom[i].ys=o.custom[i].ys+.09
                 --if o.custom[i].xdist<26 and o.custom[i].ydist<17 then
                 if o.custom[i].xdist<15 and o.custom[i].ydist<17 then
-                    o.custom[i].active=0
+                    o.custom[i].destroy=true
                     hurtplayer()
                 end
 
@@ -6285,7 +6483,14 @@ function spidey.update(inp,joy)
                     gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
                 end
                 if collision(rect, hitboxes.whip.rect) then
-                    o.custom[i].active = 0
+                    o.custom[i].destroy = true
+                    if config.boneJuggle then
+                        -- bone juggle
+                        createBone(o.custom[i].x-scrollx, o.custom[i].y-scrolly-8)
+                    else
+                        local obj = createObject("poof",o.custom[i].x-4, o.custom[i].y-8)
+                        obj.aliveTime = 3
+                    end
                 end
 
             elseif o.custom[i].type=="axe" then
@@ -6295,7 +6500,7 @@ function spidey.update(inp,joy)
                 gfx.draw(o.custom[i].x-2-scrollx-bone.xo[f], o.custom[i].y-2-scrolly-8-bone.yo[f], gfx.axe[f])
                 o.custom[i].ys=o.custom[i].ys+.09
                 for ii=0,o.count-1 do
-                    if o[ii].type~=0 and o[ii].team==1 and (not o.custom[i].hasHit) then
+                    if o[ii].type~=0 and o[ii].team==1 and (not o.custom[i].hasHift) then
                         xdist=math.abs(o[ii].x-o.custom[i].x+scrollx)
                         ydist=math.abs(o[ii].y-o.custom[i].y+scrolly)
                         if xdist<10 and ydist<10 then
@@ -6414,6 +6619,10 @@ function spidey.update(inp,joy)
                 end
             else
                 gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
+            end
+            
+            if o.custom[i].destroy then
+                o.custom[i].active = 0
             end
             
             if o.custom[i].x-scrollx<0 or o.custom[i].y-scrolly<0 or o.custom[i].x-scrollx>255 or o.custom[i].y-scrolly>255  then
@@ -6816,7 +7025,7 @@ function spidey.draw()
             gui.text(-game.map.x+x+1,-game.map.y+y,n, "black","clear")
             gui.text(-game.map.x+x+1,-game.map.y+y+1,n, "black","clear")
             gui.text(-game.map.x+x,-game.map.y+y,n, "#c0b0ff","clear")
-            if n==locations.getAreaName(area1,area2,area3) and spidey.counter%6<3 then
+            if n==locations.getAreaName(area1,area2,area3,areaFlags) and spidey.counter%6<3 then
                 gui.text(-game.map.x+x,-game.map.y+y,n, "white","clear")
             end
         end
@@ -6873,7 +7082,6 @@ function spidey.draw()
         local stats= getStats()
         gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def),"white","#00002080")
     end
-    
 end
 
 spidey.run()

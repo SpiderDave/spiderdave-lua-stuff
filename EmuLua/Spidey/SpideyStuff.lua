@@ -720,9 +720,27 @@ function input_read()
     if input_data.current.leftbutton_press then
         input_data.current.xmouse_down=input_data.current.xmouse
         input_data.current.ymouse_down=input_data.current.ymouse
+        input_data.current.doubleclick_counter = 0
+        input_data.current.doubleclick_x = input_data.current.xmouse
+        input_data.current.doubleclick_y = input_data.current.ymouse
+        if input_data.old.doubleclick_counter  and (input_data.old.doubleclick_counter < 15) then
+            if input_data.current.doubleclick_x == input_data.old.doubleclick_x and input_data.current.doubleclick_y == input_data.old.doubleclick_y then
+                input_data.current.doubleclick = true
+                --emu.message("double click")
+            end
+            --emu.message("double click")
+        end
     else
         input_data.current.xmouse_down=input_data.old.xmouse_down
         input_data.current.ymouse_down=input_data.old.ymouse_down
+
+        input_data.current.doubleclick_x = input_data.old.doubleclick_x
+        input_data.current.doubleclick_y = input_data.old.doubleclick_y
+
+        input_data.current.doubleclick = false
+        if input_data.old.doubleclick_counter then
+            input_data.current.doubleclick_counter = input_data.old.doubleclick_counter + 1
+        end
     end
     
     -- snap 8

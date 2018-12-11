@@ -15,9 +15,11 @@ hitboxes=false
 // Turn on cheats
 //cheats=true
 
-//cheats_leftClick = warp
-cheats_leftClick = item
-//cheats_leftClick = candle
+//leftClick = warp
+//leftClick = item
+
+// Enable candle editing mode.  Double-click to place a candle.
+editCandles = false
 
 // turn on quick day/night transition
 quickDayNight=true
@@ -84,4 +86,11 @@ maxHearts = 99
 // Reduce heart cost for special weapons
 //reduceHeartCost = 2
 
+// Lighting and effects quality preset.
+// values are high, medium, low, custom.
+// high: Candles have larger secondary light circle.
+// low: Disable light radius for candles.
+qualityPreset=high
 
+// If set to true, juggle bones with the whip instead of killing them.
+boneJuggle = false
