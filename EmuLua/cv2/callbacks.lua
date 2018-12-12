@@ -137,16 +137,10 @@ registerExec(0x934f,1,1,"onGetFreeLaurels")
 
 registerExec(0xc84b+3,7,1,"onPrintTitleText")
 
+registerExec(0x8948,1,1,"onEnemyDeath")
+
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
-
--- onWalkSpeed(speed)
--- onWalkSpeedLeft(speed)
--- onWalkSpeedRight(speed)
--- onWalkStop()
--- onJumpSpeedLeft(speed)
--- onJumpSpeedRight(speed)
--- onJumpSpeed(speed)
 
 function _onWalkSpeedRight(address,len,t)
     if type(onWalkSpeedRight)~="function" and type(onWalkSpeed)~="function" then return end
@@ -603,3 +597,10 @@ function _onPrintTitleText(address,len,t)
     end
 end
 
+
+function _onEnemyDeath(address,len,t)
+    if type(onEnemyDeath)=="function" then
+        local enemyType = memory.readbyte(0x03b4+t.x)
+        onEnemyDeath(enemyType)
+    end
+end

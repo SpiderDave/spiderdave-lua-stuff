@@ -2687,24 +2687,21 @@ end
 --end)
 
 -- triggers when an enemy dies from anything
-memory.registerexec(0x8948,1, function()
-        local a,x,y,s,p,pc=memory.getregisters()
-        local t = memory.readbyte(0x03b4+x)
-        
-        if cv2data.enemies[t] then
-            local e = cv2data.enemies[t].exp or 0
-            -- extra exp at night, but not for town zombies
-            if night and e>0 and t~=0x17 then e=e+1 end
-            addExp(e)
-        end
-        
-        if not spidey.debug.enabled then return end
-        if cv2data.enemies[t] then
-            emu.message(string.format("%02X %s",t,cv2data.enemies[t].name or "?"))
-        else
-            emu.message(string.format("%02X %02x",x,t))
-        end
-end)
+function onEnemyDeath(t)
+    if cv2data.enemies[t] then
+        local e = cv2data.enemies[t].exp or 0
+        -- extra exp at night, but not for town zombies
+        if night and e>0 and t~=0x17 then e=e+1 end
+        addExp(e)
+    end
+    
+    if not spidey.debug.enabled then return end
+    if cv2data.enemies[t] then
+        emu.message(string.format("%02X %s",t,cv2data.enemies[t].name or "?"))
+    else
+        emu.message(string.format("%02X %02x",x,t))
+    end
+end
 
 -- ********** start of map stuff **********
 -- This section is stuff related to the map in this hack:
@@ -4574,6 +4571,17 @@ function spidey.update(inp,joy)
     
     updateSoundQueue()
     
+    
+    local bank = 2
+    for i=0,0x0f do
+        --rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xd9+i, rom.readbyte(0x10+0x20000+bank*0x1000+0x10*0xd9+i+8))
+        --rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xf6+i, 0)
+        --rom.writebyte(0x10+0x20000+bank*0x1000+0x10*0xf8+i, 0)
+        
+        --20f60
+    end
+    
+    
     if config.quickDayNight then
         -- day/night toggle thing
         if memory.readbyte(0x002c) == 0x07 then
@@ -5246,7 +5254,8 @@ function spidey.update(inp,joy)
             o[i].y=memory.readbyte(0x0324+6+i)
             o[i].ys=memory.readbyte(0x036c+6+i)
             o[i].xs=memory.readbyte(0x0396+i)
-            o[i].show=(memory.readbyte(0x03cc+i) <0x80)
+            --o[i].show=(memory.readbyte(0x03cc+i) <0x80)
+            o[i].show=(memory.readbyte(0x03cc+i) ==0)
             o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
             o[i].facing=memory.readbyte(0x0420+6+i)
             o[i].carrying=memory.readbyte(0x0480+i) --platforms: 00 = not carrying simon, ff = carrying simon
@@ -5267,7 +5276,7 @@ function spidey.update(inp,joy)
             
             if o[i].type ~=0 and o[i].hp>0-1 and o[i].show then
                 --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",o[i].type,o[i].x,o[i].y,o[i].hp))
-                if spidey.debug.enabled then gui.text(o[i].x,o[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x+scrollx,o[i].y+scrolly,signed8bit(o[i].xs),signed8bit(o[i].ys))) end
+                if spidey.debug.enabled then gui.text(o[i].x,o[i].y-32, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x+scrollx,o[i].y+scrolly,signed8bit(o[i].xs),signed8bit(o[i].ys))) end
                 if spidey.debug.enabled then
                     if game.data and game.data.enemies and game.data.enemies[o[i].type] and game.data.enemies[o[i].type].damage then
                         local dnum=1
@@ -5358,8 +5367,9 @@ function spidey.update(inp,joy)
                     interval = 100
                 end
                 for j=1, nBones do
-                    createBone(o[i].x,o[i].y)
-                    --createAxe(o[i].x,o[i].y)
+                    if o[i].stun == 0 then
+                        createBone(o[i].x,o[i].y)
+                    end
                 end
             end
         end
@@ -6387,7 +6397,7 @@ function spidey.update(inp,joy)
                     local x=o.custom[i].x-scrollx
                     local y=o.custom[i].y-scrolly
                     local rect = {x-5+7,y-1-3,x+7+7,y+14-3}
-                    if config.hitboxes then
+                    if config.hitboxes or spidey.debug.enabled then
                         gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
                     end
                     
@@ -6593,7 +6603,7 @@ function spidey.update(inp,joy)
                 local x=o.custom[i].x-scrollx
                 local y=o.custom[i].y-scrolly
                 local rect = {x-5,y-4-8,x+7,y+7-8}
-                if config.hitboxes then
+                if config.hitboxes or spidey.debug.enabled then
                     gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
                 end
                 if collision(rect, hitboxes.whip.rect) then
@@ -6682,7 +6692,7 @@ function spidey.update(inp,joy)
                 local x=o.custom[i].x-scrollx
                 local y=o.custom[i].y-scrolly
                 local rect = {x-5,y-4-8,x+9,y+7-4}
-                if config.hitboxes then gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80") end
+                if config.hitboxes or spidey.debug.enabled then gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80") end
                 
                 if collision(rect, hitboxes.whip.rect) then
                     o.custom[i].die = true
@@ -7185,7 +7195,7 @@ function spidey.draw()
         end
     end
     
-    if action and config.hitboxes then
+    if action and (config.hitboxes or spidey.debug.enabled) then
         hitboxes.draw()
     end
     
