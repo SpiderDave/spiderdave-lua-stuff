@@ -1,6 +1,6 @@
 -- Castlevania 2 Lua script by SpiderDave
 --
--- 2018.28.11
+-- 2018.12.11
 --
 -- Changes:
 --  * Message speed increased
@@ -71,11 +71,10 @@
 --    + select weapons, relics, equipment
 --    + bestiary
 --    + map
---    + clue list
+--    + clue list *DONE*
 --  * improve gold system
---  * add production flag to remove all cheats/debug stuff
 --  * make garlic throw a bunch of garlic
---  * fix medusa heads, ghosts, etc.
+--  * fix ghosts
 --  * Change reflected fireballs to blocked fireballs (disappear)
 --  * make bordia mountains useful (put something there)
 --  * move respawn points to where you first entered the screen
@@ -84,7 +83,6 @@
 --  * resetting doesn't clear extra data
 --  * finish map labels
 --  * make spikes kill you completely
---  * make sure all items can be obtained properly
 --  * allow different configs for different save slots
 --  * starting a new game sometimes shows the wrong tunic color
 --  * skeletons sometimes throw bones from below you when they are above -- wrong bone placement
@@ -93,10 +91,6 @@
 --     - started work on it, buggy.
 --  * create a town warp for debugging
 --  * audit/test getting all items
---     - aljiba guy gives diamond instead of laurels
---       + fixed
---     - free laurel guy doesn't give laurels
---       + fixed.  he now gives the pendant instead.
 --  * rework all memory.registerexec functions to use custom callbacks.  safer, better.
 --     - did some of them
 --  * add confirmation of equipping an item (sound, flash, etc)
@@ -115,6 +109,7 @@
 --  * level up toast should go on top of everything else
 --  * fix bug where you can whip through edge of screen and break blocks on the other side.
 --  * add candles
+--    - added some of them
 --  * adjust spawn point at top of screen so enemies don't appear behind the hud.
 
 require ".Spidey.TSerial"
@@ -586,7 +581,7 @@ gfx.medusa = {
     {gfx.load("medusa1"), gfx.load("medusa2")},
     {gfx.load("medusa1h"), gfx.load("medusa2h")},
 }
-
+gfx.castle = gfx.load("castle")
 
 
 mnu.cursor_image=gfx.cv2heart.image
@@ -664,6 +659,11 @@ if gd then
 --    local newFile = string.gsub(f, "%.png", "%.gd")
 --    img:gd("cv2/images/gd/"..newFile)
 --    f="medusa2h.png"
+--    local img = gd.createFromPng("cv2/images/png/"..f)
+--    local newFile = string.gsub(f, "%.png", "%.gd")
+--    img:gd("cv2/images/gd/"..newFile)
+
+--    f="castle.png"
 --    local img = gd.createFromPng("cv2/images/png/"..f)
 --    local newFile = string.gsub(f, "%.png", "%.gd")
 --    img:gd("cv2/images/gd/"..newFile)
@@ -879,19 +879,8 @@ if _b>127 then return (255-_b)*-1 else return _b end
 end
 
 function getunusedcustom()
-    for i=1,o.custom.count-1 do
-        if o.custom[i].active==0 then
-            o.custom[i] = {x=0,y=0}
-            o.custom[i].originX = o.custom[i].x
-            o.custom[i].originY = o.custom[i].y
-            o.custom[i].outscreen=nil
-            o.custom[i].alivetime=0
-            o.custom[i].xs=0
-            o.custom[i].ys=0
-            return i
-        end
-    end
-    return false
+    local dummy, i = createObject(nil, 0,0)
+    return i
 end
 
 function getCustomCount(t)
@@ -3139,14 +3128,16 @@ function createLevelUpText()
 end
 
 function createItemPopUp(text)
-    local i=getunusedcustom()
-    if i then
-        o.custom[i].type="itemPopUp"
-        o.custom[i].x=o.player.x+scrollx
-        o.custom[i].y=o.player.y+scrolly-32
-        o.custom[i].active=1
-        o.custom[i].text=text
-    end
+    local obj = createObject("itemPopUp", o.player.x+scrollx, o.player.y+scrolly-32)
+    obj.text = text
+--    local i=getunusedcustom()
+--    if i then
+--        o.custom[i].type="itemPopUp"
+--        o.custom[i].x=o.player.x+scrollx
+--        o.custom[i].y=o.player.y+scrolly-32
+--        o.custom[i].active=1
+--        o.custom[i].text=text
+--    end
 end
 
 function createBone(x,y)
@@ -3250,30 +3241,53 @@ function createMedusaHead()
 end
 
 function createCustomHeart(x,y, floor)
-    local i=getunusedcustom()
-    if i then
-        o.custom[i].type="heart"
-        o.custom[i].facing = 1
-        o.custom[i].x=x
-        o.custom[i].y=y
-        
-        o.custom[i].active=1
-        o.custom[i].floor = floor
-    end
+    local obj = createObject("heart", x, y)
+    obj.floor = floor
 end
 
+
+--    for i=1,o.custom.count-1 do
+--        if o.custom[i].active==0 then
+--            o.custom[i] = {x=0,y=0}
+--            o.custom[i].originX = o.custom[i].x
+--            o.custom[i].originY = o.custom[i].y
+--            o.custom[i].outscreen=nil
+--            o.custom[i].alivetime=0
+--            o.custom[i].xs=0
+--            o.custom[i].ys=0
+--            return i
+--        end
+--    end
+--    return false
+
+
 function createObject(t,x,y)
-    local i=getunusedcustom()
-    if i then
-        o.custom[i].type = t
-        o.custom[i].facing = 1
-        o.custom[i].x = x or 0
-        o.custom[i].y = y or 0
-        o.custom[i].aliveTime=0
-        o.custom[i].active=1
-        return o.custom[i]
+    local unusedIndex
+     for i=1,o.custom.count-1 do
+        if o.custom[i].active==0 then
+            unusedIndex = i
+            break
+        end
     end
-    return false
+    
+    if not unusedIndex then return false end
+    
+    local i = unusedIndex
+    o.custom[i] = {}
+    o.custom[i].type = t
+    o.custom[i].facing = 1
+    o.custom[i].x = x or 0
+    o.custom[i].y = y or 0
+    o.custom[i].xs = 0
+    o.custom[i].ys = 0
+    o.custom[i].originX = 0
+    o.custom[i].originY = 0
+    o.custom[i].outscreen=nil
+    o.custom[i].alivetime=0
+    o.custom[i].aliveTime=0
+    o.custom[i].active=1
+    o.custom[i].area = {area1,area2,area3,areaFlags}
+    return o.custom[i], i
 end
 
 
@@ -4546,6 +4560,8 @@ function spidey.update(inp,joy)
         
         story = string.gsub(story, "\n", "\n\n")
         
+        gfx.draw(8*5+48+8*6-8*11,8*40-(game.film.y or 0)+8*9,gfx.castle)
+        
         drawfont(8*5+4,8*40-(game.film.y or 0),font[5], "       PROLOGUE\n\n\n\n\n"..story)
         --drawfont(8*5+4,8*40-(game.film.y or 0),font[5], "       PROLOGUE\n\n\n\n\nSTEP INTO THE SHADOWS\n\nOF THE HELL HOUSE.\n\nYOUVE ARRIVED BACK\n\nHERE AT TRANSYLVANIA\n\nON BUSINESS: TO\n\nDESTROY FOREVER THE\n\nCURSE OF THE\n\nEVIL COUNT DRACULA.")
     end
@@ -5382,11 +5398,12 @@ function spidey.update(inp,joy)
             if o[i].xs==1 then -- we set this to mark it as custom damager heart
             else
                 -- hearts always small
-                o[i].hp=0xef
-                o[i].hp=1
-                memory.writebyte(0x04c8+i, o[i].hp)
-                o[i].frame=0x8b
-                memory.writebyte(0x0306+i, o[i].frame)
+--                o[i].hp=0xef
+--                o[i].hp=1
+--                memory.writebyte(0x04c8+i, o[i].hp)
+--                o[i].frame=0x8b
+--                memory.writebyte(0x0306+i, o[i].frame)
+                o[i].destroy = true
             end
         elseif o[i].name == "Werewolf" then
             -- The werewolf's senses are better at night; greater rush distance and they can turn to rush at night.
@@ -6247,7 +6264,7 @@ function spidey.update(inp,joy)
         if o.custom[i].active==0 then
             --o.custom[i].aliveTime=0
         end
-        if o.custom[i].active==1 then
+        if o.custom[i].active==1 and o.custom.isOnScreen(i) then
             o.custom[i].xdist=math.abs(o.player.x-o.custom[i].x+scrollx)
             o.custom[i].ydist=math.abs(o.player.y-o.custom[i].y+scrolly)
             o.custom[i].aliveTime=math.min((o.custom[i].aliveTime or 0)+1,100000)
@@ -6275,23 +6292,46 @@ function spidey.update(inp,joy)
                     end
                 end
                 
-                if o.custom.isOnScreen(i) and o.custom[i].active==1 then
-                    local item
-                    if items.index[o.custom[i].itemName] then
-                        item = items[items.index[o.custom[i].itemName]]
-                        if item.type=="gold" then 
-                            o.custom[i].gfx=gfx.gold[3]
-                        end
+                local item
+                if items.index[o.custom[i].itemName] then
+                    item = items[items.index[o.custom[i].itemName]]
+                    if item.type=="gold" then 
+                        o.custom[i].gfx=gfx.gold[3]
                     end
+                end
+                
+                
+                if o.custom[i].alivetime == 1 then
+                    o.custom[i].ys = .2
+                    o.custom[i].falling = true
+                end
+                
+                if o.custom[i].falling then
+                    o.custom[i].ys = math.min(2.2, o.custom[i].ys * 1.4)
+                end
+                
+                if o.custom[i].floor then
+                    if o.custom[i].y>o.custom[i].floor then
+                        o.custom[i].y=o.custom[i].floor
+                        o.custom[i].ys = 0
+                        o.custom[i].falling=false
+                    end
+                else
+                    o.custom[i].ys = 0
+                    o.custom[i].falling=false
+                end
+                
+                local x,y=o.custom[i].x-scrollx, o.custom[i].y-scrolly
+                --gfx.draw(o.custom[i].x-scrollx-4, o.custom[i].y-scrolly+8, o.custom[i].gfx or gfx.items.bag)
+                
+                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, o.custom[i].gfx or gfx.items.bag)
+                
+                if o.custom[i].xdist <= 12 and o.custom[i].ydist <= 12 then
+                    o.custom[i].destroy = 1
+                    --playSound(0x10)
+                    getItem(o.custom[i].itemName, true)
+                    --spidey.message("getitem")
                     
-                    
-                    local x,y=o.custom[i].x-scrollx, o.custom[i].y-scrolly
-                    gfx.draw(o.custom[i].x-scrollx-4, o.custom[i].y-scrolly+8, o.custom[i].gfx or gfx.items.bag)
-                    if o.custom[i].xdist <= 8 and o.custom[i].ydist <= 8 then
-                        o.custom[i].destroy = 1
-                        --playSound(0x10)
-                        getItem(o.custom[i].itemName, true)
-                        
 --                        for i=0,255 do
 --                            local itemIndex
 --                            local itemAmount
@@ -6305,7 +6345,6 @@ function spidey.update(inp,joy)
 --                            memory.writebyte(0x7100+i*2, itemIndex)
 --                            memory.writebyte(0x7100+i*2+1, itemAmount)
 --                        end
-                    end
                 end
             elseif o.custom[i].type=="poof" then
                 local x,y=o.custom[i].x-scrollx+1, o.custom[i].y-scrolly
@@ -6357,6 +6396,7 @@ function spidey.update(inp,joy)
                         playSound(0x04)
                         local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
                         obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+                        --obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName="Gold"}
 --                        floor = o.custom[i].floor
                         --local h = createObject("heart",o.custom[i].x, o.custom[i].y)
                         --h.floor = o.custom[i].floor

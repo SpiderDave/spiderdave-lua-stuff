@@ -137,6 +137,7 @@ registerExec(0x934f,1,1,"onGetFreeLaurels")
 
 registerExec(0xc84b+3,7,1,"onPrintTitleText")
 
+
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
 -- onWalkSpeed(speed)

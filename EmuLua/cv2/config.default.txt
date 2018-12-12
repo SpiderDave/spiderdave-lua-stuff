@@ -38,7 +38,7 @@ platformVelocityFix=true
 stationaryMerchant=true
 
 // Replace Medusa Heads with custom object Medusa Heads (needs work).
-replaceMedusaHeads=false
+replaceMedusaHeads=true
 
 // Use new pattern for floating eyes
 floatingEyes = true
