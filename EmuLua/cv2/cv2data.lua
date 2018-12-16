@@ -675,6 +675,9 @@ cv2.candles = {
 
 
 cv2.story = [[
+       PROLOGUE
+
+
 - 1698 -
 
             It was 

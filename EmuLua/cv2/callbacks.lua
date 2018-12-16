@@ -132,12 +132,24 @@ registerExec(0xd88c,7,1,"onDeductHeartCost2")
 registerExec(0xc04b,7,1,"onVBlank")
 registerExec(0x8941,3,1,"onWhipOrSubWeapon")
 registerExec(0xae16,1,1,"onGetSilverKnife")
-
 registerExec(0x934f,1,1,"onGetFreeLaurels")
-
 registerExec(0xc84b+3,7,1,"onPrintTitleText")
-
 registerExec(0x8948,1,1,"onEnemyDeath")
+registerExec(0xd554+3,7,1,"onExpForLevel1")
+registerExec(0xd55e+3,7,1,"onExpForLevel2")
+registerExec(0x881c+3,1,1,"onSetPlayerLevelDataPointer")
+registerExec(0x8821+3,1,1,"onSetPlayerLevelDataPointer")
+registerExec(0x8c72+3,1,1,"onWhipCheckForFlameWhip")
+registerExec(0x8360, nil,1,"onRelicCheckEye")
+registerExec(0xd625, 7,1,"onRelicCheckNail")
+registerExec(0xd3c4, 7,1,"onRelicCheckRib")
+
+registerExec(0xadbe, nil,1,"onRelicCheckBlueCrystal")
+registerExec(0xa78d+2, 1,1,"onRelicCheckBlueCrystal2")
+registerExec(0xa799, 1,1,"onRelicCheckBlueCrystal3")
+
+registerExec(0x8331+2, 4,1,"onSetTitleScreenDisplayDuration")
+
 
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
@@ -597,10 +609,103 @@ function _onPrintTitleText(address,len,t)
     end
 end
 
-
 function _onEnemyDeath(address,len,t)
     if type(onEnemyDeath)=="function" then
         local enemyType = memory.readbyte(0x03b4+t.x)
         onEnemyDeath(enemyType)
     end
 end
+
+function _onExpForLevel1(address,len,t)
+    if type(onExpForLevel1)=="function" then
+        local a = onExpForLevel1(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+function _onExpForLevel2(address,len,t)
+    if type(onExpForLevel2)=="function" then
+        local x = onExpForLevel2(t.x)
+        if x then memory.setregister("x", x) end
+    end
+end
+
+function _onSetPlayerLevelDataPointer(address,len,t)
+    if type(onSetPlayerLevelDataPointer)=="function" then
+        if address == 0x881c+3 then
+            local a = onSetPlayerLevelDataPointer(t.a, nil)
+            if a then memory.setregister("a", a) end
+        else
+            local a = onSetPlayerLevelDataPointer(nil, t.a)
+            if a then memory.setregister("a", a) end
+        end
+    end
+end
+
+function _onWhipCheckForFlameWhip(address,len,t)
+    if type(onWhipCheckForFlameWhip)=="function" then
+        local a = onWhipCheckForFlameWhip(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckEye(address,len,t)
+    if type(onRelicCheckEye)=="function" then
+        local y = onRelicCheckEye(t.y)
+        if y then memory.setregister("y", y) end
+    end
+end
+
+function _onRelicCheckNail(address,len,t)
+    if type(onRelicCheckNail)=="function" then
+        local a = onRelicCheckNail(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckRib(address,len,t)
+    if type(onRelicCheckRib)=="function" then
+        local a = onRelicCheckRib(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckBlueCrystal(address,len,t)
+    if type(onRelicCheckBlueCrystal)=="function" then
+        local a = onRelicCheckBlueCrystal(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckBlueCrystal2(address,len,t)
+    if type(onRelicCheckBlueCrystal2)=="function" then
+        local a = onRelicCheckBlueCrystal2(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckBlueCrystal3(address,len,t)
+    if type(onRelicCheckBlueCrystal3)=="function" then
+        -- todo: pass current truth value and test
+        local ret = onRelicCheckBlueCrystal3()
+        
+        -- need to check for nil specifically here
+        if ret ~= nil then
+            local p
+            if ret==true then
+                p = bit.bor(p, 0x02)
+            else
+                p = bit.bor(p, 0x02)-2
+            end
+            memory.setregister("p", p)
+        end
+    end
+end
+
+-- default duration is 0xb4
+function _onSetTitleScreenDisplayDuration(address,len,t)
+    if type(onSetTitleScreenDisplayDuration)=="function" then
+        local a = onSetTitleScreenDisplayDuration(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+

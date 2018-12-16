@@ -94,3 +94,7 @@ qualityPreset=high
 
 // If set to true, juggle bones with the whip instead of killing them.
 boneJuggle = false
+
+// Set to true to perform a md5 check on the rom.  This will help make sure you 
+// have the correct one.
+md5=false

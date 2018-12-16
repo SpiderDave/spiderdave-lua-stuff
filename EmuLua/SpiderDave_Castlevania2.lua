@@ -65,7 +65,6 @@
 --  * Don't get items you already have (Dracula's parts, etc)
 --    + dracula parts finished
 --    + clues finished
---  * replace hp graphics when unloading script
 --  * add mummy bandages
 --  * overhaul menu system, make new sub screen
 --    + select weapons, relics, equipment
@@ -111,6 +110,7 @@
 --  * add candles
 --    - added some of them
 --  * adjust spawn point at top of screen so enemies don't appear behind the hud.
+--  * bug: getting hit by custom hit object affects block velocity
 
 require ".Spidey.TSerial"
 
@@ -167,7 +167,7 @@ game.map.width = 484
 game.map.height = 237
 game.map.visible=false
 game.saveSlot = 1
-
+game.romUndo = game.romUndo or {index={}}
 
 game.film = {
     scroll = 0,
@@ -2282,6 +2282,11 @@ function onPrintTitleText(c,address, index)
     return c
 end
 
+function onSetTitleScreenDisplayDuration(n)
+    -- Increase time that title screen is shown (default is 0xb4)
+    return 0xff
+end
+
 -- triggers when an enemy takes damage from whip
 --memory.registerexec(0x8920,1,
 --    function()
@@ -3371,22 +3376,25 @@ end
 
 -- Don't get knocked off stairs when hit; needs work
 -- disabled
-memory.registerexec(0xd392,0, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    if not config.stairsFix then return end
-    local state = memory.readbyte(0x3d8)
-    if state==0x09 or state==0x0a then
-        a=0x0a
-        o.player.lockPosition = {
-            frame = o.player.facing,
-            frame = o.player.frame,
-            scrollX=scrollx,
-            scrollY=scrolly,
-            c=0x30,
-        }
-    end
-    memory.setregister("a",a)
-end)
+--memory.registerexec(0xd392,0, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--function onSetPlayerStateWhenHit(state)
+--    if not config.stairsFix then return end
+    --local state = memory.readbyte(0x3d8)
+--    if state==0x09 or state==0x0a then
+--        a=0x0a
+--        o.player.lockPosition = {
+--            frame = o.player.facing,
+--            frame = o.player.frame,
+--            scrollX=scrollx,
+--            scrollY=scrolly,
+--            c=0x30,
+--        }
+        --memory.setregister("a",a)
+--        return 0x0a
+--    end
+    --memory.setregister("a",a)
+--end
 
 -- Modify the lives display by intercepting the 
 -- given value to print and subtracting 1.
@@ -3436,64 +3444,64 @@ function getStats(level)
 end
 
 -- intercept exp needed for level (low byte
-memory.registerexec(0xd554+3,1, function(address)
-        local a,x,y,s,p,pc=memory.getregisters()
-        local e = getExpNeeded()
-        --emu.message(string.format("%04d",e))
-        a = tonumber(string.format("%02d",e % 100),16)
-        memory.setregister("a",a)
-end)
+function onExpForLevel1(e)
+    local e = getExpNeeded()
+    return tonumber(string.format("%02d",e % 100),16)
+end
 
 -- intercept exp needed for level (high byte)
-memory.registerexec(0xd55e+3,1, function(address)
-        local a,x,y,s,p,pc=memory.getregisters()
-        local e = getExpNeeded()
-        x = tonumber(string.format("%02d",(e - e % 100) / 100),16)
-        --emu.message(string.format("%02x",x))
-        memory.setregister("x",x)
-end)
+function onExpForLevel2(e)
+    local e = getExpNeeded()
+    return tonumber(string.format("%02d",(e - e % 100) / 100),16)
+end
 
 -- Fix level in sub screen so it displays decimal, not hex
-memory.registerexec(0xf13f+2,1, function(address)
-        local a,x,y,s,p,pc=memory.getregisters()
-        a = tonumber(string.format("%02d",a),16)
-        memory.setregister("a",a)
-end)
+--memory.registerexec(0xf13f+2,1, function(address)
+--        local a,x,y,s,p,pc=memory.getregisters()
+--        a = tonumber(string.format("%02d",a),16)
+--        memory.setregister("a",a)
+--end)
 
 
 -- intercept getting pointer to level data stuff
-local f = function(address)
-    local a,x,y,s,p,pc=memory.getregisters()
+--local f = function(address)
+--    local a,x,y,s,p,pc=memory.getregisters()
     
-    if o.player.level>6 then -- for now, use stats for level 6 at levels > 6
-        if address == 0x881c+3 then
-            a = 0x3b
+--    if o.player.level>6 then -- for now, use stats for level 6 at levels > 6
+--        if address == 0x881c+3 then
+--            a = 0x3b
+--        else
+--            a = 0x8c
+--        end
+--    end
+    
+--    memory.setregister("a",a)
+--end
+--memory.registerexec(0x881c+3,1, f)
+--memory.registerexec(0x8821+3,1, f)
+
+-- intercept getting pointer to level data stuff
+function onSetPlayerLevelDataPointer(low, high)
+    if o.player.level>6 then -- for now, use stats for level 6 at levels > 6 (0x8c3b)
+        if low then
+            return 0x3b
         else
-            a = 0x8c
+            return 0x8c
         end
     end
-    
---    if address == 0x881c+3 then
---        a = 0xff
---    else
---        a = 0x8b
---    end
-    memory.setregister("a",a)
 end
-memory.registerexec(0x881c+3,1, f)
-memory.registerexec(0x8821+3,1, f)
 
 -- change solid blocks (not visually)
 -- *disabled* (second parameter is 0)
-memory.registerexec(0xe8a2,0, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    local address = memory.readbyte(0x0a)+y
+--memory.registerexec(0xe8a2,0, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    local address = memory.readbyte(0x0a)+y
     --aa = block, ac=swamp ad=some are breakable
-    if a==0xaa then a=0xae end
-    a=0
+--    if a==0xaa then a=0xae end
+--    a=0
     
-    memory.setregister("a",a)
-end)
+--    memory.setregister("a",a)
+--end)
 
 
 -- something to do with stage block palette
@@ -3562,93 +3570,89 @@ end
 
 
 -- Whip check for getting flame whip
-memory.registerexec(0x8c72+3,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onWhipCheckForFlameWhip(whip)
     if hasInventoryItem("Morning Star") then
-        a = 3
+        whip = 3
         if not hasInventoryItem("Flame Whip") then
             getItem("Flame Whip", true, true) -- delayed
         end
     else
-        a = 0
+        whip = 0
     end
-    memory.setregister("a", a)
-end)
+    return whip
+end
 
+-- controller direction press check on stairs
+-- bank 3
+--memory.registerexec(0x8ae2+2,1, function()
+--    local a,x,y,s,p,pc=memory.getregisters()
+--    a=0
+--    a=0x04
+--    a=0x08
+--    memory.setregister("a", a)
+--end)
 
 
 -- Relic check for eye
-memory.registerexec(0x8360,1, function()
+function onRelicCheckEye(relic)
     --emu.message("relic check eye")
-    local a,x,y,s,p,pc=memory.getregisters()
     if relics.list.eye and relics.on.eye then
-        y=3
+        relic=3
     else
-        y=0
+        relic=0
     end
-    memory.setregister("y", y)
-end)
+    return relic
+end
 
 -- Relic check for nail
-memory.registerexec(0xd625,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckNail(relic)
     if relics.list.nail and relics.on.nail then
-        a=4
+        relic=4
     else
-        a=0
+        relic=0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 -- Relic check for rib
-memory.registerexec(0xd3c4,1, function()
-    --emu.message("relic check rib")
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckRib(relic)
     if relics.list.rib and relics.on.rib then
-        a=1
+        relic=1
     else
-        a=0
+        relic=0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 -- Relic check for blue crystal
-memory.registerexec(0xadbe,1, function()
-    --emu.message("relic check blue crystal 2")
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckBlueCrystal(relic)
     if relics.list.blueCrystal and relics.on.blueCrystal then
-        a=6
+        relic=6
     else
-        a=0
+        relic=0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 -- Relic check for blue crystal
-memory.registerexec(0xa78d+2,1, function()
-    --emu.message("relic check blue crystal 3")
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckBlueCrystal2(relic)
     if relics.list.blueCrystal and relics.on.blueCrystal then
-        a=6
+        relic=6
     else
-        a=0
+        relic=0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 
--- Relic check for blue crystal (2)
-memory.registerexec(0xa799,1, function()
-    --emu.pause()
-    --emu.message("relic check blue crystal 2")
-    local a,x,y,s,p,pc=memory.getregisters()
+-- Relic check for blue crystal
+function onRelicCheckBlueCrystal3()
     if relics.list.blueCrystal and relics.on.blueCrystal then
-        p = bit.bor(p, 0x02)-2
+        return false
     else
-        p = bit.bor(p, 0x02)
+        return true
     end
-    memory.setregister("p", p)
-end)
+end
 
 
 -- Relic check for red crystal
@@ -4145,72 +4149,6 @@ memory.registerexec(0xc118,1, function()
     memory.setregister("a",a)
 end)
 
-
-memory.registerexec(0xe38d,1,
-    function()
-        do return end
-        if not spidey.debug.enabled then return end
-        local newMessage = "HELLO WORLD"
-        local fontstr=" ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
-        local msg=""
-        msg=msg..fontstr:sub(msgchar+1,msgchar+1)
-        
-        local a,x,y,s,p,pc=memory.getregisters()
-        local messageCounter = memory.readbyte(0x007c)
-        if x==0x03 then
-            --emu.message(string.format("msg=%02X msgindex=%02x x=%02x a=%02x",game.messageNum, messageCounter,x,a))
-            --emu.pause()
-        end
-        if x==0x03 then
-            if game.messageNum==0x0b then
-                local fontstr=" ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
-                --msg=msg..fontstr:sub(msgchar+1,msgchar+1)
-                msg=msg..fontstr:sub(msgchar+1,msgchar+1)
-            end
-            --emu.message(string.format("%02X %02x",game.messageNum, messageCounter))
-            --emu.pause()
-            a=0x01
-            
-            local c = messages[game.messageNum]:sub(messageCounter+1, messageCounter+1)
-            
-            
-local m = [[TURN RIGHT
-FOR CAMILLA
-CEMETERY,
-LEFT FOR THE
-ALJIBA WOODS.]]
-
-local m = [[THE QUICK,
-BROWN FOX  
-JUMPS    
-OVER THE    
-LAZY DOG.    ]]
-            
-local m = "THE QUICK, BROWN FOX JUMPS OVER THE LAZY DOG."
-
-            
-            local c = m:sub(messageCounter, messageCounter)
-            if textMap2[0x10] then
-                emu.message('yep')
-            end
-            if textMap2[c] or true then
-                c=textMap2[c] or 0
-                --c=0x18
-                memory.setregister("a",c)
-                memory.writebyte(0x700+x,c)
-            else
-                --c=0x18
-                --memory.setregister("a",c)
-            end
-            
-            
-
-        end
-        
-    end
-)
-
-
 -- Triggered when a sp weapon breaks
 function onSubWeaponBreak(currentWeapon, i)
     if currentWeapon == 4 then
@@ -4238,36 +4176,50 @@ end
 
 
 function romPatch()
+    local rom_writebyte = function(address, value)
+        if not game.romUndo[address] then 
+            game.romUndo[address] = rom.readbyte(address, value)
+            game.romUndo.index[#game.romUndo.index+1] = address
+        end
+        rom.writebyte(address, value)
+    end
+    
+    local rom_writebytes = function(address, str)
+        for i = 0, #str-1 do
+            rom_writebyte(address+i,string.byte(str,i+1))
+        end
+    end
+    
     -- This adds a little patch that makes it so when you poke a value
     -- to 0x7500 it plays a sound effect.  Currently it only works in game.
     --put 1ce0e 20edfe
     --put 1feed 203a86  48 ad0075 f008  2018c1 a900 8d0075  68 60
-    rom.writebytes(0x1ce0e+0x10, spidey.hex2bin("20edfe"))
-    rom.writebytes(0x1feed+0x10, spidey.hex2bin("203a8648ad0075f0082018c1a9008d00756860"))
+    rom_writebytes(0x1ce0e+0x10, spidey.hex2bin("20edfe"))
+    rom_writebytes(0x1feed+0x10, spidey.hex2bin("203a8648ad0075f0082018c1a9008d00756860"))
 
     -- remove hp graphics
-    rom.writebytes(0x21600+0x10, string.rep(string.char(0x00), 0x60))
-    rom.writebytes(0x23600+0x10, string.rep(string.char(0x00), 0x60))
-    rom.writebytes(0x25600+0x10, string.rep(string.char(0x00), 0x60))
-    rom.writebytes(0x27600+0x10, string.rep(string.char(0x00), 0x60))
-    rom.writebytes(0x29600+0x10, string.rep(string.char(0x00), 0x60))
-    rom.writebytes(0x2a600+0x10, string.rep(string.char(0x00), 0x60))
-    rom.writebytes(0x2c600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x21600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x23600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x25600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x27600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x29600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x2a600+0x10, string.rep(string.char(0x00), 0x60))
+    rom_writebytes(0x2c600+0x10, string.rep(string.char(0x00), 0x60))
     
     -- remove exp cap thing based on area
-    rom.writebyte(0x1d518+0x10, 0xc9)
-    rom.writebyte(0x1d519+0x10, 0x00)
+    rom_writebyte(0x1d518+0x10, 0xc9)
+    rom_writebyte(0x1d519+0x10, 0x00)
     
     --increase level cap to 99
-    rom.writebyte(0x1d53c+0x10, 0xc9)
-    rom.writebyte(0x1d53d+0x10, 0x63)
+    rom_writebyte(0x1d53c+0x10, 0xc9)
+    rom_writebyte(0x1d53d+0x10, 0x63)
     
     --don't increase hp for level up
-    rom.writebyte(0x1d57f+0x10, 0xea)
-    rom.writebyte(0x1d580+0x10, 0xea)
+    rom_writebyte(0x1d57f+0x10, 0xea)
+    rom_writebyte(0x1d580+0x10, 0xea)
 
     -- Change golden dagger throw sfx
-    --rom.writebyte(0x1d90c+0x10, 0x11)
+    --rom_writebyte(0x1d90c+0x10, 0x11)
     
     
 --    if tile==0xd9 then tile=0 end
@@ -4276,17 +4228,17 @@ function romPatch()
 --    if tile==0xdc then tile=0 end
 
 --    for i=0,0x0f do
---        rom.writebyte(0x10+0x28000+0x10*0xd9+i, 0)
---        rom.writebyte(0x10+0x28000+0x10*0xdb+i, 0)
---        rom.writebyte(0x10+0x28000+0x10*0xda+i, 0)
---        rom.writebyte(0x10+0x28000+0x10*0xdc+i, 0)
+--        rom_writebyte(0x10+0x28000+0x10*0xd9+i, 0)
+--        rom_writebyte(0x10+0x28000+0x10*0xdb+i, 0)
+--        rom_writebyte(0x10+0x28000+0x10*0xda+i, 0)
+--        rom_writebyte(0x10+0x28000+0x10*0xdc+i, 0)
 --    end
 
 --    for i=0,0x0f do
---        rom.writebyte(0x10+0x28000+0x10*0xd9+i, rom.readbyte(0x10+0x28000+0x10*0xf6+i))
---        rom.writebyte(0x10+0x28000+0x10*0xdb+i, rom.readbyte(0x10+0x28000+0x10*0xf8+i))
---        rom.writebyte(0x10+0x28000+0x10*0xda+i, rom.readbyte(0x10+0x28000+0x10*0xf7+i))
---        rom.writebyte(0x10+0x28000+0x10*0xdc+i, rom.readbyte(0x10+0x28000+0x10*0xf9+i))
+--        rom_writebyte(0x10+0x28000+0x10*0xd9+i, rom.readbyte(0x10+0x28000+0x10*0xf6+i))
+--        rom_writebyte(0x10+0x28000+0x10*0xdb+i, rom.readbyte(0x10+0x28000+0x10*0xf8+i))
+--        rom_writebyte(0x10+0x28000+0x10*0xda+i, rom.readbyte(0x10+0x28000+0x10*0xf7+i))
+--        rom_writebyte(0x10+0x28000+0x10*0xdc+i, rom.readbyte(0x10+0x28000+0x10*0xf9+i))
 --    end
 end
 
@@ -4306,11 +4258,52 @@ savestate.registerload(function()
     o.custom.createLevelObjects()
 end)
 
+emu.registerexit(function(x)
+    emu.message("")
+    if game.romUndo then
+        for _,a in ipairs(game.romUndo.index) do
+            rom.writebyte(a,game.romUndo[a])
+        end
+    end
 
-emu.registerexit(function(x) emu.message("") end)
+end)
+
 function spidey.update(inp,joy)
     hitboxes.update()
     lastinp=inp
+    
+    if config.md5 then
+        if not game.md5 then
+            -- We have to reload here to make sure the rom hasn't been changed with rom.writebyte.
+            if not spidey.reloadfile() then
+                spidey.error = function()
+                    --#000040d0
+                    gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"#807070a0", "#807070a0")
+                    gui.text(20,40,"ERROR: Could not test MD5 properly. Please \nupgrade FCEUX to at least 2.2.3.", "white", "clear")
+                end
+                config.md5=false
+            end
+        end
+        game.md5 = game.md5 or require 'cv2.md5'
+        game.md5Data = game.md5Data or {address=0, m=game.md5.new()}
+        
+        for i=1, 2000 do
+            local b = game.romUndo[game.md5Data.address] or rom.readbyte(game.md5Data.address)
+            
+            game.md5Data.m:update(string.char(b))
+            game.md5Data.address=game.md5Data.address+1
+            
+            if game.md5Data.address>=262160 then
+                game.md5Data.md5 = game.md5.tohex(game.md5Data.m:finish())
+                spidey.message("")
+                config.md5 = nil
+                break
+            else
+                spidey.message("calculating md5...%d%%", math.floor((game.md5Data.address/262160)*100))
+            end
+        end
+    end
+    
     
     if config.testEnding then
         if config.testEnding<1 or config.testEnding>3 then
@@ -4508,6 +4501,13 @@ function spidey.update(inp,joy)
     
     -- title screen
     if memory.readbyte(0x18)==0x1 and (game.mode==0x00 and memory.readbyte(0xff)~=0xa9) then
+        -- Apply a simple fade out.  It's not very smooth, but this actually gives it
+        -- more of a NES quality, so I'm ok with that.
+        if game.modeCounter<0x18 then
+            local c = string.format("#000000%02x", 0x18*4 - game.modeCounter*4)
+            gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, c, c)
+        end
+--           spidey.message("%02x %02x",game.mode, game.modeCounter)
 --        local c = spidey.nes.palette[0x0c]
 --        gui.drawbox(0, 0, spidey.screenWidth, 8*3, c,c)
 --        gui.drawbox(0, 8*6, spidey.screenWidth, 8*8+9, c,c)
@@ -4557,9 +4557,9 @@ function spidey.update(inp,joy)
         
         story = string.gsub(story, "\n", "\n\n")
         
-        gfx.draw(8*5+48+8*6-8*11,8*40-(game.film.y or 0)+8*9,gfx.castle)
+        gfx.draw(8*5+48+8*6-8*11,8*40-(game.film.y or 0)+8*10,gfx.castle)
         
-        drawfont(8*5+4,8*40-(game.film.y or 0),font[5], "       PROLOGUE\n\n\n\n\n"..story)
+        drawfont(8*5+4,8*40-(game.film.y or 0),font[5], story)
         --drawfont(8*5+4,8*40-(game.film.y or 0),font[5], "       PROLOGUE\n\n\n\n\nSTEP INTO THE SHADOWS\n\nOF THE HELL HOUSE.\n\nYOUVE ARRIVED BACK\n\nHERE AT TRANSYLVANIA\n\nON BUSINESS: TO\n\nDESTROY FOREVER THE\n\nCURSE OF THE\n\nEVIL COUNT DRACULA.")
     end
     
@@ -4669,8 +4669,6 @@ function spidey.update(inp,joy)
         
         o.player.whip = memory.readbyte(0x0434)
         o.player.items = memory.readbyte(0x004a)+memory.readbyte(0x0092)*0x100
-        
-        o.player.hasbag=hasItem(7)
         
         -- new hp formula
         --o.player.maxHp=0x30+1*o.player.level+4*relics.nParts
@@ -7221,6 +7219,18 @@ function spidey.draw()
         local stats= getStats()
         gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def),"white","#00002080")
     end
+    
+    if game.md5Data and game.md5Data.md5 then
+        if game.md5Data.md5 == string.lower("1B827C602C904D8C846499C9F54B93E0") then
+            gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"#00006080", "#00006080")
+            gui.text(20,40,string.format("Rom matches No-Intro. \nchecksum=%s", game.md5Data.md5), "white", "clear")
+        else
+            gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"#8070c0a0", "#8070c0a0")
+            gui.text(20,40,string.format("Unknown rom. \nchecksum=%s", game.md5Data.md5), "white", "clear")
+        end
+    end
+
+
 end
 
 spidey.run()
