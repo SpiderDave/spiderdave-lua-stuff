@@ -838,6 +838,25 @@ o.custom.isOnScreen=function(i)
 end
 
 
+function saveCandles()
+    local out = "local candles = {\n"
+    local formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", item="%s" },\n'
+    for _,c in ipairs(candles) do
+        if c.item then
+            formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", item="%s", },\n'
+            out = out..string.format(formatText, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],c.floor,c.location, c.item)
+        else
+            formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
+            out = out..string.format(formatText, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],c.floor,c.location)
+        end
+    end
+    out=out.."}\n\nreturn candles\n"
+    
+    --writetofile('cv2/candles.backup.lua', spidey.getFileContents("cv2/candles.lua"))
+    writetofile('cv2/candles.lua', out)
+    --emu.message("Candles exported to cv2/candles.lua")
+end
+
 function collision(t1,t2)
     if not t1 or not t2 then return end
     if #t1+#t2 ~=8 then return end
@@ -3007,6 +3026,15 @@ function onCreateEnemy(i,enemyType)
     
     if enemyType==0x26 and hasInventoryItem("Sacred Flame") then enemyType=0 end
     
+    -- Zombie
+--    time1=memory.readbyte(0x0086),
+--    time2=memory.readbyte(0x0085),
+
+    -- grace period to despawn zombies when it turns to night in town
+    if inTown and enemyType==0x17 and hour==18 and minute <=15 then 
+        enemyType=0
+    end
+    
     -- 27 = clue
     if enemyType==0x27 then
         --t=0
@@ -4440,6 +4468,9 @@ function spidey.update(inp,joy)
     for k,v in pairs(relics.list) do
         if v== true then relics.nParts = relics.nParts + 1 end
     end
+    hour=tonumber(string.format("%02x",memory.readbyte(0x0086)))
+    minute=tonumber(string.format("%02x",memory.readbyte(0x0085)))
+
     time=string.format('%02X:%02X',memory.readbyte(0x0086),memory.readbyte(0x0085))
     --timeWithDays =string.format("%02X:", memory.readbyte(0x0087), time)
     day = memory.readbyte(0x0083)
@@ -6218,6 +6249,7 @@ function spidey.update(inp,joy)
                     end
                 end
             end
+            saveCandles()
         end
     end
     
@@ -6289,6 +6321,7 @@ function spidey.update(inp,joy)
             --local txt = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
             
             --spidey.appendToFile("cv2/candles.txt", string.format(txt, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],o.player.y,displayarea))
+            saveCandles()
         end
     end
     
