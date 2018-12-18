@@ -141,20 +141,17 @@ registerExec(0x881c+3,1,1,"onSetPlayerLevelDataPointer")
 registerExec(0x8821+3,1,1,"onSetPlayerLevelDataPointer")
 registerExec(0x8c72+3,1,1,"onWhipCheckForFlameWhip")
 registerExec(0x8331+2, 4,1,"onSetTitleScreenDisplayDuration")
-registerExec(0x8360, nil,1,"onRelicCheckEye")
+registerExec(0x8360, 1,1,"onRelicCheckEye")
 registerExec(0xd625, 7,1,"onRelicCheckNail")
 registerExec(0xd3c4, 7,1,"onRelicCheckRib")
-
 registerExec(0xadbe, nil,1,"onRelicCheckBlueCrystal")
 registerExec(0xa78d+2, 1,1,"onRelicCheckBlueCrystal2")
 registerExec(0xa799, 1,1,"onRelicCheckBlueCrystal3")
-
 registerExec(0xa938, nil,1,"onRelicCheckRedCrystal")
 registerExec(0x8600, 1,1,"onRelicCheckWhiteCrystal")
-registerExec(0x9071+2, nil,1,"onRelicCheckWhiteCrystal2")
-registerExec(0x86f2, nil,1,"onRelicCheckHeart")
-registerExec(0xa8fe+2, nil,1,"onRelicCheckAll")
-
+registerExec(0x9071+2, 1,1,"onRelicCheckWhiteCrystal2")
+registerExec(0x86f2, 1,1,"onRelicCheckHeart")
+registerExec(0xa8fe+2, 1,1,"onRelicCheckAll")
 registerExec(0xf5e2, 7,1,"onWindowPrintChar")
 
 
@@ -699,13 +696,12 @@ function _onRelicCheckBlueCrystal3(address,len,t)
         
         -- need to check for nil specifically here
         if ret ~= nil then
-            local p
             if ret==true then
-                p = bit.bor(p, 0x02)
+                t.p = bit.bor(t.p, 0x02)
             else
-                p = bit.bor(p, 0x02)-2
+                t.p = bit.bor(t.p, 0x02)-2
             end
-            memory.setregister("p", p)
+            memory.setregister("p", t.p)
         end
     end
 end
@@ -741,13 +737,12 @@ function _onRelicCheckWhiteCrystal2(address,len,t)
         
         -- need to check for nil specifically here
         if ret ~= nil then
-            local p
             if ret==true then
-                p = bit.bor(p, 0x02)
+                t.p = bit.bor(t.p, 0x02)
             else
-                p = bit.bor(p, 0x02)-2
+                t.p = bit.bor(p, 0x02)-2
             end
-            memory.setregister("p", p)
+            memory.setregister("p", t.p)
         end
     end
 end

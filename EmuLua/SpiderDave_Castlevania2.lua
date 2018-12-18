@@ -3651,7 +3651,7 @@ function onRelicCheckWhiteCrystal(relic)
 end
 
 -- Relic check for white crystal to get blue in aljiba
-function onRelicCheckWhiteCrystal2(relic)
+function onRelicCheckWhiteCrystal2()
     if relics.list.whiteCrystal and not relics.list.blueCrystal then
         -- get relic, turn it on by default
         relics.list.blueCrystal=true
@@ -3673,14 +3673,14 @@ function onRelicCheckHeart(relic)
 end
 
 -- Relic check for west bridge
-function onRelicCheckAll(relics)
-    relics = 0x7f
+function onRelicCheckAll(relic)
+    relic = 0x7f
     for i=1,5 do
         if not relics.list[cv2data.relics[i].name] or not relics.on[cv2data.relics[i].name] then
-            relics = 0
+            relic = 0
         end
     end
-    return relics
+    return relic
 end
 
 -- get a relic (mansions)
