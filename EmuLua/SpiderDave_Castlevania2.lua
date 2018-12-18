@@ -2627,16 +2627,18 @@ end
 
 function addExp(n)
     local e = tonumber(string.format("%02x%02x", memory.readbyte(0x47), memory.readbyte(0x46)))
+    --local e = getCurrentExp()
+    
     e=math.min(9999, e+n)
     
     
     o.player.gold = o.player.gold+5
     memory.writeword(0x7000+1, o.player.gold)
     
-    need = getExpNeeded()
-
-
-    if e>=need then
+    local need = getExpNeeded()
+    
+    --if e>=need then
+    if getExpNeeded()-n <=0 then
         --getheart()
         
         --emu.message("level up!")
