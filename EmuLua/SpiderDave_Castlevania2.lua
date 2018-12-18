@@ -385,12 +385,6 @@ mnu.items={
             emu.setrenderplanes(true, not frame_tester)
         end
     },
-    {text="Save gfx",
-    action=function()
-        local t= TSerial.pack(gfx)
-        writetofile('cv2/cv2.gfx', t)
-        emu.message("saved.")
-    end},
     {text="Save game data",
     action=function()
         saveGame(game.saveSlot)
@@ -734,26 +728,7 @@ if gd then
     --img:png("cv2/images/output2.png")
 end
 
-if false then
-    temp=getfilecontents('cv2/cv2.gfx')
-    if temp then
-        temp=TSerial.unpack(temp)
-        gfx=temp
-        emu.message("loaded.")
-     else
-        --emu.message("Error: could not load data.")
-     end
-end
-
---temp=getfilecontents('cv2/cv2.dat')
-temp = false
-if temp then
-    temp=TSerial.unpack(temp)
-    game.data=temp
-else
-    --emu.message("Error: could not load data.")
-end
-game.data = game.data or {}
+game.data = {}
 game.data.enemies=game.data.enemies or {}
 
 if util.fileExists('cv2/warp.dat') then
@@ -3656,66 +3631,57 @@ end
 
 
 -- Relic check for red crystal
-memory.registerexec(0xa938,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckRedCrystal(relic)
     if relics.list.redCrystal and relics.on.redCrystal then
-        a=6
+        relic = 6
     else
-        a=0
+        relic = 0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 -- Relic check for white crystal (to see invisible block)
-memory.registerexec(0x8600,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckWhiteCrystal(relic)
     if relics.list.whiteCrystal and relics.on.whiteCrystal then
-        a=6
+        relic = 6
     else
-        a=0
+        relic = 0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 -- Relic check for white crystal to get blue in aljiba
-memory.registerexec(0x9071+2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    
+function onRelicCheckWhiteCrystal2(relic)
     if relics.list.whiteCrystal and not relics.list.blueCrystal then
-        p = bit.bor(p, 0x02) - 02
-
         -- get relic, turn it on by default
         relics.list.blueCrystal=true
         setRelicState("blueCrystal", true)
+        return false
     else
-        p = bit.bor(p, 0x02)
+        return true
     end
-    memory.setregister("p", p)
-end)
+end
 
 -- Relic check for heart
-memory.registerexec(0x86f2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onRelicCheckHeart(relic)
     if relics.list.heart and relics.on.heart then
-        a=2
+        relic = 2
     else
-        a=0
+        relic = 0
     end
-    memory.setregister("a", a)
-end)
+    return relic
+end
 
 -- Relic check for west bridge
-memory.registerexec(0xa8fe+2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    
-    a = 0x7f
+function onRelicCheckAll(relics)
+    relics = 0x7f
     for i=1,5 do
         if not relics.list[cv2data.relics[i].name] or not relics.on[cv2data.relics[i].name] then
-            a = 0
+            relics = 0
         end
     end
-    memory.setregister("a", a)
-end)
+    return relics
+end
 
 -- get a relic (mansions)
 memory.registerexec(0x8799,1, function()
@@ -3738,13 +3704,12 @@ memory.registerexec(0x87d1,1, function()
 end)
 
 -- character printing; change heart to "G" in messages
-memory.registerexec(0xf5e2+2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
+function onWindowPrintChar(c)
     if not pausemenu then
-        if a==0x61 then a=0x07 end
+        if c==0x61 then c=0x07 end
+        return c
     end
-    memory.setregister("a", a)
-end)
+end
 
 -- get an item/relic from npc (such as holy water)
 memory.registerexec(0xede9,1, function()
@@ -4271,7 +4236,6 @@ end)
 function spidey.update(inp,joy)
     hitboxes.update()
     lastinp=inp
-    
     if config.md5 then
         if not game.md5 then
             -- We have to reload here to make sure the rom hasn't been changed with rom.writebyte.
@@ -4285,7 +4249,7 @@ function spidey.update(inp,joy)
             end
         end
         game.md5 = game.md5 or require 'cv2.md5'
-        game.md5Data = game.md5Data or {address=0, m=game.md5.new()}
+        game.md5Data = game.md5Data or {address=0, size = spidey.getRomSize(), m=game.md5.new()}
         
         for i=1, 2000 do
             local b = game.romUndo[game.md5Data.address] or rom.readbyte(game.md5Data.address)
@@ -4293,7 +4257,7 @@ function spidey.update(inp,joy)
             game.md5Data.m:update(string.char(b))
             game.md5Data.address=game.md5Data.address+1
             
-            if game.md5Data.address>=262160 then
+            if game.md5Data.address>=game.md5Data.size then
                 game.md5Data.md5 = game.md5.tohex(game.md5Data.m:finish())
                 spidey.message("")
                 config.md5 = nil
@@ -4533,7 +4497,7 @@ function spidey.update(inp,joy)
             --game.film.scroll = (game.film.scroll + 1) % 14
             game.film.y = game.film.y + 1
         end
-        game.film.scroll = (game.film.scroll + 3) % 14
+        game.film.scroll = (game.film.scroll + 2) % 14
         gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
         gui.drawbox(0+8*2, 0, spidey.screenWidth-1-8*2, spidey.screenHeight-1, spidey.nes.palette[0x0c], spidey.nes.palette[0x0c])
         --emu.message(string.format("%s", spidey.nes.palette[0x0c]))

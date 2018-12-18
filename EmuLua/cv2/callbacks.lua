@@ -140,6 +140,7 @@ registerExec(0xd55e+3,7,1,"onExpForLevel2")
 registerExec(0x881c+3,1,1,"onSetPlayerLevelDataPointer")
 registerExec(0x8821+3,1,1,"onSetPlayerLevelDataPointer")
 registerExec(0x8c72+3,1,1,"onWhipCheckForFlameWhip")
+registerExec(0x8331+2, 4,1,"onSetTitleScreenDisplayDuration")
 registerExec(0x8360, nil,1,"onRelicCheckEye")
 registerExec(0xd625, 7,1,"onRelicCheckNail")
 registerExec(0xd3c4, 7,1,"onRelicCheckRib")
@@ -148,7 +149,15 @@ registerExec(0xadbe, nil,1,"onRelicCheckBlueCrystal")
 registerExec(0xa78d+2, 1,1,"onRelicCheckBlueCrystal2")
 registerExec(0xa799, 1,1,"onRelicCheckBlueCrystal3")
 
-registerExec(0x8331+2, 4,1,"onSetTitleScreenDisplayDuration")
+registerExec(0xa938, nil,1,"onRelicCheckRedCrystal")
+registerExec(0x8600, 1,1,"onRelicCheckWhiteCrystal")
+registerExec(0x9071+2, nil,1,"onRelicCheckWhiteCrystal2")
+registerExec(0x86f2, nil,1,"onRelicCheckHeart")
+registerExec(0xa8fe+2, nil,1,"onRelicCheckAll")
+
+registerExec(0xf5e2, 7,1,"onWindowPrintChar")
+
+
 
 
 
@@ -705,6 +714,61 @@ end
 function _onSetTitleScreenDisplayDuration(address,len,t)
     if type(onSetTitleScreenDisplayDuration)=="function" then
         local a = onSetTitleScreenDisplayDuration(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckRedCrystal(address,len,t)
+    if type(onRelicCheckRedCrystal)=="function" then
+        local a = onRelicCheckRedCrystal(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+-- Relic check for white crystal (to see invisible block)
+function _onRelicCheckWhiteCrystal(address,len,t)
+    if type(onRelicCheckWhiteCrystal)=="function" then
+        local a = onRelicCheckWhiteCrystal(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+-- Relic check for white crystal to get blue in aljiba
+function _onRelicCheckWhiteCrystal2(address,len,t)
+    if type(onRelicCheckWhiteCrystal2)=="function" then
+        -- todo: pass current truth value and test
+        local ret = onRelicCheckWhiteCrystal2()
+        
+        -- need to check for nil specifically here
+        if ret ~= nil then
+            local p
+            if ret==true then
+                p = bit.bor(p, 0x02)
+            else
+                p = bit.bor(p, 0x02)-2
+            end
+            memory.setregister("p", p)
+        end
+    end
+end
+
+function _onRelicCheckHeart(address,len,t)
+    if type(onRelicCheckHeart)=="function" then
+        local a = onRelicCheckHeart(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onRelicCheckAll(address,len,t)
+    if type(onRelicCheckAll)=="function" then
+        local a = onRelicCheckAll(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onWindowPrintChar(address,len,t)
+    if type(onWindowPrintChar)=="function" then
+        local a = onWindowPrintChar(t.a)
         if a then memory.setregister("a", a) end
     end
 end
