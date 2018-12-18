@@ -111,6 +111,8 @@
 --    - added some of them
 --  * adjust spawn point at top of screen so enemies don't appear behind the hud.
 --  * bug: getting hit by custom hit object affects block velocity
+--  * bug: some hidden books in berkely mansion give game over
+--  * bug: incorrect next amount
 
 require ".Spidey.TSerial"
 
@@ -174,6 +176,22 @@ game.film = {
     y=0,
     counter=0,
 }
+
+game.debugMenuItems = {
+    {text="Fill HP", action=function()
+        o.player.hp = o.player.maxHp
+        memory.writebyte(0x0080, o.player.hp)
+    end},
+    {text="Fill hearts", action=function()
+        o.player.hearts = o.player.maxHearts
+        setHearts(o.player.hearts)
+    end},
+    {text="Add 1000 gold", action=function()
+        o.player.gold = o.player.gold + 1000
+        memory.writeword(0x7000+1, o.player.gold)
+    end},
+}
+
 
 enableddisabled={[true]="enabled",[false]="disabled"}
 
@@ -258,6 +276,7 @@ mnu.items={
                 area1=memory.readbyte(0x0030),
                 area2=memory.readbyte(0x0050),
                 area3=memory.readbyte(0x0051) % 0x80,
+                areaFlags=memory.readbyte(0x008f),
                 returnArea = memory.readbyte(0x004e),
                 returnScroll1 = memory.readbyte(0x0458),
                 returnScroll2 = memory.readbyte(0x0046a),
@@ -278,9 +297,15 @@ mnu.items={
         action=function()
 
             local out = "local candles = {\n"
-            local formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
+            local formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", item="%s" },\n'
             for _,c in ipairs(candles) do
-                out = out..string.format(formatText, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],c.floor,c.location)
+                if c.item then
+                    formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", item="%s", },\n'
+                    out = out..string.format(formatText, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],c.floor,c.location, c.item)
+                else
+                    formatText = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
+                    out = out..string.format(formatText, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],c.floor,c.location)
+                end
             end
             out=out.."}\n\nreturn candles\n"
             
@@ -606,6 +631,17 @@ if not rom.writebyte then
     end
 end
 
+--            if not spidey.reloadfile() then
+--                spidey.error = function()
+                    --#000040d0
+--                    gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"#807070a0", "#807070a0")
+--                    gui.text(20,40,"ERROR: Could not test MD5 properly. Please \nupgrade FCEUX to at least 2.2.3.", "white", "clear")
+--                end
+--                config.md5=false
+--            end
+
+
+
 if useGD then
     if not pcall(function()
         require "gd"
@@ -823,6 +859,7 @@ o.custom.createCandles = function()
         }
         candle.outscreen = true
         candle.floor = v.floor
+        candle.item = v.item
     end
 end
 
@@ -1566,6 +1603,7 @@ function warpPlayer(w)
     area1=w.area1
     area2=w.area2
     area3=w.area3
+    areaFlags=w.areaFlags or areaFlags
     returnArea=w.returnArea
     returnScroll1=w.returnScroll1
     returnScroll2=w.returnScroll2
@@ -1579,6 +1617,7 @@ function warpPlayer(w)
     memory.writebyte(0x0030, area1)
     memory.writebyte(0x0050, area2)
     memory.writebyte(0x0051, area3)
+    memory.writebyte(0x008f, areaFlags)
     memory.writebyte(0x004e, returnArea)
     memory.writebyte(0x0458, returnScroll1)
     memory.writebyte(0x046a, returnScroll2)
@@ -1907,8 +1946,29 @@ function drawSubScreen()
         if spidey.counter %4<3 and not subScreen.showClues and not subScreen.showRelics then
             gfx.draw(x+28+4,y+28+8*(3+subScreen.subMenu.y*2),gfx.arrowcursorRight)
         end
-
         
+    end
+    if subScreen.showDebug then
+        local borderColor = "#ff3030"
+        local x=2
+        local y=5
+        local h = 20
+        local w = 26
+        gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
+        gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
+        gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
+        
+        drawfont(x+28,y+28+1,font[subScreenFont], "Debug")
+        for i=1+subScreen.subMenu.scrollY,8+subScreen.subMenu.scrollY do
+            local y2 = i-subScreen.subMenu.scrollY
+            if game.debugMenuItems[i] then
+                drawfont(x+28+8*3,y+28+8*(1+y2*2),font[itemFont], game.debugMenuItems[i].text)
+            end
+        end
+
+        if spidey.counter %4<3 then
+            gfx.draw(x+28+4,y+28+8*(3+subScreen.subMenu.y*2),gfx.arrowcursorRight)
+        end
     end
     
     if spidey.debug.enabled then
@@ -1945,6 +2005,7 @@ function enterSubScreen()
     subScreen.showClues = false
     subScreen.showRelics = false
     subScreen.showItems = false
+    subScreen.showDebug = false
     game.map.visible = false
 
 
@@ -1966,6 +2027,7 @@ function exitSubScreen()
     subScreen.showClues = false
     subScreen.showRelics = false
     subScreen.showItems = false
+    subScreen.showDebug = false
     game.map.visible = false
     if hasRelic(subScreen.relic) then
         relics.current=subScreen.relic or 0
@@ -4785,7 +4847,7 @@ function spidey.update(inp,joy)
         if not subScreen.cursorX then enterSubScreen() end
         if joy[1].up_press then
             if subScreen.showClues or game.map.visible then
-            elseif subScreen.showRelics or subScreen.showItems then
+            elseif subScreen.showRelics or subScreen.showItems or subScreen.showDebug then
                 if subScreen.subMenu.y==0 and subScreen.subMenu.scrollY>0 then
                     subScreen.subMenu.scrollY=subScreen.subMenu.scrollY-1
                 end
@@ -4796,7 +4858,7 @@ function spidey.update(inp,joy)
         end
         if joy[1].down_press then
             if subScreen.showClues or game.map.visible then
-            elseif subScreen.showRelics or subScreen.showItems then
+            elseif subScreen.showRelics or subScreen.showItems or subScreen.showDebug then
                 if subScreen.subMenu.y==7 then
                     subScreen.subMenu.scrollY=subScreen.subMenu.scrollY+1
                 end
@@ -4810,14 +4872,14 @@ function spidey.update(inp,joy)
                 subScreen.clue=subScreen.clue-1
                 --if subScreen.clue<1 then subScreen.clue = #subScreen.clues end
                 if subScreen.clue<1 then subScreen.clue = 1 end
-            elseif subScreen.showRelics or subScreen.showItems then
+            elseif subScreen.showRelics or subScreen.showItems or subScreen.showDebug then
                 if subScreen.subMenu.scrollY -8>= 0 then
                     subScreen.subMenu.scrollY=subScreen.subMenu.scrollY-8
                 else
                     subScreen.subMenu.scrollY=0
                 end
             else
-                subScreen.cursorX = subScreen.cursorX - 1
+                --subScreen.cursorX = subScreen.cursorX - 1
             end
         end
         if joy[1].right_press then
@@ -4825,10 +4887,10 @@ function spidey.update(inp,joy)
                 subScreen.clue=subScreen.clue+1
                 --if subScreen.clue>#subScreen.clues then subScreen.clue=1 end
                 if subScreen.clue> 13 then subScreen.clue=13 end
-            elseif subScreen.showRelics or subScreen.showItems then
+            elseif subScreen.showRelics or subScreen.showItems or subScreen.showDebug then
                 subScreen.subMenu.scrollY=subScreen.subMenu.scrollY+8
             else
-                subScreen.cursorX = subScreen.cursorX + 1
+                --subScreen.cursorX = subScreen.cursorX + 1
             end
         end
         if joy[1].A_press then
@@ -4844,6 +4906,12 @@ function spidey.update(inp,joy)
             if subScreen.showClues then
                 subScreen.showClues = false
             end
+            if subScreen.showDebug then
+                subScreen.showDebug = false
+            end
+        end
+        if joy[1].select_press then
+            subScreen.showDebug = not subScreen.showDebug
         end
         if joy[1].B_press then
             --if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
@@ -4902,7 +4970,14 @@ function spidey.update(inp,joy)
                 end
                 subScreen.showItems = not subScreen.showItems
             end
-            
+            if subScreen.showDebug then
+                local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
+                local item = game.debugMenuItems[i]
+                if item.action then
+                    item.action()
+                    subScreen.showDebug = false
+                end
+            end
         end
 --        if subScreen.cursorY == 0 and subScreen.cursorX > 1 then subScreen.cursorX = 1 end
 --        if subScreen.cursorY == 1 and subScreen.cursorX > 8 then subScreen.cursorX = 8 end
@@ -6194,6 +6269,8 @@ function spidey.update(inp,joy)
             c.active=1
             c.floor = o.player.y+scrolly+12
             c.location = displayarea
+            c.item = config.candleItem
+            
             candles[#candles+1] = c
             
             if i then
@@ -6205,6 +6282,7 @@ function spidey.update(inp,joy)
                 o.custom[i].active=1
                 --o.custom[i].floor = o.player.y+12
                 o.custom[i].floor = c.floor
+                o.custom[i].item = c.item
             end
             --local txt = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
             
@@ -6367,7 +6445,11 @@ function spidey.update(inp,joy)
                         o.custom[i].destroy = true
                         playSound(0x04)
                         local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
-                        obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+                        if o.custom[i].item then
+                            obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName=o.custom[i].item}
+                        else
+                            obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+                        end
                         --obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName="Gold"}
 --                        floor = o.custom[i].floor
                         --local h = createObject("heart",o.custom[i].x, o.custom[i].y)
@@ -7181,7 +7263,7 @@ function spidey.draw()
     
     if action and config.testStats then
         local stats= getStats()
-        gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def),"white","#00002080")
+        gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d\nexp %d, next %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def, o.player.exp, o.player.expNext),"white","#00002080")
     end
     
     if game.md5Data and game.md5Data.md5 then

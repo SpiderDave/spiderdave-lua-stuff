@@ -9,6 +9,9 @@ music=true
 // Allow debugging stuff.  Setting this to false removes the select menu.
 debug = false
 
+// Allow new debug menu.  Press select while on the pause menu to access.
+debugMenu = false
+
 // display hitboxes
 hitboxes=false
 
@@ -21,6 +24,9 @@ hitboxes=false
 // Enable candle editing mode.  Double-click to place a candle.
 editCandles = false
 
+// Set the item to place in candle editing mode.  If ommited, defaults to heart.
+//candleItem = Gold
+
 // turn on quick day/night transition
 quickDayNight=true
 
@@ -28,7 +34,7 @@ quickDayNight=true
 stairsFix=false
 
 // turn on stuff to test stats and damage specifically
-testStats = false
+testStats = true
 
 // Fix it so your jumping x or y velocity doesn't change based 
 // on the velocity of a moving platform.

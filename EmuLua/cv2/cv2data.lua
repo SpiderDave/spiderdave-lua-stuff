@@ -184,9 +184,9 @@ cv2.enemies = {
     [0x2D] = {name="Priest", exp=0, hp=0},
     [0x2E] = {name="Merchant", exp=0, hp=0},
     [0x2F] = {name="Town Knight", exp=0, hp=0},
-    [0x30] = {name="Fireball", exp=0},
-    [0x31] = {name="Fireball", exp=0},
-    [0x32] = {name="Fireball (from flame man)", exp=0},
+    [0x30] = {name="Fireball", exp=0, hp="initial"},
+    [0x31] = {name="Fireball", exp=0, hp="initial"},
+    [0x32] = {name="Fireball (from flame man)", exp=0, hp="initial"},
     [0x33] = {
         name="Spider Web",
         exp=0,

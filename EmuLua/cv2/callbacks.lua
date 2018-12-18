@@ -740,7 +740,7 @@ function _onRelicCheckWhiteCrystal2(address,len,t)
             if ret==true then
                 t.p = bit.bor(t.p, 0x02)
             else
-                t.p = bit.bor(p, 0x02)-2
+                t.p = bit.bor(t.p, 0x02)-2
             end
             memory.setregister("p", t.p)
         end
