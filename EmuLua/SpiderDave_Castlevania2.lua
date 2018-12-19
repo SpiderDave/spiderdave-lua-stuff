@@ -1,7 +1,5 @@
 -- Castlevania 2 Lua script by SpiderDave
 --
--- 2018.12.11
---
 -- Changes:
 --  * Message speed increased
 --  * New patterns for Dracula (needs work and balancing)
@@ -113,6 +111,7 @@
 --  * bug: getting hit by custom hit object affects block velocity
 --  * bug: some hidden books in berkely mansion give game over
 --  * bug: incorrect next amount
+--  * bug: (real) hearts are collectable still if you're fast enough.  This can trigger level ups.
 
 require ".Spidey.TSerial"
 
@@ -1236,7 +1235,7 @@ function getItem(n, showMessage, delay)
         updateItems()
     end
     --if showMessage then emu.message(string.format("you got %s", item.name)) end
-    if showMessage then createItemPopUp(item.name) end
+    if showMessage then createItemPopUp(item.shortName) end
 end
 
 function sortItems()
@@ -6491,7 +6490,11 @@ function spidey.update(inp,joy)
                         playSound(0x04)
                         local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
                         if o.custom[i].item then
-                            obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName=o.custom[i].item}
+                            if hasInventoryItem(o.custom[i].item) then
+                                obj.item = {type="bigheart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+                            else
+                                obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName=o.custom[i].item}
+                            end
                         else
                             obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
                         end
@@ -6525,7 +6528,7 @@ function spidey.update(inp,joy)
                 if o.custom[i].alivetime > 55 then
                     o.custom[i].destroy=1
                 end
-            elseif o.custom[i].type=="heart" then
+            elseif o.custom[i].type=="heart" or o.custom[i].type=="bigheart" then
                 gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, gfx.cv2heart)
                 --o.custom[i].ys=o.custom[i].ys+.1
 
@@ -6557,7 +6560,11 @@ function spidey.update(inp,joy)
                     if config.candlesRealHearts then
                         getheart()
                     else
-                        addHearts(1)
+                        if o.custom[i].type=="bigheart" then
+                            addHearts(5)
+                        else
+                            addHearts(1)
+                        end
                         playSound(0x1f)
                     end
                 end

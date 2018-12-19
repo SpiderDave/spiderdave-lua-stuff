@@ -186,10 +186,12 @@ local items = {
     {
         name = "Potion",
         type = "food",
+        hp=30,
     },
     {
         name = "Elixir",
         type = "food",
+        hp=100,
     },
     {
         name = "Gold Ring",

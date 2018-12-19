@@ -670,6 +670,8 @@ cv2.placedItems = {
     {x=0xb8, y=0x9d, area = {0x00,0x07,0x00, 0x00}, name="Axe", location="church in jova."},
 }
 
+cv2.placedItems = {} -- disabled
+
 cv2.candles = {
 }
 
