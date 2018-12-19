@@ -104,3 +104,6 @@ boneJuggle = false
 // Set to true to perform a md5 check on the rom.  This will help make sure you 
 // have the correct one (No-Intro).
 md5=false
+
+// Set to true to use non-blinking cursors.
+//noBlinkCursor=true

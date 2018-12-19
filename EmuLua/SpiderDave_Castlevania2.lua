@@ -1775,8 +1775,7 @@ function drawSubScreen()
 --        gui.drawbox(x+28+(subScreen.relic*16-16)-2,y+28+8*10-2,x+28+(subScreen.relic*16-16)+8+1,y+28+8*10+8+1,"clear","#0070ec")
 --    end
     --if subScreen.cursorY==0 or spidey.counter % 3==0 then
-    
-    if spidey.counter %4<3 and not subScreen.showClues and not subScreen.showRelics then
+    if ((spidey.counter %4<3) or config.noBlinkCursor) and not subScreen.showClues and not subScreen.showRelics then
         gfx.draw(x+28+4,y+28+8*8+16*subScreen.cursorY,gfx.arrowcursorRight)
         --gui.drawbox(x+28+(subScreen.cursorX*16-16)-2,y+28+8*8-2+16*subScreen.cursorY,x+28+(subScreen.cursorX*16-16)+8+1,y+28+8*8+8+1+16*subScreen.cursorY,"clear","blue")
     end
@@ -1962,7 +1961,7 @@ function drawSubScreen()
         subScreen.subMenu.y = subScreen.subMenu.y or 0
         
         --gui.drawbox(x+28,y+28+8*(3+subScreen.subMenu.y*2)-4,x+28+8*15,y+28+8*(3+subScreen.subMenu.y*2)+8+4,"clear","blue")
-        if spidey.counter %4<3 and not subScreen.showClues and not subScreen.showRelics then
+        if ((spidey.counter %4<3) or config.noBlinkCursor) and not subScreen.showClues and not subScreen.showRelics then
             gfx.draw(x+28+4,y+28+8*(3+subScreen.subMenu.y*2),gfx.arrowcursorRight)
         end
         
@@ -1985,7 +1984,7 @@ function drawSubScreen()
             end
         end
 
-        if spidey.counter %4<3 then
+        if (spidey.counter %4<3) or config.noBlinkCursor then
             gfx.draw(x+28+4,y+28+8*(3+subScreen.subMenu.y*2),gfx.arrowcursorRight)
         end
     end
@@ -3026,14 +3025,16 @@ function onCreateEnemy(i,enemyType)
     
     if enemyType==0x26 and hasInventoryItem("Sacred Flame") then enemyType=0 end
     
-    -- Zombie
---    time1=memory.readbyte(0x0086),
---    time2=memory.readbyte(0x0085),
-
     -- grace period to despawn zombies when it turns to night in town
     if inTown and enemyType==0x17 and hour==18 and minute <=15 then 
         enemyType=0
     end
+    
+--    if inTown and areaFlags==0 and hour==17 then
+--        if enemyType>=0x28 and enemyType<=0x2f then enemyType=0 end
+--        if enemyType==0x35 then enemyType=0 end
+--    end
+    
     
     -- 27 = clue
     if enemyType==0x27 then
@@ -3075,6 +3076,15 @@ function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
         --enemyType = 0x10
         memory.writebyte(0x03ba+enemyIndex,enemyType)
     end
+    
+    -- Town npcs don't spawn when it's close to night.
+    if inTown and areaFlags==0 and hour==17 and minute>=15 then
+        if (enemyType>=0x28 and enemyType<=0x2f) or enemyType==0x35 then
+            enemyType=0
+            memory.writebyte(0x03ba+enemyIndex,enemyType)
+        end
+    end
+    
     
     if enemyName=="Blob" then
         enemyY=enemyY+8+5
@@ -4594,7 +4604,7 @@ function spidey.update(inp,joy)
         end
         game.film.scroll = (game.film.scroll + 2) % 14
         gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
-        gui.drawbox(0+8*2, 0, spidey.screenWidth-1-8*2, spidey.screenHeight-1, spidey.nes.palette[0x0c], spidey.nes.palette[0x0c])
+        gui.drawbox(0+8*2, 0, spidey.screenWidth-1-8*2, spidey.screenHeight-1, "P0c", "P0c")
         --emu.message(string.format("%s", spidey.nes.palette[0x0c]))
         for i=1,17 do
             gui.drawbox(0+8*2+6,i*7*2-game.film.scroll, 0+8*2+6+11,i*7*2+7-game.film.scroll, "black", "black")

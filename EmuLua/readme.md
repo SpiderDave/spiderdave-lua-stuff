@@ -1,7 +1,14 @@
-Emulator Lua scripts for use with FCEUX.  Make sure you have an updated version of FCEUX.
+Emulator Lua scripts for use with FCEUX.  The current version of FCEUX on the home page is 2 years out of date, and does not work properly with this script.  Grab a more recent version here: https://ci.appveyor.com/project/zeromus/fceux/build/artifacts
+
+You will need:
+* Windows
+* FCEUX
+* Castlevania 2 Rom (No-intro version)
+* The script (or just run update.exe).
 
 How to use:
-* Copy everything in this "EmuLua" folder into the "LuaScripts" folder inside the FCEUX folder.
+* Place the "update.exe" file in the "LuaScripts" folder inside the FCEUX folder.
+* Run "update.exe" and press "Update" button.
 * Run FCEUX
 * "File" --> "Open Rom... --> "Castlevania II - Simon's Quest (USA).nes"
 * "File" --> "Lua" --> "New Lua Script Window..." --> "Browse..." --> (select a script such as SpiderDave_Castlevania2.lua) --> "Run"
