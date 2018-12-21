@@ -826,7 +826,15 @@ o.weapons[2]={}
 
 o.custom={}
 o.custom.count=500
-o.custom.destroyall=function() for _i=0,o.custom.count-1 do o.custom[_i].active=0 end end
+o.custom.destroyall=function()
+    for _i=0,o.custom.count-1 do
+        if o.custom[_i].deSpawn then
+            o.custom[_i].deSpawn()
+        end
+        --o.custom[_i].active=0
+        o.custom[_i] = {active=0}
+    end
+end
 for i=0,o.custom.count-1 do
     o.custom[i]={type='',active=0,x=0,y=0}
 end
@@ -835,7 +843,6 @@ o.custom.isOnScreen=function(i)
     if not o.custom[i].area then return false end
     return (area1==o.custom[i].area[1] and area2==o.custom[i].area[2] and area3==o.custom[i].area[3] and areaFlags==(o.custom[i].area[4] or areaFlags))
 end
-
 
 function saveCandles()
     local out = "local candles = {\n"
@@ -6636,6 +6643,10 @@ function spidey.update(inp,joy)
 
                 if o.custom[i].alivetime>=80 then
                     o.custom[i].active = 0
+                end
+                o.custom[i].deSpawn = function()
+                    o.player.hp = o.player.maxHp
+                    memory.writebyte(0x0080, o.player.hp)
                 end
             elseif o.custom[i].type=="poisonDrip" then
                 local target = o.custom[i].target
