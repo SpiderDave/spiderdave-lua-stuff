@@ -831,7 +831,6 @@ o.custom.destroyall=function()
         if o.custom[_i].deSpawn then
             o.custom[_i].deSpawn()
         end
-        --o.custom[_i].active=0
         o.custom[_i] = {active=0}
     end
 end
@@ -2662,7 +2661,7 @@ function addExp(n)
     local need = getExpNeeded()
     
     --if e>=need then
-    if getExpNeeded()-n <=0 then
+    if need-n <=0 then
         --getheart()
         
         --emu.message("level up!")
@@ -2670,7 +2669,8 @@ function addExp(n)
         createLevelUpText()
         playSound(0x27)
         
-        e=e-need
+        e=e-getTotalExpNeeded()
+        
         o.player.level = math.min(o.player.level+1, 99)
         memory.writebyte(0x008b, o.player.level)
     end
@@ -3493,18 +3493,23 @@ function onExpGain(e)
     return e
 end
 
+function getTotalExpNeeded(level)
+    level = level or o.player.level
+    --do return 10 end
+    return level*50+100
+end
+
 function getExpNeeded(level)
     level = level or o.player.level
     --do return 10 end
     return level*50+100 - o.player.exp
 end
 
-
 function getCurrentExp()
+    --spidey.message(o.player.exp)
     local exp = o.player.exp
-    --if i==0 then return exp end
     for i=0, o.player.level-1 do
-       exp=exp + getExpNeeded(i)
+       exp=exp + getTotalExpNeeded(i)
     end
     return exp
 end
@@ -7326,7 +7331,7 @@ function spidey.draw()
     
     if action and config.testStats then
         local stats= getStats()
-        gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d\nexp %d, next %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def, o.player.exp, o.player.expNext),"white","#00002080")
+        gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d\nexp %d, next %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def, getCurrentExp(), o.player.expNext),"white","#00002080")
     end
     
     if game.md5Data and game.md5Data.md5 then
