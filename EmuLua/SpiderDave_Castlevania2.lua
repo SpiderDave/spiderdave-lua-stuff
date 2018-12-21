@@ -5015,7 +5015,7 @@ function spidey.update(inp,joy)
             if subScreen.showDebug then
                 local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
                 local item = game.debugMenuItems[i]
-                if item.action then
+                if item and item.action then
                     item.action()
                     subScreen.showDebug = false
                 end
