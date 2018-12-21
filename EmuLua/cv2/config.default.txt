@@ -34,7 +34,7 @@ quickDayNight=true
 stairsFix=false
 
 // turn on stuff to test stats and damage specifically
-testStats = true
+testStats = false
 
 // Fix it so your jumping x or y velocity doesn't change based 
 // on the velocity of a moving platform.

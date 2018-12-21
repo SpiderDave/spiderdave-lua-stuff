@@ -113,13 +113,14 @@ local function objects()
         active = memory.readbyte(0x3D8 + i)
         isoob = memory.readbyte(oob + i)
         etype = memory.readbyte(0x3B4 +i)
+        local index = i-6
+        local subType=""
         if etype > 0 and etype ~= 0x43 and etype ~= 0x1E and etype ~= 0x2A then
             box = buildbox(i)
             x = memory.readbyte(ex + i)
             y = memory.readbyte(ey + i)
             l = memory.readbyte(el + i)
             if hasbit(active,findbit(1)) and not hasbit(active,findbit(8)) then  -- Enemy
-                
                 if bit.rshift(bit.band(isoob,0xF0),4) ~= 8 and bit.rshift(bit.band(isoob,0xF0),4) ~= 4 then  -- If not offscreen
                     if show_elife == true then
                         gui.text(x-8,y-28,"HP: " .. l)
@@ -127,10 +128,11 @@ local function objects()
                 end
                 fill = "#FF000040"
                 outl = "#FF0000FF"
+                subType = "Enemy"
             elseif hasbit(active,findbit(8)) and hasbit(active,findbit(1)) then -- Hidden enemy, no active box
                 outl = "#FF000040"
                 fill = "#FF000000"
-                
+                subType = "Inactive"
                 if bit.rshift(bit.band(isoob,0xF0),4) ~= 8 and bit.rshift(bit.band(isoob,0xF0),4) ~= 4 then  -- If not offscreen
                     if show_elife == true then
                         gui.text(x-8,y-28,"HP: " .. l)
@@ -139,23 +141,30 @@ local function objects()
             elseif hasbit(active,findbit(8)) and hasbit(active,findbit(2)) then  -- Simon's projectiles
                 outl = "#00FFFFFF"
                 fill = "#00FFFF40"
+                index = i-3
+                subType = "SimonProjectile"
             elseif not hasbit(active,findbit(8)) and hasbit(active,(2)) then -- Enemy projectile
                 outl = "#FFFF00FF"
                 fill = "#FFFF0040"
+                subType = "EnemyProjectile"
             elseif hasbit(active,findbit(8)) and not hasbit(active,findbit(2)) then  -- Inactive box
                 outl = 0
                 fill = 0
             elseif hasbit(active,findbit(7)) then -- NPC
                 outl = "#FF00FFFF"
                 fill = "#FF00FF40"
+                subType = "NPC"
             elseif hasbit(active,findbit(3)) then -- Item pickups
                 outl = "#FFA500FF"
                 fill = "#FFA50040"
+                subType = "Item"
             end
             if bit.rshift(bit.band(isoob,0xF0),4) ~= 8 and bit.rshift(bit.band(isoob,0xF0),4) ~= 4 then  -- If not offscreen
                 --gui.box(x - box[3],y+box[1]+box[2],x+box[3],y+box[1]-box[2],fill,outl)
                 hb.object[i] = {
                     type = "object",
+                    subType=subType,
+                    index = index,
                     color = {fill, outl},
                     rect={x - box[3],y+box[1]+box[2],x+box[3],y+box[1]-box[2]},
                 }
@@ -171,6 +180,7 @@ hitboxes.draw = function()
     local drawHitBox = function(object)
         if object and object.rect then
             gui.box(object.rect[1],object.rect[2],object.rect[3],object.rect[4],object.color[1],object.color[2])
+            --gui.text(object.rect[1],object.rect[2],string.format("%02x",object.index or 0),"white")
         end
     end
     

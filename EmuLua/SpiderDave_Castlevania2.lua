@@ -865,6 +865,13 @@ end
 function collision(t1,t2)
     if not t1 or not t2 then return end
     if #t1+#t2 ~=8 then return end
+    
+    if t1[1]>t1[3] then t1[1],t1[3] = t1[3],t1[1] end
+    if t1[2]>t1[4] then t1[2],t1[4] = t1[4],t1[2] end
+    
+    if t2[1]>t2[3] then t2[1],t2[3] = t2[3],t2[1] end
+    if t2[2]>t2[4] then t2[2],t2[4] = t2[4],t2[2] end
+    
     return t1[1] < t2[3] and
          t2[1] < t1[3] and
          t1[2] < t2[4] and
@@ -5812,10 +5819,9 @@ function spidey.update(inp,joy)
         
         if o[i].type==0x44 then --Death
             o.boss.maxHp = 128
-            if o.player.hasgoldendagger and not refight_bosses then
+            if hasInventoryItem("Golden Knife") and not refight_bosses then
                 --Only fight boss once
-                o[i].type=0
-                o[i].frame=0
+                o[i].destroy=true
             end
                 if config.deathAI then
                     o[i].skullc = ((o[i].skullc or 0) +1) % 1000
@@ -5858,7 +5864,7 @@ function spidey.update(inp,joy)
             o.boss.maxHp=240
             if hasInventoryItem("Cross") and not refight_bosses then
                 --Only fight boss once
-                --o[i].destroy = true
+                o[i].destroy = true
             end
             
             --gui.text(8,8*2, string.format("%02x %02X %02X",i,o[i].state,o[i].state2,o[i].statecounter))
@@ -6506,7 +6512,11 @@ function spidey.update(inp,joy)
                         gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
                     end
                     
-                    if collision(rect, hitboxes.whip.rect) then
+                    o.custom[i].hitbox = rect
+                    
+                    --if collision(rect, hitboxes.whip.rect) then
+                    
+                    o.custom[i].getHit = function()
                         o.custom[i].destroy = true
                         playSound(0x04)
                         local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
@@ -6524,7 +6534,6 @@ function spidey.update(inp,joy)
                         --local h = createObject("heart",o.custom[i].x, o.custom[i].y)
                         --h.floor = o.custom[i].floor
                     end
-
                 end
             elseif o.custom[i].type=="holyfire" then
                 o.custom[i].frame = o.custom[i].frame or 0
@@ -6756,6 +6765,14 @@ function spidey.update(inp,joy)
                         end
                     end
                 end
+                
+                local x=o.custom[i].x-scrollx
+                local y=o.custom[i].y-scrolly
+                local rect = {x-8,y-20,x+9,y+0}
+                o.custom[i].attackbox = rect
+                
+                if config.hitboxes or spidey.debug.enabled then gui.box(rect[1],rect[2],rect[3],rect[4],"#ff400060", "#ff400080") end
+                
             elseif o.custom[i].type=="bigbat" then
                 o.custom[i].outscreen=true
                 f=math.floor(o.custom[i].alivetime/10) % 2+1
@@ -6813,9 +6830,11 @@ function spidey.update(inp,joy)
                 local x=o.custom[i].x-scrollx
                 local y=o.custom[i].y-scrolly
                 local rect = {x-5,y-4-8,x+9,y+7-4}
+                o.custom[i].hitbox = rect
+                
                 if config.hitboxes or spidey.debug.enabled then gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80") end
                 
-                if collision(rect, hitboxes.whip.rect) then
+                o.custom[i].getHit = function()
                     o.custom[i].die = true
                     o.custom[i].deathSound = 0x1a
                     o.custom[i].item = {type="poof", x=o.custom[i].x-4, y=o.custom[i].y-10}
@@ -6867,6 +6886,23 @@ function spidey.update(inp,joy)
                 end
             else
                 gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
+            end
+            
+            --if collision(rect, hitboxes.whip.rect) then
+            if o.custom[i].hitbox and o.custom[i].getHit then
+                local getHit=false
+                if collision(o.custom[i].hitbox, hitboxes.whip.rect) then getHit=true end
+                
+                for ii = 2,19 do
+                    local hb=hitboxes.object[ii] or {}
+                    if hb.subType=="SimonProjectile" and collision(o.custom[i].hitbox, hb.rect) then getHit=true end
+                end
+                
+                for k,v in ipairs(o.custom) do
+                    if v.attackbox and collision(o.custom[i].hitbox, v.attackbox) then getHit=true end
+                end
+                
+                if getHit then o.custom[i].getHit() end
             end
             
             if o.custom[i].destroy then
