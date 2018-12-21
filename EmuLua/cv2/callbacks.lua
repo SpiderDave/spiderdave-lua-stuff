@@ -154,7 +154,8 @@ registerExec(0x86f2, 1,1,"onRelicCheckHeart")
 registerExec(0xa8fe+2, 1,1,"onRelicCheckAll")
 registerExec(0xf5e2, 7,1,"onWindowPrintChar")
 
-
+registerExec(0x87c9,1,1,"onGetGoldenKnife")
+registerExec(0x87cf,1,1,"onGetSacredFlame")
 
 
 
@@ -768,3 +769,11 @@ function _onWindowPrintChar(address,len,t)
     end
 end
 
+
+function _onGetGoldenKnife(address,len,t)
+    if type(onGetGoldenKnife)=="function" then onGetGoldenKnife() end
+end
+
+function _onGetSacredFlame(address,len,t)
+    if type(onGetSacredFlame)=="function" then onGetSacredFlame() end
+end

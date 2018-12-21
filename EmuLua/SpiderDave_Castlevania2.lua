@@ -2454,6 +2454,17 @@ function onGetSilverKnife()
     getItem("Silver Knife", true, true) -- Delayed
 end
 
+function onGetGoldenKnife()
+    if hasInventoryItem("Golden Knife") then return end
+    getItem("Golden Knife", true, true) -- Delayed
+end
+
+function onGetSacredFlame()
+    if hasInventoryItem("Sacred Flame") then return end
+    getItem("Sacred Flame", true, true) -- Delayed
+end
+
+
 
 function onUseLaurel(n)
     removeItem("Laurel", 1)
@@ -3811,10 +3822,10 @@ memory.registerexec(0x8799,1, function()
 end)
 
 -- get sacred flame
-memory.registerexec(0x87d1,1, function()
+--memory.registerexec(0x87d1,1, function()
     --local a,x,y,s,p,pc=memory.getregisters()
-    getItem("Sacred Flame", true)
-end)
+--    getItem("Sacred Flame", true)
+--end)
 
 -- character printing; change heart to "G" in messages
 function onWindowPrintChar(c)
@@ -5806,22 +5817,24 @@ function spidey.update(inp,joy)
                 o[i].type=0
                 o[i].frame=0
             end
-                o[i].skullc = ((o[i].skullc or 0) +1) % 1000
-                o[i].y=o[i].y+math.cos(o[i].skullc *.03)*2
-                o[i].x=o[i].x+math.sin(o[i].skullc *.01)*1
-                o[i].y=o[i].y+math.cos(emu.framecount()*.09)*1
-                o[i].x=o[i].x+math.sin(emu.framecount()*.09)*1
-                n=40
-                if o[i].x<0+n then o[i].x=0+n end
-                if o[i].x>255-n then o[i].x=255-n end
-                if o[i].y<0+n then o[i].y=0+n end
-                if o[i].y>255-n then o[i].y=255-n end
-                memory.writebyte(0x0348+6+i,o[i].x)
-                memory.writebyte(0x0324+6+i,o[i].y)
+                if config.deathAI then
+                    o[i].skullc = ((o[i].skullc or 0) +1) % 1000
+                    o[i].y=o[i].y+math.cos(o[i].skullc *.03)*2
+                    o[i].x=o[i].x+math.sin(o[i].skullc *.01)*1
+                    o[i].y=o[i].y+math.cos(emu.framecount()*.09)*1
+                    o[i].x=o[i].x+math.sin(emu.framecount()*.09)*1
+                    n=40
+                    if o[i].x<0+n then o[i].x=0+n end
+                    if o[i].x>255-n then o[i].x=255-n end
+                    if o[i].y<0+n then o[i].y=0+n end
+                    if o[i].y>255-n then o[i].y=255-n end
+                    memory.writebyte(0x0348+6+i,o[i].x)
+                    memory.writebyte(0x0324+6+i,o[i].y)
+                    memory.writebyte(0x03ba+i,o[i].type)
+                    memory.writebyte(0x0306+i,o[i].frame)
+                end
                 
                 o.player.bossdoor()
-                memory.writebyte(0x03ba+i,o[i].type)
-                memory.writebyte(0x0306+i,o[i].frame)
         end
         
         if o[i].type==0x48 and false then --drac weapon
@@ -5837,19 +5850,15 @@ function spidey.update(inp,joy)
         end
         
         if o[i].type==0x49 then -- magic cross item
-            if hasInventoryItem("Cross") then
-                o[i].type=0
-                o[i].frame=0
-                memory.writebyte(0x03ba+i,o[i].type)
-                memory.writebyte(0x0306+i,o[i].frame)
-            end
+            if hasInventoryItem("Cross") and displayarea=="Laruba" then o[i].destroy = true end
+            if hasInventoryItem("Golden Knife") and displayarea=="Brahm" then o[i].destroy = true end
         end
         
         if o[i].type==0x42 then --Carmilla (mask boss)
             o.boss.maxHp=240
             if hasInventoryItem("Cross") and not refight_bosses then
                 --Only fight boss once
-                o[i].destroy = true
+                --o[i].destroy = true
             end
             
             --gui.text(8,8*2, string.format("%02x %02X %02X",i,o[i].state,o[i].state2,o[i].statecounter))
