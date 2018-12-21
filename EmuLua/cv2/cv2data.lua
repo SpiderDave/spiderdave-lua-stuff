@@ -136,7 +136,7 @@ cv2.enemies = {
         name="Werewolf",
         exp=2,
         attack = 8,
-        hp = 35,
+        hp = 10,
     },
     [0x14] = {name="Mansion Zombie", exp=1},
     [0x15] = {
