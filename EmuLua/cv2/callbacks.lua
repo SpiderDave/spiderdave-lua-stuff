@@ -153,7 +153,6 @@ registerExec(0x9071+2, 1,1,"onRelicCheckWhiteCrystal2")
 registerExec(0x86f2, 1,1,"onRelicCheckHeart")
 registerExec(0xa8fe+2, 1,1,"onRelicCheckAll")
 registerExec(0xf5e2, 7,1,"onWindowPrintChar")
-
 registerExec(0x87c9,1,1,"onGetGoldenKnife")
 registerExec(0x87cf,1,1,"onGetSacredFlame")
 

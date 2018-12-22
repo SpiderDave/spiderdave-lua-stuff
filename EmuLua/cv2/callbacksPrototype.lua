@@ -236,3 +236,15 @@ end
 function onWhipOrSubWeapon(isSubWeapon)
     return isSubWeapon
 end
+
+-- Called when getting the sacred flame
+function onGetSacredFlame()
+end
+
+-- Called when getting the silver knife.
+function onGetSilverKnife()
+end
+
+-- Called when getting the golden knife.
+function onGetGoldenKnife()
+end

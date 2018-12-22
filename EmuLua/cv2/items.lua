@@ -247,6 +247,13 @@ local items = {
         damageReduction = 1,
         desc = "Reduce all damage by 1.",
     },
+    {
+        name = "Soul of Bat",
+        type = "accessory",
+        damageReduction = 1,
+        palette = {0x0f, 0x0f, 0x13, 0x35},
+        desc = "Bat Mode.",
+    },
 }
 
 

@@ -176,21 +176,77 @@ game.film = {
     counter=0,
 }
 
+local subScreen = {}
+subScreen.subMenu={x=0, y=0, scrollY=0}
+
+subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
+subScreen.clue = 1
+
+game.setDebugMenuTab = function(tab)
+    game.debugMenuTab = tab
+    subScreen.subMenu.y = 0
+    subScreen.subMenu.scrollY = 0
+end
+
 game.debugMenuItems = {
-    {text="Fill HP", action=function()
+    {tab="main", text="Cheats", action=function()
+        game.setDebugMenuTab("cheats")
+    end},
+    {tab="main", text="Debug", action=function()
+        game.setDebugMenuTab("debug")
+    end},
+    {tab="cheats", text="Fill HP", action=function()
         o.player.hp = o.player.maxHp
         memory.writebyte(0x0080, o.player.hp)
     end},
-    {text="Fill hearts", action=function()
+    {tab="cheats", text="Fill hearts", action=function()
         o.player.hearts = o.player.maxHearts
         setHearts(o.player.hearts)
     end},
-    {text="Add 1000 gold", action=function()
+    {tab="cheats", text="Add 1000 gold", action=function()
         o.player.gold = o.player.gold + 1000
         memory.writeword(0x7000+1, o.player.gold)
     end},
+    {tab="cheats", text=function() return "No Enemies "..(config.noEnemies and "on" or "off") end, action=function()
+        config.noEnemies = not config.noEnemies
+    end},
+
+    {tab="-cheats", text=function() return "Save Slot "..game.saveSlot end, action=function()
+    end},
+    
+    {tab="-cheats", text=function() return "Load Game - slot "..game.saveSlot end, action=function()
+        loadGame(game.saveSlot, true)
+    end},
+    {tab="-cheats", text=function() return "Save Game - slot "..game.saveSlot end, action=function()
+        saveGame(game.saveSlot)
+    end},
+
+    {tab="debug", text=function() return "Candle Edit Mode "..(config.editCandles and "on" or "off") end, action=function()
+        config.editCandles = not config.editCandles
+    end},
+    {tab="debug", text=function() return "Candle Item "..(config.candleItem or "heart") end, action=function()
+        game.setDebugMenuTab("candleitem")
+    end},
+    {tab="debug", text=function() return "Show Hitboxes "..(config.hitboxes and "on" or "off") end, action=function()
+        config.hitboxes = not config.hitboxes
+    end},
+    {tab="debug", text=function() return "Show Stats "..(config.testStats and "on" or "off") end, action=function()
+        config.testStats = not config.testStats
+    end},
+    {tab="candleitem", text="Heart", action=function()
+        config.candleItem = false
+    end},
 }
 
+for i,v in ipairs(items) do
+    game.debugMenuItems[#game.debugMenuItems+1]={tab="candleitem", text = v.shortName, action = function() config.candleItem = v.name game.setDebugMenuTab("debug") end}
+end
+
+
+for i=1,#game.debugMenuItems do
+    game.debugMenuItems[i].index = i
+end
+game.debugMenuTab = "main"
 
 enableddisabled={[true]="enabled",[false]="disabled"}
 
@@ -608,12 +664,6 @@ if type(mnu.cursor_image)=="userdata" then
 end
 
 getfilecontents=oldgetfilecontents
-
-local subScreen = {}
-subScreen.submenu={scrollY=0}
-
-subScreen.clues = {106, 91, 62, 76, 77, 63, 78, 79, 56, 64, 96, 65, 57, 67, 68, 70, 102, 87, 103, 88, 89, 105, 61, }
-subScreen.clue = 1
 
 
 local itemList = {}
@@ -1132,6 +1182,8 @@ function loadGame(slot, setArea)
     
     game.setArea = setArea
     if game.setArea==true then
+        -- need to make this work better form pause menu
+        --memory.writebyte(0x0026,0) -- unpause
         memory.writebyte(0x0030, area1)
         memory.writebyte(0x0050, area2)
         memory.writebyte(0x0051, area3)
@@ -1142,7 +1194,7 @@ function loadGame(slot, setArea)
         memory.writebyte(0x4b2, returnY)
     end
     --emu.message("loaded "..slot)
-    subScreen.submenu.scrollY = 0
+    subScreen.subMenu.scrollY = 0
     return true
 end
 
@@ -1509,6 +1561,19 @@ function setAccessory(n)
     else
         --o.player.palette = items[o.player.armor].palette
     end
+
+    if o.player.accessory == items.index["Soul of Bat"] then
+        if not o.player.batMode then
+            --o.player.batMode=true
+            --memory.writebyte(0x03b5,0xff) --help disable whip
+        end
+    elseif o.player.batMode then
+        o.player.batMode = false
+        -- reenable whip better
+        whipframe=00
+        memory.writebyte(0x0445,whipframe)
+    end
+
 end
 
 function setWhip(n)
@@ -1988,11 +2053,28 @@ function drawSubScreen()
         gui.drawbox(x+28-5, y+28-4, x+24+8*w+6,28+ 24+h*08+4+1+4, "black", borderColor)
         gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
         
-        drawfont(x+28,y+28+1,font[subScreenFont], "Debug")
+        local menuItems = {}
+        for k,v in ipairs(game.debugMenuItems) do
+            if v.tab==game.debugMenuTab then
+                menuItems[#menuItems+1]=v
+            end
+        end
+        
+        if game.debugMenuTab=="main" then
+            drawfont(x+28,y+28+1,font[subScreenFont], "Debug")
+        else
+            drawfont(x+28,y+28+1,font[subScreenFont], "Debug / "..game.debugMenuTab)
+        end
+        
         for i=1+subScreen.subMenu.scrollY,8+subScreen.subMenu.scrollY do
             local y2 = i-subScreen.subMenu.scrollY
-            if game.debugMenuItems[i] then
-                drawfont(x+28+8*3,y+28+8*(1+y2*2),font[itemFont], game.debugMenuItems[i].text)
+            
+            if menuItems[i] then
+                if type(menuItems[i].text)=="function" then
+                    drawfont(x+28+8*3,y+28+8*(1+y2*2),font[itemFont], menuItems[i].text())
+                else
+                    drawfont(x+28+8*3,y+28+8*(1+y2*2),font[itemFont], menuItems[i].text)
+                end
             end
         end
 
@@ -2036,6 +2118,7 @@ function enterSubScreen()
     subScreen.showRelics = false
     subScreen.showItems = false
     subScreen.showDebug = false
+    game.setDebugMenuTab("main")
     game.map.visible = false
 
 
@@ -3406,6 +3489,7 @@ function onStartGame()
         memory.writebyte(0x4b2, returnY)
         game.setArea=false
     end
+    game.applyPlayerPalette = 1
 end
 
 function onRestartGame()
@@ -3995,7 +4079,17 @@ function onVBlank()
         if inTown then
             memory.writebyte(0x002c, 2) -- reload level
         end
-
+    end
+    
+    if game.applyPlayerPalette and action then
+        game.applyPlayerPalette = game.applyPlayerPalette - 1
+        if game.applyPlayerPalette <= 0 then
+            spidey.message("apply palette")
+            memory.writebyteppu(0x3f10, o.player.palette[1])
+            memory.writebyteppu(0x3f11, o.player.palette[2])
+            memory.writebyteppu(0x3f12, o.player.palette[3])
+            game.applyPlayerPalette = false
+        end
     end
 end
 
@@ -4979,11 +5073,16 @@ function spidey.update(inp,joy)
                 subScreen.showClues = false
             end
             if subScreen.showDebug then
-                subScreen.showDebug = false
+                if game.debugMenuTab == "main" then
+                    subScreen.showDebug = false
+                else
+                    game.setDebugMenuTab("main")
+                end
             end
         end
         if joy[1].select_press then
             subScreen.showDebug = not subScreen.showDebug
+            game.setDebugMenuTab("main")
         end
         if joy[1].B_press then
             --if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
@@ -5044,10 +5143,18 @@ function spidey.update(inp,joy)
             end
             if subScreen.showDebug then
                 local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
-                local item = game.debugMenuItems[i]
+                
+                local menuItems = {}
+                for k,v in ipairs(game.debugMenuItems) do
+                    if v.tab==game.debugMenuTab then
+                        menuItems[#menuItems+1]=v
+                    end
+                end
+                
+                local item = menuItems[i]
                 if item and item.action then
                     item.action()
-                    subScreen.showDebug = false
+                    --subScreen.showDebug = false
                 end
             end
         end
@@ -5079,18 +5186,20 @@ function spidey.update(inp,joy)
         memory.writebyte(0x0445,whipframe)
     end
     
-    if joy[1].down_press then
---        memory.writebyte(0x00b4,0x01)
---        memory.writebyte(0x00b5,0x01)
---        memory.writebyte(0x0169,0x60)
---        memory.writebyte(0x016a,0xff)
---        memory.writebyte(0x016b,0x03)
-        
---        memory.writebyte(0x0113,0x80)
---        memory.writebyte(0x0122,0x80)
-        
-        --memory.writebyte(0x00e5,0x1f)
-        --memory.writebyte(0x00b4,0x1f)
+    if action and joy[1].down and joy[1].A_press then
+        if o.player.accessory == items.index["Soul of Bat"] then
+            if o.player.batMode == true then
+                o.player.batMode = false
+                bat = false
+                -- reenable whip better
+                whipframe=00
+                memory.writebyte(0x0445,whipframe)
+            else
+                o.player.batMode = true
+                bat = true
+                memory.writebyte(0x03b5,0xff) --help disable whip
+            end
+        end
     end
     
     if action and bat then
