@@ -49,9 +49,11 @@ replaceMedusaHeads=true
 // Use new pattern for floating eyes
 floatingEyes = true
 
-// Use new pattern for ghosts
-// currently broken
+// Use new pattern for ghosts (currently broken)
 ghosts = false
+
+// Use new pattern for death (currently broken)
+deathAI = false
 
 // Change jump animation and velocity.  It's buggy, don't enable it.
 jumpTweak = false
@@ -107,3 +109,8 @@ md5=false
 
 // Set to true to use non-blinking cursors.
 //noBlinkCursor=true
+
+// Set to true to ignore the version warning when using
+// an older build.  This isn't recommended, as the script
+// breaks in various ways with the current 2.2.3.
+//ignoreVersionWarning=true

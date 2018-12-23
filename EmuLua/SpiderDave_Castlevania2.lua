@@ -176,6 +176,11 @@ game.film = {
     counter=0,
 }
 
+game.credits = {
+    y=0,
+    show=false,
+}
+
 local subScreen = {}
 subScreen.subMenu={x=0, y=0, scrollY=0}
 
@@ -233,8 +238,25 @@ game.debugMenuItems = {
     {tab="debug", text=function() return "Show Stats "..(config.testStats and "on" or "off") end, action=function()
         config.testStats = not config.testStats
     end},
+    {tab="debug", text="Ending", action=function()
+        game.setDebugMenuTab("ending")
+    end},
+    {tab="debug", text="Credits", action=function()
+        game.credits.show=true
+        game.credits.done=false
+        game.credits.y=0
+    end},
     {tab="candleitem", text="Heart", action=function()
         config.candleItem = false
+    end},
+    {tab="ending", text="1", action=function()
+        config.testEnding = 1
+    end},
+    {tab="ending", text="2", action=function()
+        config.testEnding = 2
+    end},
+    {tab="ending", text="3", action=function()
+        config.testEnding = 3
     end},
 }
 
@@ -679,6 +701,40 @@ if not rom.writebyte then
         gui.text(0+8*2, 8+8*10, "Error: please update FCEUX version.","white","clear")
     end
 end
+
+
+-- We don't need movie.record for this script, but since the current 2.2.3 release
+-- has all kinds of problems with this script I'll use it as a test that we're
+-- using a more recent build of FCEUX.  It was added 2018-11-30, so that's our 
+-- minimum for now.
+if (not movie.record) and (not config.ignoreVersionWarning) then
+    local inp, lastinp
+    inp=input.read()
+    spidey.error = function()
+        gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"#00000070", "#ffffff30")
+        gui.drawbox(0,8*3+20,spidey.screenWidth-1,8*16,"#706090b0", "#807070a0")
+        gui.text(20,60,"ERROR: Please upgrade FCEUX to a more \nrecent build from:", "white", "clear")
+        gui.text(20,60+8*3,"https://ci.appveyor.com/project/zeromus/fceux/\nbuild/artifacts", "#ccccff", "clear")
+        
+        lastinp=inp
+        inp = input.read()
+        local x,y = 18,8*11+20
+        
+        if inp.xmouse>=x and inp.xmouse<=x+8*12 and inp.ymouse>=y and inp.ymouse<=y+8+4 then
+            gui.drawbox(x,y,  x+8*12,y+8+4,  "#bbbbcc", "#888888")
+            gui.text(x+28,y+2,"Download", "#ffffff", "clear")
+            
+            if lastinp.leftclick and not inp.leftclick then
+                spidey.message("click")
+                winapi.shell_exec('open','https://ci.appveyor.com/project/zeromus/fceux/build/artifacts')
+            end
+        else
+            gui.drawbox(x,y,  x+8*12,y+8+4,  "#FFFFFF", "#888888")
+            gui.text(x+28,y+2,"Download", "#808080", "clear")
+        end
+    end
+end
+
 
 --            if not spidey.reloadfile() then
 --                spidey.error = function()
@@ -1895,7 +1951,8 @@ function drawSubScreen()
     if not hasRelic(subScreen.relic) then
         relics.current=0
         subScreen.relic = 0
-        memory.writebyte(0x004F, relics.current or 0)
+        -- Don't bother with this, it's obsolete
+        --memory.writebyte(0x004F, relics.current or 0)
     end
     
     if subScreen.showClues then
@@ -2568,11 +2625,12 @@ function onUseLaurel(n)
     return n
 end
 
-function onSetWeapon(w)
-    --w=memory.readbyte(0x90)
-    w=1
-    return w
-end
+-- This isn't needed because the real sub menu selections 
+-- are irrelevant
+--function onSetWeapon(w, side)
+--end
+
+
 
 --memory.registerexec(0x87a4+3,1, function()
 --    local a,x,y,s,p,pc=memory.getregisters()
@@ -4511,6 +4569,7 @@ function spidey.update(inp,joy)
         config.testEnding=nil
     end
     
+    game.modeMain=memory.readbyte(0x0018)
     game.mode=memory.readbyte(0x0019)
     game.mode2=memory.readbyte(0x00aa)
     game.modeCursor=memory.readbyte(0x23) -- start or continue
@@ -4619,6 +4678,24 @@ function spidey.update(inp,joy)
 --    memory.writebyte(0x0101, pattern1)
     
     --gui.text(20,50,string.format("mode=%02x mode2=%02x",game.mode, game.mode2))
+    
+    if game.modeMain==0x0a and memory.readbyte(0x047a)==0x07 then
+        local endingCountDown = memory.readbyte(0x047c)
+        
+        if game.credits.show then
+            endingCountDown = 2
+        elseif game.credits.done then
+            endingCountDown = 1
+            -- Need to draw over this one frame so we don't see a flash of ending before reset
+            gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
+        elseif endingCountDown == 1 then
+            game.credits.show = true
+            game.credits.y = 0
+            endingCountDown = 2
+        end
+        
+        memory.writebyte(0x047c, endingCountDown)
+    end
     
     if game.mode==0x00 and game.resetCounter > 0 then
         game.resetCounter = game.resetCounter - 1
@@ -5085,62 +5162,6 @@ function spidey.update(inp,joy)
             game.setDebugMenuTab("main")
         end
         if joy[1].B_press then
-            --if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
-            if subScreen.cursorY == 4 then
-                game.map.visible = not game.map.visible
-            end
-            if subScreen.cursorY == 0 and subScreen.cursorX == 1 then
-                o.player.whip = o.player.whip + 1
-                if o.player.whip > 4 then o.player.whip = 0 end
-                memory.writebyte(0x0434, o.player.whip)
-                emu.pause()
-            end
-            if subScreen.cursorY == 3 then
-                if subScreen.showClues or (numClues() > 0) then
-                    subScreen.showClues = not subScreen.showClues
-                end
-            end
-            if subScreen.cursorY == 2 then
-                if subScreen.showRelics then
-                    subScreen.subMenu.scrollY=0
-                    --subScreen.relic = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
-                    --setRelic(subScreen.subMenu.y+subScreen.subMenu.scrollY+1)
-                    local r = cv2data.relics[subScreen.subMenu.y+subScreen.subMenu.scrollY+1].varName
-                    if relics.list[r] then
-                        relics.on[r] = not relics.on[r]
-                        setRelicState(r, relics.on[r])
-                    end
-                else
-                    subScreen.showRelics = not subScreen.showRelics
-                end
-            end
-            if subScreen.cursorY == 1 then
-                if subScreen.showItems then
-                    local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
-                    local item = itemList[i]
-                    if item then
-                        if item.type=="armor" then
-                            setArmor(item.index)
-                            --playSound(0x11)
-                        end
-                        if item.type=="whip" then
-                            setWhip(item.index)
-                            --playSound(0x11)
-                        end
-                        if item.type=="weapon" then
-                            setWeapon(item.index)
-                            --playSound(0x11)
-                        end
-                        if item.type=="accessory" then
-                            setAccessory(item.index)
-                            --playSound(0x11)
-                        end
-                    end
-                    --emu.message(string.format("%02x",subScreen.subMenu.y-subScreen.subMenu.scrollY+1))
-                    --emu.message(i)
-                end
-                subScreen.showItems = not subScreen.showItems
-            end
             if subScreen.showDebug then
                 local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
                 
@@ -5155,6 +5176,63 @@ function spidey.update(inp,joy)
                 if item and item.action then
                     item.action()
                     --subScreen.showDebug = false
+                end
+            else
+                --if subScreen.cursorY == 1 then subScreen.relic = subScreen.cursorX end
+                if subScreen.cursorY == 4 then
+                    game.map.visible = not game.map.visible
+                end
+                if subScreen.cursorY == 0 and subScreen.cursorX == 1 then
+                    o.player.whip = o.player.whip + 1
+                    if o.player.whip > 4 then o.player.whip = 0 end
+                    memory.writebyte(0x0434, o.player.whip)
+                    emu.pause()
+                end
+                if subScreen.cursorY == 3 then
+                    if subScreen.showClues or (numClues() > 0) then
+                        subScreen.showClues = not subScreen.showClues
+                    end
+                end
+                if subScreen.cursorY == 2 then
+                    if subScreen.showRelics then
+                        subScreen.subMenu.scrollY=0
+                        --subScreen.relic = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
+                        --setRelic(subScreen.subMenu.y+subScreen.subMenu.scrollY+1)
+                        local r = cv2data.relics[subScreen.subMenu.y+subScreen.subMenu.scrollY+1].varName
+                        if relics.list[r] then
+                            relics.on[r] = not relics.on[r]
+                            setRelicState(r, relics.on[r])
+                        end
+                    else
+                        subScreen.showRelics = not subScreen.showRelics
+                    end
+                end
+                if subScreen.cursorY == 1 then
+                    if subScreen.showItems then
+                        local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
+                        local item = itemList[i]
+                        if item then
+                            if item.type=="armor" then
+                                setArmor(item.index)
+                                --playSound(0x11)
+                            end
+                            if item.type=="whip" then
+                                setWhip(item.index)
+                                --playSound(0x11)
+                            end
+                            if item.type=="weapon" then
+                                setWeapon(item.index)
+                                --playSound(0x11)
+                            end
+                            if item.type=="accessory" then
+                                setAccessory(item.index)
+                                --playSound(0x11)
+                            end
+                        end
+                        --emu.message(string.format("%02x",subScreen.subMenu.y-subScreen.subMenu.scrollY+1))
+                        --emu.message(i)
+                    end
+                    subScreen.showItems = not subScreen.showItems
                 end
             end
         end
@@ -6629,7 +6707,7 @@ function spidey.update(inp,joy)
                         o.custom[i].destroy = true
                         playSound(0x04)
                         local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
-                        if o.custom[i].item then
+                        if obj and o.custom[i].item then
                             if hasInventoryItem(o.custom[i].item) then
                                 obj.item = {type="bigheart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
                             else
@@ -7488,6 +7566,34 @@ function spidey.draw()
         gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d\nexp %d, next %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def, getCurrentExp(), o.player.expNext),"white","#00002080")
     end
     
+    if game.credits.show then
+        if spidey.counter % 3 == 0 then
+            game.credits.y = game.credits.y + 1
+        end
+        
+        local c = string.format("#000000%02x",math.min(0xff, game.credits.y))
+        gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, c, c)
+        
+        local txt = cv2data.credits
+        txt = string.gsub(txt, "\n", "\n\n")
+        
+        --gfx.draw(8*5+48+8*6-8*11,8*40-(game.film.y or 0)+8*10,gfx.castle)
+        
+        drawfont(10,8*36-(game.credits.y or 0),font[5], txt)
+        --spidey.message("credits %02x",game.credits.y)
+        
+        for i=1,8 do
+            gui.drawbox(0, 0, spidey.screenWidth-1, 6*(i-1), "#00000090", "#00000060")
+            gui.drawbox(0, spidey.screenHeight-1-6*i, spidey.screenWidth-1, spidey.screenHeight-1, "#00000090", "#00000060")
+        end
+        
+        if game.credits.y>=0x2d0 then
+            game.credits.show=false
+            game.credits.done=true
+        end
+        
+    end
+    
     if game.md5Data and game.md5Data.md5 then
         if game.md5Data.md5 == string.lower("1B827C602C904D8C846499C9F54B93E0") then
             gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"#00006080", "#00006080")
@@ -7497,6 +7603,7 @@ function spidey.draw()
             gui.text(20,40,string.format("Unknown rom. \nchecksum=%s", game.md5Data.md5), "white", "clear")
         end
     end
+
 
 
 end

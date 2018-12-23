@@ -719,4 +719,34 @@ castle and purifying
 them with fire.
 ]]
 
+cv2.credits = [[
+           CREDITS            
+
+
+
+        Castlevania II        
+        Simon's Quest
+
+           by Konami          
+
+
+
+
+  Castlevania II Improvement  
+   Lua Script by SpiderDave   
+
+
+
+
+Coding..............SpiderDave
+Candle Editor.....krunkcleanup
+Graphics................Konami
+Graphics/edit.......THiN CRUST
+Play Testing......krunkcleanup
+Play Testing.........Snorenado
+
+
+
+]]
+
 return cv2

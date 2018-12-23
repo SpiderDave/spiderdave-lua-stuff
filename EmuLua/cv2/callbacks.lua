@@ -104,8 +104,8 @@ registerExec(0xe855+2,7,1,"onPlaceStageTile")
 registerExec(0x896c+2,1,1,"onEnemyStun")
 registerExec(0x875c,1,1,"onHeartPickup")
 registerExec(0xd7ea,7,1,"onThrowWeapon")
-registerExec(0xf24c,7,1,"onSetWeaponLeft")
-registerExec(0xf295,7,1,"onSetWeaponRight")
+registerExec(0xf24c+2,7,1,"onSetWeaponLeft")
+registerExec(0xf295+2,7,1,"onSetWeaponRight")
 registerExec(0x9096,1,1,"onGetRedCrystal")
 registerExec(0x87c3,1,1,"onGetCross")
 registerExec(0xaa3e,1,1,"onGetDiamond")
@@ -343,14 +343,14 @@ end
 
 function _onSetWeaponLeft(address,len,t)
     if type(onSetWeapon)=="function" then
-        local y = onSetWeapon(t.y)
+        local y = onSetWeapon(t.y, "left")
         if y then memory.setregister("y", y) end
     end
 end
 
 function _onSetWeaponRight(address,len,t)
     if type(onSetWeapon)=="function" then
-        local y = onSetWeapon(t.y)
+        local y = onSetWeapon(t.y, "right")
         if y then memory.setregister("y", y) end
     end
 end
