@@ -258,7 +258,7 @@ local items = {
         name = "Thief's Dagger",
         type = "whip",
         whipBase = 0,
-        attack = 20,
+        attack = 4,
     },
 }
 

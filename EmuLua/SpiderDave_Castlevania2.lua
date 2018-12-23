@@ -4926,9 +4926,7 @@ function spidey.update(inp,joy)
     
     --gui.drawbox(0, 0, 256, 240, "black", "black")
     if action or pausemenu then
-        o.player.state=memory.readbyte(0x03d8)
-        --o.player.ducking = (o.player.state == 0x03)
-        o.player.ducking = (memory.readbyte(0x040e) == 0x2b) -- or in air ducking frames
+        
         o.player.hp=memory.readbyte(0x0080)
         o.player.maxHp=memory.readbyte(0x0081)
         --memory.writebyte(0x008b, 0x63) -- level 99
@@ -5289,7 +5287,7 @@ function spidey.update(inp,joy)
         local yo=0
         if o.player.ducking then yo=yo+3 end
         
-        if whipframe>=0x03 then
+        if whipframe==0x03 then
             gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+10)*facing, o.player.y-2+2+yo, "white", "grey")
             gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+12)*facing, o.player.y-2+2+yo, "white", "clear")
             gui.drawbox(o.player.x+12*facing, o.player.y-4+yo, o.player.x+(12+2)*facing, o.player.y-2+4+yo, "white", "clear")
@@ -5444,6 +5442,8 @@ function spidey.update(inp,joy)
         o.player.y=memory.readbyte(0x0324)
         o.player.inv=memory.readbyte(0x04f8)
         o.player.frame = memory.readbyte(0x0300)
+        o.player.state=memory.readbyte(0x03d8)
+        o.player.ducking = (o.player.frame==0x05 or o.player.frame==0x2a or o.player.frame==0x2b or o.player.frame==0x2c)
         
         
         if config.getItems then
