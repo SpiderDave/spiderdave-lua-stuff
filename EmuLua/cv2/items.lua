@@ -254,6 +254,12 @@ local items = {
         palette = {0x0f, 0x0f, 0x13, 0x35},
         desc = "Bat Mode.",
     },
+    {
+        name = "Thief's Dagger",
+        type = "whip",
+        whipBase = 0,
+        attack = 20,
+    },
 }
 
 

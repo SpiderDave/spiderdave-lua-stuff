@@ -112,6 +112,7 @@
 --  * bug: some hidden books in berkely mansion give game over
 --  * bug: incorrect next amount
 --  * bug: (real) hearts are collectable still if you're fast enough.  This can trigger level ups.
+--  * bug: can cancel day by holding up as it happens
 
 require ".Spidey.TSerial"
 
@@ -2454,6 +2455,10 @@ end
 
 -- check if attack is sub weapon or whip
 function onWhipOrSubWeapon(isSub)
+--    if o.player.whipItem == items.index["Thief's Dagger"] then
+--        isSub=true
+--        return isSub
+--    end
     if isSub and canThrowWeapon()==false then
         isSub = false
         return isSub
@@ -4921,6 +4926,9 @@ function spidey.update(inp,joy)
     
     --gui.drawbox(0, 0, 256, 240, "black", "black")
     if action or pausemenu then
+        o.player.state=memory.readbyte(0x03d8)
+        --o.player.ducking = (o.player.state == 0x03)
+        o.player.ducking = (memory.readbyte(0x040e) == 0x2b) -- or in air ducking frames
         o.player.hp=memory.readbyte(0x0080)
         o.player.maxHp=memory.readbyte(0x0081)
         --memory.writebyte(0x008b, 0x63) -- level 99
@@ -5262,6 +5270,44 @@ function spidey.update(inp,joy)
         whipframe=memory.readbyte(0x0445)
         whipframe=04
         memory.writebyte(0x0445,whipframe)
+    end
+    
+    if action and o.player.whipItem == items.index["Thief's Dagger"] then
+        memory.writebyte(0x0434,0x0d) -- whip
+        local whipDelay = memory.readbyte(0x0457)
+        whipDelay = math.min(whipDelay, 0x04)
+        memory.writebyte(0x0457,whipDelay)
+        local whipframe = memory.readbyte(0x0445)
+        for i=0, 1 do
+            o.whip[i].frame = 0
+            memory.writebyte(0x0301+i, o.whip[i].frame)
+        end
+        
+        local facing=1
+        if o.player.facing==0 then facing=-1 end
+        
+        local yo=0
+        if o.player.ducking then yo=yo+3 end
+        
+        if whipframe>=0x03 then
+            gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+10)*facing, o.player.y-2+2+yo, "white", "grey")
+            gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+12)*facing, o.player.y-2+2+yo, "white", "clear")
+            gui.drawbox(o.player.x+12*facing, o.player.y-4+yo, o.player.x+(12+2)*facing, o.player.y-2+4+yo, "white", "clear")
+            
+            --memory.writebyte(0x040e,0x04)
+            
+--            memory.writebyte(0x03d8,0x05)
+            
+            --whipframe=0x01
+            memory.writebyte(0x0445,whipframe)
+        end
+        
+        
+        --memory.writebyte(0x03b5,0xff) --help disable whip
+        
+        --memory.writebyte(0x040e,0x01)
+        
+
     end
     
     if action and joy[1].down and joy[1].A_press then
@@ -7582,9 +7628,10 @@ function spidey.draw()
         drawfont(10,8*36-(game.credits.y or 0),font[5], txt)
         --spidey.message("credits %02x",game.credits.y)
         
+        c = string.format("#000000%02x",math.min(0x90, game.credits.y))
         for i=1,8 do
-            gui.drawbox(0, 0, spidey.screenWidth-1, 6*(i-1), "#00000090", "#00000060")
-            gui.drawbox(0, spidey.screenHeight-1-6*i, spidey.screenWidth-1, spidey.screenHeight-1, "#00000090", "#00000060")
+            gui.drawbox(0, 0, spidey.screenWidth-1, 6*(i-1), c, c)
+            gui.drawbox(0, spidey.screenHeight-1-6*i, spidey.screenWidth-1, spidey.screenHeight-1, c, c)
         end
         
         if game.credits.y>=0x2d0 then
