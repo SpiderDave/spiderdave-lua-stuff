@@ -2080,6 +2080,16 @@ spidey._draw = function()
 end
 gui.register(spidey._draw)
 
+spidey._after = function()
+    if spidey.after then spidey.after() end
+end
+emu.registerafter(spidey._after)
+
+spidey._before = function()
+    if spidey.before then spidey.before() end
+end
+emu.registerbefore(spidey._before)
+
 spidey.run=function()
 
     spidey.time = 0 -- time in seconds

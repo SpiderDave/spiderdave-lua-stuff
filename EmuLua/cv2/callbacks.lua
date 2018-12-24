@@ -156,6 +156,12 @@ registerExec(0xf5e2, 7,1,"onWindowPrintChar")
 registerExec(0x87c9,1,1,"onGetGoldenKnife")
 registerExec(0x87cf,1,1,"onGetSacredFlame")
 
+registerExec(0x88b5+3,1,1,"onSetWhipHitbox1")
+registerExec(0x88ba+3,1,1,"onSetWhipHitbox2")
+
+registerExec(0x88fc,1,1,"onSetHitboxCollision1")
+registerExec(0x8916,1,1,"onSetHitboxCollision2")
+
 
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
@@ -776,3 +782,46 @@ end
 function _onGetSacredFlame(address,len,t)
     if type(onGetSacredFlame)=="function" then onGetSacredFlame() end
 end
+
+function _onSetWhipHitbox1(address,len,t)
+    if type(onSetWhipHitbox)=="function" then
+        local a = onSetWhipHitbox(t.a, 1)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSetWhipHitbox2(address,len,t)
+    if type(onSetWhipHitbox)=="function" then
+        local a = onSetWhipHitbox(t.a, 2)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSetHitboxCollision1(address,len,t)
+    if type(onSetHitboxCollision)=="function" then
+        local ret = onSetHitboxCollision(1)
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x80)
+            else
+                t.p = bit.bor(t.p, 0x80)-0x80
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onSetHitboxCollision2(address,len,t)
+    if type(onSetHitboxCollision)=="function" then
+        local ret = onSetHitboxCollision(2)
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x80)
+            else
+                t.p = bit.bor(t.p, 0x80)-0x80
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+

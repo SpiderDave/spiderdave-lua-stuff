@@ -259,6 +259,7 @@ local items = {
         type = "whip",
         whipBase = 0,
         attack = 4,
+        desc = "A small dagger that once \nbelonged to a noble thief.",
     },
 }
 

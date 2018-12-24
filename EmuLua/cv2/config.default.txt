@@ -52,8 +52,11 @@ floatingEyes = true
 // Use new pattern for ghosts (currently broken)
 ghosts = false
 
-// Use new pattern for death (currently broken)
+// Use new pattern for Death (currently broken)
 deathAI = false
+
+// Use new pattern for Dracula (currently broken)
+draculaAI = false
 
 // Change jump animation and velocity.  It's buggy, don't enable it.
 jumpTweak = false

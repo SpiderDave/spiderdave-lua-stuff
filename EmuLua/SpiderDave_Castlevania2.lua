@@ -182,6 +182,21 @@ game.credits = {
     show=false,
 }
 
+game.data = {}
+game.data.enemies=game.data.enemies or {}
+
+if util.fileExists('cv2/warp.dat') then
+    local t=getfilecontents('cv2/warp.dat')
+    t=TSerial.unpack(t)
+    game.data.warps=t
+elseif util.fileExists('cv2/warp.default.dat') then
+    local t=getfilecontents('cv2/warp.default.dat')
+    t=TSerial.unpack(t)
+    game.data.warps=t
+else
+    game.data.warps = {}
+end
+
 local subScreen = {}
 subScreen.subMenu={x=0, y=0, scrollY=0}
 
@@ -226,7 +241,9 @@ game.debugMenuItems = {
     {tab="-cheats", text=function() return "Save Game - slot "..game.saveSlot end, action=function()
         saveGame(game.saveSlot)
     end},
-
+    {tab="debug", text="Warp", action=function()
+        game.setDebugMenuTab("warp")
+    end},
     {tab="debug", text=function() return "Candle Edit Mode "..(config.editCandles and "on" or "off") end, action=function()
         config.editCandles = not config.editCandles
     end},
@@ -235,6 +252,9 @@ game.debugMenuItems = {
     end},
     {tab="debug", text=function() return "Show Hitboxes "..(config.hitboxes and "on" or "off") end, action=function()
         config.hitboxes = not config.hitboxes
+    end},
+    {tab="debug", text=function() return "Debug "..(spidey.debug.enabled and "on" or "off") end, action=function()
+        spidey.debug.enabled = not spidey.debug.enabled
     end},
     {tab="debug", text=function() return "Show Stats "..(config.testStats and "on" or "off") end, action=function()
         config.testStats = not config.testStats
@@ -265,11 +285,23 @@ for i,v in ipairs(items) do
     game.debugMenuItems[#game.debugMenuItems+1]={tab="candleitem", text = v.shortName, action = function() config.candleItem = v.name game.setDebugMenuTab("debug") end}
 end
 
+for i,w in ipairs(game.data.warps or {}) do
+    --return string.format("Warp %02x %s", game.data.warpNum or 1, cv2data.locations.getAreaName(w.area1,w.area2,w.area3))
+    game.debugMenuItems[#game.debugMenuItems+1]={tab="warp", text = function() return cv2data.locations.getAreaName(w.area1,w.area2,w.area3) end, action = function()
+        game.data.warpNum = i
+        warpPlayer(w)
+        memory.writebyte(0x0026,0) -- unpause
+    end}
+end
+
+
+
 
 for i=1,#game.debugMenuItems do
     game.debugMenuItems[i].index = i
 end
 game.debugMenuTab = "main"
+
 
 enableddisabled={[true]="enabled",[false]="disabled"}
 
@@ -870,21 +902,6 @@ if gd then
     --img:png("cv2/images/output2.png")
 end
 
-game.data = {}
-game.data.enemies=game.data.enemies or {}
-
-if util.fileExists('cv2/warp.dat') then
-    local t=getfilecontents('cv2/warp.dat')
-    t=TSerial.unpack(t)
-    game.data.warps=t
-elseif util.fileExists('cv2/warp.default.dat') then
-    local t=getfilecontents('cv2/warp.default.dat')
-    t=TSerial.unpack(t)
-    game.data.warps=t
-else
-    game.data.warps = {}
-end
-
 
 refight_bosses=false
 relics={}
@@ -1422,6 +1439,9 @@ function updateItems()
         
         if itemList[i].type=="whip" then
             itemList[i].gfx = gfx.whipicon
+            if itemList[i].name == "Thief's Dagger" then
+                itemList[i].gfx = gfx.weapons[3]
+            end
         end
     end
     
@@ -1780,11 +1800,8 @@ function warpPlayer(w)
     memory.writebyte(0x0348, o.player.x)
     memory.writebyte(0x0324, o.player.y)
     
-    memory.writebyte(0x0053, scrollx % 0x100)
-    memory.writebyte(0x0054, (scrollx-(scrollx % 0x100))/0x100)
-    memory.writebyte(0x0056, scrolly % 0x224)
-    memory.writebyte(0x0057, (scrolly-(scrolly % 0x224))/0x224)
-    
+    setScroll()
+
     memory.writebyte(0x2c, 1) -- reload screen
 end
 
@@ -1794,8 +1811,8 @@ function setScroll(x,y)
     y = y or scrolly
     memory.writebyte(0x0053, x % 0x100)
     memory.writebyte(0x0054, (x-(x % 0x100))/0x100)
-    memory.writebyte(0x0056, y % 0x224)
-    memory.writebyte(0x0057, (y-(y % 0x224))/0x224)
+    memory.writebyte(0x0056, y % 0xe0)
+    memory.writebyte(0x0057, (y-(y % 0xe0))/0xe0)
 end
 
 function getunused()
@@ -1826,7 +1843,7 @@ function drawSubScreen()
     local x=-4
     local y=0
     local h = 14+2+1
-    local w = 14+10
+    local w = 14+10+2
     local subScreenFont = 2
     local itemFont = 2
     gui.drawbox(x+28-9, y+28+1-8,x+ 24+8*w+10, 28+24+h*08+8+4, "black", "black")
@@ -1834,11 +1851,11 @@ function drawSubScreen()
     gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
     
     drawfont(x+28,y+28+8*1,font[subScreenFont], "Simon")
-    drawfont(x+28+8*15,y+28+8*1,font[subScreenFont], string.format("Level %02d", o.player.level+1))
+    drawfont(x+28+8*17,y+28+8*1,font[subScreenFont], string.format("Level %02d", o.player.level+1))
     
-    drawfont(x+28+8*14,y+28+8*17,font[itemFont], string.format("Lives: %02d",o.player.lives-1))
+    drawfont(x+28+8*16,y+28+8*17,font[itemFont], string.format("Lives: %02d",o.player.lives-1))
     drawfont(x+28+8*0,y+28+8*19,font[subScreenFont], string.format("Day %d",day+1))
-    drawfont(x+28+8*12,y+28+8*19,font[subScreenFont], string.format("Time: %s",time))
+    drawfont(x+28+8*14,y+28+8*19,font[subScreenFont], string.format("Time: %s",time))
     
 --    local s = string.format("%d/%d", o.player.hp, o.player.maxHp)
 --    drawfont(x+28+8*11,y+28+8*4,font[subScreenFont], " HP:")
@@ -1859,8 +1876,8 @@ function drawSubScreen()
     --drawfont(x+28+8*12,y+28+8*10,font[itemFont], cv2data.whips.names[o.player.whip])
     
     local stats = getStats()
-    drawfont(x+28+8*16,y+28+8*3,font[itemFont], string.format("ATT: %d\nDEF: %d", stats.atk, stats.def))
-    drawfont(x+28+8*16,y+28+8*6,font[itemFont], string.format("STR: %d\nCON: %d\nINT: %d\nLCK: %d", stats.str, stats.con, stats.int, stats.luck))
+    drawfont(x+28+8*18,y+28+8*3,font[itemFont], string.format("ATT: %d\nDEF: %d", stats.atk, stats.def))
+    drawfont(x+28+8*18,y+28+8*6,font[itemFont], string.format("STR: %d\nCON: %d\nINT: %d\nLCK: %d", stats.str, stats.con, stats.int, stats.luck))
     
     
     
@@ -2452,6 +2469,19 @@ end)
 function onLoadState()
     o.custom.destroyall()
 end
+
+-- whip reach if n=1
+--function onSetWhipHitbox(a, n)
+--    if n==1 then
+--        spidey.message("%02x",a)
+--        return 0x2f
+--    end
+
+--end
+
+--function onSetHitboxCollision(n)
+--    return false
+--end
 
 -- check if attack is sub weapon or whip
 function onWhipOrSubWeapon(isSub)
@@ -3577,10 +3607,7 @@ function onRestartGame()
         
         a=area3
         memory.setregister("a",a)
-        memory.writebyte(0x0053, scrollx % 0x100)
-        memory.writebyte(0x0054, (scrollx-(scrollx % 0x100))/0x100)
-        memory.writebyte(0x0056, scrolly % 0x224)
-        memory.writebyte(0x0057, (scrolly-(scrolly % 0x224))/0x224)
+        setScroll()
         memory.writebyte(0x0348, o.player.x)
         memory.writebyte(0x0324, o.player.y)
         return area3
@@ -4271,6 +4298,9 @@ memory.registerexec(0xc127,1, function()
         if a==0x0f then a=0x62 end
     end
     
+    
+    if a == 0x0e and o.player.whipItem == items.index["Thief's Dagger"] then a=0x11 end
+    
     -- Change Golden Knife sound effect
     if a == 0x13 then a=0x11 end
     
@@ -4493,6 +4523,7 @@ function romPatch()
 --        rom_writebyte(0x10+0x28000+0x10*0xda+i, rom.readbyte(0x10+0x28000+0x10*0xf7+i))
 --        rom_writebyte(0x10+0x28000+0x10*0xdc+i, rom.readbyte(0x10+0x28000+0x10*0xf9+i))
 --    end
+
 end
 
 function hasRelic(n)
@@ -4609,7 +4640,6 @@ function spidey.update(inp,joy)
     returnY = memory.readbyte(0x04b2)
     screenload=(memory.readbyte(0x0021)>01) --not perfect yet; goes off on some non-screen loads
     scrollx=memory.readbyte(0x0053)+memory.readbyte(0x0054)*0x100
-    --scrolly=memory.readbyte(0x0056)+memory.readbyte(0x0057)*0x224
     scrolly=memory.readbyte(0x0056)+memory.readbyte(0x0057)*0xe0
     msgnum=memory.readbyte(0x007f)
     game.messageNum=msgnum
@@ -5291,21 +5321,7 @@ function spidey.update(inp,joy)
             gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+10)*facing, o.player.y-2+2+yo, "white", "grey")
             gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+12)*facing, o.player.y-2+2+yo, "white", "clear")
             gui.drawbox(o.player.x+12*facing, o.player.y-4+yo, o.player.x+(12+2)*facing, o.player.y-2+4+yo, "white", "clear")
-            
-            --memory.writebyte(0x040e,0x04)
-            
---            memory.writebyte(0x03d8,0x05)
-            
-            --whipframe=0x01
-            memory.writebyte(0x0445,whipframe)
         end
-        
-        
-        --memory.writebyte(0x03b5,0xff) --help disable whip
-        
-        --memory.writebyte(0x040e,0x01)
-        
-
     end
     
     if action and joy[1].down and joy[1].A_press then
@@ -5318,6 +5334,7 @@ function spidey.update(inp,joy)
                 memory.writebyte(0x0445,whipframe)
             else
                 o.player.batMode = true
+                o.player.batDelay = 0x12
                 bat = true
                 memory.writebyte(0x03b5,0xff) --help disable whip
             end
@@ -5390,7 +5407,13 @@ function spidey.update(inp,joy)
             end
         end
         
-        
+        if o.player.batDelay then
+            memory.writebyte(0x006d,0)
+            memory.writebyte(0x036c,0)
+            if o.player.batDelay==0x12 then memory.writebyte(0x036c,0xf5) end
+            o.player.batDelay = o.player.batDelay - 1
+            if o.player.batDelay <=0 then o.player.batDelay = false end
+        end
         
         memory.writebyte(0x0300,simon_frame)
         
@@ -6076,6 +6099,15 @@ function spidey.update(inp,joy)
                 o.player.bossdoor()
         end
         
+        if o[i].type==0x48 then
+            if o[i].frame >=0x7a and o[i].frame<=0x7d then
+            else
+                o[i].destroy=true
+                spidey.message("%02x",o[i].frame)
+            end
+            --if frame~=0x29 then
+            --memory.writebyte(0x0306+i,o[i].frame)
+        end
         if o[i].type==0x48 and false then --drac weapon
             o[i].frame=0x29
             o[i].type=0x30
@@ -6129,7 +6161,7 @@ function spidey.update(inp,joy)
             memory.writebyte(0x03de+i,o[i].team)
         end
         
-        if o[i].type==0x47 then -- Dracula
+        if o[i].type==0x47 and config.draculaAI then -- Dracula
             o.dracula = o.dracula or {}
             
             o.player.inBossRoom=true
@@ -6352,8 +6384,10 @@ function spidey.update(inp,joy)
             ]]--
             --if o[i].movename~='' then emu.message(o[i].movename) end
             
-            drawfont(0,50,font[current_font], string.format("move=%s movec=%02x draccount=%02x",o.dracula.move or "", o.dracula.movec or 0, o[i].draccount or 0))
-            drawfont(0,50+8,font[current_font], string.format("moveindex=%02x",o.dracula.moveindex or 0))
+            if spidey.debug then
+                drawfont(0,50,font[current_font], string.format("move=%s movec=%02x draccount=%02x",o.dracula.move or "", o.dracula.movec or 0, o[i].draccount or 0))
+                drawfont(0,50+8,font[current_font], string.format("moveindex=%02x",o.dracula.moveindex or 0))
+            end
         end
         
         if o[i].destroy then
@@ -6959,7 +6993,7 @@ function spidey.update(inp,joy)
                 o.custom[i].ys=o.custom[i].ys+.09
                 --if o.custom[i].xdist<26 and o.custom[i].ydist<17 then
                 if o.custom[i].xdist<15 and o.custom[i].ydist<17 then
-                    o.custom[i].destroy=true
+                    --o.custom[i].destroy=true
                     hurtplayer()
                 end
 
@@ -7606,6 +7640,11 @@ function spidey.draw()
         end
     end
     
+--    for k,v in ipairs(game.boxes or {}) do
+--        gui.drawbox(v[1],v[2],v[3],v[4],v[5],v[6])
+--    end
+--    game.boxes={}
+    
     
     if action and config.testStats then
         local stats= getStats()
@@ -7650,9 +7689,6 @@ function spidey.draw()
             gui.text(20,40,string.format("Unknown rom. \nchecksum=%s", game.md5Data.md5), "white", "clear")
         end
     end
-
-
-
 end
 
 spidey.run()
