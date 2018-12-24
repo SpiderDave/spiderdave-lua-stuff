@@ -148,6 +148,10 @@ end
 config.load("cv2/config.default.txt")
 config.load("cv2/config.txt")
 
+spidey.joyAliases.confirm = config.button_confirm or spidey.joyAliases.confirm
+spidey.joyAliases.cancel = config.button_cancel or spidey.joyAliases.cancel
+
+
 local graphics = require("Spidey.graphics")
 graphics:init(config.graphics_mode or "")
 
@@ -5172,7 +5176,7 @@ function spidey.update(inp,joy)
                 --subScreen.cursorX = subScreen.cursorX + 1
             end
         end
-        if joy[1].A_press then
+        if joy[1].cancel_press then
             if game.map.visible then
                 game.map.visible = false
             end
@@ -5197,7 +5201,7 @@ function spidey.update(inp,joy)
             subScreen.showDebug = not subScreen.showDebug
             game.setDebugMenuTab("main")
         end
-        if joy[1].B_press then
+        if joy[1].confirm_press then
             if subScreen.showDebug then
                 local i = subScreen.subMenu.y+subScreen.subMenu.scrollY+1
                 
@@ -7269,7 +7273,7 @@ function spidey.update(inp,joy)
             msgChoice=(msgChoice+1) %2
             memory.writebyte(0x7000+4, msgChoice)
         end
-        if msgMode==0x00 and joy[1].B_press then
+        if msgMode==0x00 and joy[1].confirm_press then
             o.player.hp = o.player.maxHp
             memory.writebyte(0x0080, o.player.hp)
             
@@ -7351,37 +7355,6 @@ function spidey.update(inp,joy)
     --memory.writebyte(0x0245,0x1d) --hit box test
     --memory.writebyte(0x018b,0xc1) --hit box test **this makes it so you start low on screen after death 0x186 does too
     if action and (cheats.active) then
-        if joy[1].A_press and joy[1].B and joy[1].down then
-            
---            c0=hex2bin('80'..nespalette[0x0f]:sub(2,2+6))
---            c1=hex2bin('00'..nespalette[0x11]:sub(2,3+6))
---            c2=hex2bin('00'..nespalette[0x20]:sub(2,3+6))
---            c3=hex2bin('00'..nespalette[0x15]:sub(2,3+6))
-            
-            
-            --palettenum=16
-            --c1= hex2bin(string.format('00%02X%02X%02X',memory.readbyteppu(0x3f01+9*palettenum+0),memory.readbyteppu(0x3f01+9*palettenum+1),memory.readbyteppu(0x3f01+9*palettenum+2)))
-            --c2= hex2bin(string.format('00%02X%02X%02X',memory.readbyteppu(0x3f01+9*palettenum+3),memory.readbyteppu(0x3f01+9*palettenum+4),memory.readbyteppu(0x3f01+9*palettenum+5)))
-            --c3= hex2bin(string.format('00%02X%02X%02X',memory.readbyteppu(0x3f01+9*palettenum+6),memory.readbyteppu(0x3f01+9*palettenum+7),memory.readbyteppu(0x3f01+9*palettenum+8)))
-            --emu.message(string.format('%02X',memory.readbyteppu(0x3f00+0)))
-            --p=getpalettedata()
-            --emu.message(string.format('%02X %02X %02X',p.color_indexed[3],p.color_indexed[4],p.color_indexed[5]))
-            --emu.message(bin2hex(c1)..' '..bin2hex(c2)..' '..bin2hex(c3))
-            --emu.message(string.format('%02X %02X %02X',memory.readbyte(0x2007),memory.readbyteppu(0x3f01+2),memory.readbyte(0x2007)))
-            
-            ofs=0+0x10*0x52
-            --testgfx=gdTile(ofs+0x000, c0, c1, c2, c3, false,false)
-            --[[
-            for i=0,12 do
-                e1=memory.readbyte(0x03ba+i)
-                --if e1==0x06 then e1=0x0d end
-                if e1 ~= 0 then
-                    e1=0x36 --burn
-                end
-                memory.writebyte(0x03ba+i,e1)
-            end
-            ]]--
-        end
         
         --[[
         if action and joy[1].down and joy[1].B_press then

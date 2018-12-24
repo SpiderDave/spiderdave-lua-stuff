@@ -117,3 +117,8 @@ md5=false
 // an older build.  This isn't recommended, as the script
 // breaks in various ways with the current 2.2.3.
 //ignoreVersionWarning=true
+
+// Controls
+button_confirm = B
+button_cancel = A
+

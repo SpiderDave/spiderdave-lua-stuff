@@ -85,6 +85,13 @@ local spidey={
     },
 }
 
+-- The script can override these or define new ones as a convenience.
+spidey.joyAliases = {
+    confirm="Bx",
+    cancel="Ax",
+}
+
+
 spidey.getFont = function(fontNum)
     return fontNum or spidey.currentFont
 end
@@ -670,6 +677,15 @@ function joypad_read()
                 gui.text(8+50, 8+8*2+8*ii, string.format("%s",joypad_data[i][string.format('%s_press', b)] and 1 or 0) ,"white","clear")
                 gui.text(8+100, 8+8*2+8*ii, string.format("%s",joypad_data[i][b..'_press_time']) ,"white","clear")
             end
+        end
+    end
+    
+    for k,v in pairs(spidey.joyAliases) do
+        for i=1,2 do
+            joypad_data[i][k]=joypad_data[i][v]
+            joypad_data[i][k.."_press"]=joypad_data[i][v.."_press"]
+            joypad_data[i][k.."_press_time"]=joypad_data[i][v.."_press_time"]
+            joypad_data[i][k.."_press_repeat"]=joypad_data[i][v.."_press_repeat"]
         end
     end
     
