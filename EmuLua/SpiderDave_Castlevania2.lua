@@ -723,6 +723,7 @@ gfx.fleaman = {
     {gfx.load("fleaman1"),  gfx.load("fleaman2")},
     {gfx.load("fleaman1h"),  gfx.load("fleaman2h")},
 }
+gfx.bigheart = gfx.load("bigheart")
 
 
 mnu.cursor_image=gfx.cv2heart.image
@@ -845,6 +846,11 @@ if gd then
 --    convert("fleaman2.png")
 --    convert("fleaman1h.png")
 --    convert("fleaman2h.png")
+--    convert("bigheart.png")
+--    convert("heart.png")
+--    convert("bigheart.png")
+    convert("wallchicken.png")
+    convert("moneybag.png")
     
 --    f="fleaman1h.png"
 --    local img = gd.createFromPng("cv2/images/png/"..f)
@@ -6882,17 +6888,29 @@ function spidey.update(inp,joy)
                     o.custom[i].destroy=1
                 end
             elseif o.custom[i].type=="heart" or o.custom[i].type=="bigheart" then
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, gfx.cv2heart)
+                local big = (o.custom[i].type == "bigheart")
+                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.cv2heart)
+--                if big then
+--                    gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.cv2heart)
+--                else
+--                    gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, gfx.cv2heart)
+--                end
+                
                 --o.custom[i].ys=o.custom[i].ys+.1
 
                 if o.custom[i].alivetime == 1 then
                     o.custom[i].ys = .1
+                    if big then o.custom[i].ys = 1 end
                     o.custom[i].falling = true
                 end
                 
                 if o.custom[i].falling then
-                    o.custom[i].ys = math.min(.7, o.custom[i].ys * 1.05)
-                    o.custom[i].x = o.custom[i].x+math.sin(o.custom[i].alivetime *.09)*1
+                    if big then
+                        o.custom[i].ys = math.min(3, o.custom[i].ys * 1.2)
+                    else
+                        o.custom[i].ys = math.min(.7, o.custom[i].ys * 1.05)
+                        o.custom[i].x = o.custom[i].x+math.sin(o.custom[i].alivetime *.09)*1
+                    end
                 end
                 
 
@@ -6921,7 +6939,7 @@ function spidey.update(inp,joy)
                         playSound(0x1f)
                     end
                 end
-                if o.custom[i].alivetime > 800 then
+                if o.custom[i].alivetime > 1000 then
                     o.custom[i].destroy = true
                 end
             elseif o.custom[i].type=="diamondtrail" then
