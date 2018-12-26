@@ -71,6 +71,10 @@ cv2/images/gd/medusa2h.gd
 cv2/images/gd/redcrystal.gd
 cv2/images/gd/whipicon.gd
 cv2/images/gd/whitecrystal.gd
+cv2/images/gd/medusa1.gd
+cv2/images/gd/medusa2.gd
+cv2/images/gd/medusa1h.gd
+cv2/images/gd/medusa2h.gd
 cv2/images/png/arrowcursor.png
 cv2/images/png/arrowcursor_right.png
 cv2/images/png/axe1.png
@@ -139,3 +143,7 @@ cv2/images/png/redcrystal.png
 cv2/images/png/slash.png
 cv2/images/png/whipicon.png
 cv2/images/png/whitecrystal.png
+cv2/images/png/medusa1.png
+cv2/images/png/medusa2.png
+cv2/images/png/medusa1h.png
+cv2/images/png/medusa2h.png

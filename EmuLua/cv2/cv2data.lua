@@ -119,7 +119,7 @@ cv2.enemies = {
         name="Gargoyle",
         exp=3,
     },
-    [0x10] = {name="Skull", exp=2},
+    [0x10] = {name="Skull", exp=2, hp=1},
     [0x11] = {
         name="Hanging Bat",
         exp=1,
@@ -135,7 +135,7 @@ cv2.enemies = {
     [0x13] = {
         name="Werewolf",
         exp=2,
-        attack = 8,
+        attack = 4,
         hp = 10,
     },
     [0x14] = {name="Mansion Zombie", exp=1},
@@ -181,7 +181,7 @@ cv2.enemies = {
     [0x2A] = {name="Town Man", exp=0, hp="initial"},
     [0x2B] = {name="Town Man", exp=0, hp="initial"},
     [0x2C] = {name="Town Old Woman", exp=0, hp="initial"},
-    [0x2D] = {name="Priest", exp=0, hp=0},
+    [0x2D] = {name="Priest", exp=0, hp="initial"},
     [0x2E] = {name="Merchant", exp=0, hp="initial"},
     [0x2F] = {name="Town Knight", exp=0, hp="initial"},
     [0x30] = {name="Fireball", exp=0, hp="initial"},
@@ -217,11 +217,11 @@ cv2.enemies = {
     [0x43] = {
         name="Marsh",
         exp=0,
-        hp=0,
+        hp="initial",
         },
     [0x44] = {name="Death", exp=100},
     [0x45] = {name="Camilla drops", exp=0, hp="initial"},
-    [0x46] = {name="Death hatchet", exp=0},
+    [0x46] = {name="Death hatchet", exp=0, hp="initial"},
     [0x47] = {
         name="Dracula",
         exp=0,
@@ -748,5 +748,12 @@ Play Testing.........Snorenado
 
 
 ]]
+
+
+cv2.medusaHeads = {
+    {x1=0xae, x2=0x250, area = {0x04,0x00,0x00,0x03}, location="Vrad Mountain", },
+    {x1=0x180, x2=0x3d9, area = {0x03,0x00,0x00,0x00}, location="Camilla Cemetary", },
+}
+
 
 return cv2

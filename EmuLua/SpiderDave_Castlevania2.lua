@@ -186,6 +186,8 @@ game.credits = {
     show=false,
 }
 
+game.medusa = {}
+
 game.data = {}
 game.data.enemies=game.data.enemies or {}
 
@@ -223,10 +225,12 @@ game.debugMenuItems = {
     {tab="cheats", text="Fill HP", action=function()
         o.player.hp = o.player.maxHp
         memory.writebyte(0x0080, o.player.hp)
+        --queueSound(0x1f)
     end},
     {tab="cheats", text="Fill hearts", action=function()
         o.player.hearts = o.player.maxHearts
         setHearts(o.player.hearts)
+        --queueSound(0x1f)
     end},
     {tab="cheats", text="Add 1000 gold", action=function()
         o.player.gold = o.player.gold + 1000
@@ -715,6 +719,10 @@ gfx.medusa = {
     {gfx.load("medusa1h"), gfx.load("medusa2h")},
 }
 gfx.castle = gfx.load("castle")
+gfx.fleaman = {
+    {gfx.load("fleaman1"),  gfx.load("fleaman2")},
+    {gfx.load("fleaman1h"),  gfx.load("fleaman2h")},
+}
 
 
 mnu.cursor_image=gfx.cv2heart.image
@@ -825,6 +833,27 @@ if gd then
     end
     
     --emu.message(type(gd))
+    
+    
+    local convert=function(f)
+        local img = gd.createFromPng("cv2/images/png/"..f)
+        local newFile = string.gsub(f, "%.png", "%.gd")
+        img:gd("cv2/images/gd/"..newFile)
+    end
+    
+--    convert("fleaman1.png")
+--    convert("fleaman2.png")
+--    convert("fleaman1h.png")
+--    convert("fleaman2h.png")
+    
+--    f="fleaman1h.png"
+--    local img = gd.createFromPng("cv2/images/png/"..f)
+--    local newFile = string.gsub(f, "%.png", "%.gd")
+--    img:gd("cv2/images/gd/"..newFile)
+--    f="fleaman2h.png"
+--    local img = gd.createFromPng("cv2/images/png/"..f)
+--    local newFile = string.gsub(f, "%.png", "%.gd")
+--    img:gd("cv2/images/gd/"..newFile)
     
 --    f="medusa1h.png"
 --    local img = gd.createFromPng("cv2/images/png/"..f)
@@ -2240,12 +2269,13 @@ function drawHUD()
             --spidey.debug.font=font[6]
             --spidey.debug.font=font[current_font]
             spidey.debug.font=font[5]
-            gui.drawbox(8*14, 8*5+5, 8*16+8*16, 8*5+5+8*4, "#40404080", "#40404080")
+            gui.drawbox(8*14, 8*5+5, 8*16+8*16, 8*5+5+8*6, "#40404080", "#40404080")
             drawfont(8*14,8*5+5,spidey.debug.font, string.format("Area: %02x %02x %02x %02x",area1,area2,area3, returnArea))
             drawfont(8*14,8*6+5,spidey.debug.font, string.format("Area flags: %02x", areaFlags))
             drawfont(8*14,8*7+5,spidey.debug.font, string.format("Scroll: %02x %02x",scrollx, scrolly))
             drawfont(8*14,8*8+5,spidey.debug.font, string.format("Player: %02x %02x",o.player.x, o.player.y))
-            drawfont(8*14,8*9+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
+            drawfont(8*14,8*9+5,spidey.debug.font, string.format("        %02x %02x",scrollx+o.player.x,scrolly+o.player.y))
+            drawfont(8*14,8*10+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
         end
         
         name = "^aH^ai"
@@ -4178,7 +4208,7 @@ function onVBlank()
     if game.applyPlayerPalette and action then
         game.applyPlayerPalette = game.applyPlayerPalette - 1
         if game.applyPlayerPalette <= 0 then
-            spidey.message("apply palette")
+            if spidey.debug then spidey.message("apply palette") end
             memory.writebyteppu(0x3f10, o.player.palette[1])
             memory.writebyteppu(0x3f11, o.player.palette[2])
             memory.writebyteppu(0x3f12, o.player.palette[3])
@@ -4301,7 +4331,6 @@ memory.registerexec(0xc127,1, function()
         if a==0x0e then a=0x62 end
         if a==0x0f then a=0x62 end
     end
-    
     
     if a == 0x0e and o.player.whipItem == items.index["Thief's Dagger"] then a=0x11 end
     
@@ -4481,8 +4510,8 @@ function romPatch()
     -- to 0x7500 it plays a sound effect.  Currently it only works in game.
     --put 1ce0e 20edfe
     --put 1feed 203a86  48 ad0075 f008  2018c1 a900 8d0075  68 60
-    rom_writebytes(0x1ce0e+0x10, spidey.hex2bin("20edfe"))
-    rom_writebytes(0x1feed+0x10, spidey.hex2bin("203a8648ad0075f0082018c1a9008d00756860"))
+    rom_writebytes(0x1c08a+0x10, spidey.hex2bin("20edfe"))
+    rom_writebytes(0x1feed+0x10, spidey.hex2bin("208ac848ad0075f0082018c1a9008d00756860"))
 
     -- remove hp graphics
     rom_writebytes(0x21600+0x10, string.rep(string.char(0x00), 0x60))
@@ -4598,6 +4627,7 @@ function spidey.update(inp,joy)
             config.testEnding=nil
         else
             memory.writebyte(0x0026, 0) -- make sure we remove pause
+            memory.writebyte(0x03c6,0) -- turn on player rendering (it's off if paused)
             
             -- apply number of days to select ending
             config.testEnding = math.max(1,math.min(3, config.testEnding))
@@ -4638,6 +4668,7 @@ function spidey.update(inp,joy)
     area2=memory.readbyte(0x0050)
     area3=memory.readbyte(0x0051) % 0x80 --adds 0x80 if starting on right side
     returnArea=memory.readbyte(0x004e)
+    area4=returnArea
     returnScroll1 = memory.readbyte(0x0458)
     returnScroll2 = memory.readbyte(0x046a)
     returnX = memory.readbyte(0x04a0)
@@ -4735,6 +4766,11 @@ function spidey.update(inp,joy)
         
         memory.writebyte(0x047c, endingCountDown)
     end
+    
+    if game.credits.show and game.credits.y == 0x94 then
+        queueSound(0x3d)
+    end
+    
     
     if game.mode==0x00 and game.resetCounter > 0 then
         game.resetCounter = game.resetCounter - 1
@@ -5006,42 +5042,15 @@ function spidey.update(inp,joy)
              o.player.pendant = (o.player.accessory == items.index["Pendant"])
          end
     end
+    
     if action then
         o.player.inBossRoom = false
         if spidey.debug.enabled then
-            drawfont(0,5+8*5,font[current_font],string.format('HP: %02X %02X',o.player.hp or 0,o.player.maxHp or 0))
-            drawfont(0,5+8*6,font[current_font],string.format('Relics: %02X',relics.nParts) )
+            drawfont(0,5+8*5,spidey.debug.font,string.format("HP: %02X/%02X",o.player.hp or 0,o.player.maxHp or 0))
+            drawfont(0,5+8*6,spidey.debug.font,string.format("Relics: %02X",relics.nParts) )
         end
     end
     
-    if action then
-        game.medusa = game.medusa or {}
-        
-        game.medusa.enabled = false
-        
-        
-        if displayarea=="Vrad Mountain" and scrollx>=0x2e and scrollx<=0x286 then
-            game.medusa.enabled = true
-        end
-        
-        
-        if game.medusa.enabled then
-            game.medusaCounter = (game.medusaCounter or 0x20) + 1
-            local medusaLimit = 2
-            if game.night then medusaLimit=4 end
-            if game.night and game.medusaCounter == 0x90 then
-                if getCustomCount("medusahead") < medusaLimit then
-                    createMedusaHead()
-                end
-            end
-            if game.medusaCounter >=0xb0 then
-                if getCustomCount("medusahead") < medusaLimit then
-                    createMedusaHead()
-                end
-                game.medusaCounter = 0
-            end
-        end
-    end
     
     -- Hide graphics for HP
 --    if action or pausemenu then
@@ -5472,6 +5481,39 @@ function spidey.update(inp,joy)
         o.player.state=memory.readbyte(0x03d8)
         o.player.ducking = (o.player.frame==0x05 or o.player.frame==0x2a or o.player.frame==0x2b or o.player.frame==0x2c)
         
+        game.medusa.enabled = false
+        for k,v in ipairs(cv2data.medusaHeads) do
+            if area1 == v.area[1] and area2 == v.area[2] and area3 == v.area[3] and area4 == v.area[4] then
+                if o.player.x+scrollx>=v.x1 and o.player.x+scrollx<=v.x2 then
+                    game.medusa.enabled = true
+                end
+                if spidey.debug.enabled then
+                    gui.drawbox(v.x1-scrollx,79+10,v.x2-scrollx,91+10,"#FF00ff70", "clear")
+                    gui.drawline(v.x1-scrollx,60+10,v.x1-scrollx,110+10,"#FF00ff70")
+                    gui.drawline(v.x2-scrollx,60+10,v.x2-scrollx,110+10,"#FF00ff70")
+                    
+                    gui.text(v.x1-scrollx+4,82+10, "Medusa Heads", "#FFFFFF90", "clear")
+                    gui.text(v.x2-scrollx-66,82+10, "Medusa Heads", "#FFFFFF90", "clear")
+                end
+            end
+        end
+        
+        if game.medusa.enabled then
+            game.medusaCounter = (game.medusaCounter or 0x20) + 1
+            local medusaLimit = 2
+            if game.night then medusaLimit=4 end
+            if game.night and game.medusaCounter == 0x90 then
+                if getCustomCount("medusahead") < medusaLimit then
+                    createMedusaHead()
+                end
+            end
+            if game.medusaCounter >=0xb0 then
+                if getCustomCount("medusahead") < medusaLimit then
+                    createMedusaHead()
+                end
+                game.medusaCounter = 0
+            end
+        end
         
         if config.getItems then
             for _,item in ipairs(util.split(config.getItems, ",")) do
@@ -5784,6 +5826,16 @@ function spidey.update(inp,joy)
 --                memory.writebyte(0x0306+i, o[i].frame)
                 o[i].destroy = true
             end
+        elseif o[i].name == "High Jump Blob" and not inMansion then
+            o[i].frame=0x00
+            memory.writebyte(0x0306+i, o[i].frame)
+            
+            local frame = math.floor(spidey.counter /7) % 2+1
+            --gfx.draw(o[i].x, o[i].y-8, gfx.fleaman[o[i].facing % 2][frame])
+            gfx.draw(o[i].x, o[i].y-9, gfx.fleaman[1-(o[i].facing % 2)+1][frame])
+
+            
+            --gfx.draw(o[i].x, o[i].y, gfx.fleaman[1])
         elseif o[i].name == "Werewolf" then
             -- The werewolf's senses are better at night; greater rush distance and they can turn to rush at night.
             local rushDistance = 0x32
@@ -6467,7 +6519,7 @@ function spidey.update(inp,joy)
         levelEdit.block = 0
         
         if spidey.debug.enabled then
-            drawfont(0,8*7+5,font[current_font], string.format("%02x %02x %02x",levelEdit.cursor.x,levelEdit.cursor.y, levelEdit.block))
+            drawfont(0,5+8*7,spidey.debug.font, string.format("%02x %02x %02x",levelEdit.cursor.x,levelEdit.cursor.y, levelEdit.block))
         end
         
 --        spidey.debug.levelEdit.cursorX=math.floor((game.scrollX.value+inp.xmouse)/16)
@@ -7272,6 +7324,15 @@ function spidey.update(inp,joy)
         if msgMode==0x00 and (joy[1].right_press or joy[1].left_press) then
             msgChoice=(msgChoice+1) %2
             memory.writebyte(0x7000+4, msgChoice)
+        end
+        if joy[1].cancel_press then
+            -- Still refill hp if not saving.
+            o.player.hp = o.player.maxHp
+            memory.writebyte(0x0080, o.player.hp)
+
+            memory.writebyte(0x7000+3, 1)
+            msgstatus=0x06
+            memory.writebyte(0x007a, msgstatus)
         end
         if msgMode==0x00 and joy[1].confirm_press then
             o.player.hp = o.player.maxHp
