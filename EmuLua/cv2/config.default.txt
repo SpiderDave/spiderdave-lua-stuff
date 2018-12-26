@@ -91,6 +91,9 @@ sortInventory=true
 // candles drop hearts that replace with real hearts (buggy)
 candlesRealHearts=false
 
+// Amount of hearts to start with
+hearts=5
+
 // Maximum hearts
 maxHearts = 99
 

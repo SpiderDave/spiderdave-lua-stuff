@@ -275,6 +275,10 @@ game.debugMenuItems = {
         game.credits.done=false
         game.credits.y=0
     end},
+    {tab="debug", text="Reset", action=function()
+        emu.softreset()
+        emu.message("") -- suppress the "reset" message
+    end},
     {tab="candleitem", text="Heart", action=function()
         config.candleItem = false
     end},
@@ -724,6 +728,9 @@ gfx.fleaman = {
     {gfx.load("fleaman1h"),  gfx.load("fleaman2h")},
 }
 gfx.bigheart = gfx.load("bigheart")
+gfx.heart = gfx.load("heart")
+gfx.moneybag = gfx.load("moneybag")
+gfx.wallchicken = gfx.load("wallchicken")
 
 
 mnu.cursor_image=gfx.cv2heart.image
@@ -849,8 +856,8 @@ if gd then
 --    convert("bigheart.png")
 --    convert("heart.png")
 --    convert("bigheart.png")
-    convert("wallchicken.png")
-    convert("moneybag.png")
+--    convert("wallchicken.png")
+--    convert("moneybag.png")
     
 --    f="fleaman1h.png"
 --    local img = gd.createFromPng("cv2/images/png/"..f)
@@ -2523,6 +2530,41 @@ end
 --    return false
 --end
 
+function onLoadTileSquareoid(t,x,y)
+    -- remove water in town
+    if inTown and not inDoor and t==0x24 then t=0x01 end
+    
+    if config.levelReplaceTest and inTown and not inDoor then
+        if y==0x0a then
+            t=0x01 -- floor
+        elseif y==0x07 and x % 4==0 then
+            t=0x21 --window top
+        elseif y==0x08 and x % 4==0 then
+            t=0x2c --window bottom
+        else
+            t=0x38 --wall
+        end
+    end
+    
+--    t=math.min(0xff, x*8+y)
+    if o.player.pendant and jomaMarsh() then
+        if y==6 then t=0x17 end
+    end
+    
+    -- drac room edits
+--    if y<5 and x==0 then t=0 end
+--    if y<=5 and x==7 then t=0 end
+--    if y==4 and (x==3 or x==4) then t=0 end
+--    if y==5 and x<=6 then t=0 end
+--    if y==5 and (x==2 or x==5) then t= 0x2c end
+--    if t==0 then
+--        t=0x20
+--        if math.random(3)==1 then t=t+1 end
+--    end
+    
+    return t
+end
+
 -- check if attack is sub weapon or whip
 function onWhipOrSubWeapon(isSub)
 --    if o.player.whipItem == items.index["Thief's Dagger"] then
@@ -2735,6 +2777,10 @@ function onMessage(messageNum, cancel)
     --spidey.message("%02x", messageNum)
     
     return messageNum, cancel
+end
+
+function onSetStartingHearts(hearts)
+    return config.hearts or 5
 end
 
 function onSetStartingLives(lives)
@@ -3855,21 +3901,20 @@ function onPlaceStageTile(tile)
     local tileY = memory.readbyte(0x6a)
     local x = memory.getregister("x")
     --joma marsh
-    if o.player.pendant and jomaMarsh() then
-        if tile==0xe0 then
-            tile=0xf6 + ((memory.getregister("x")+1) % 2)*2
-        end
-        if tile==0xe1 then
-            if tileY==0x19 then
-                tile=0xf7 + ((memory.getregister("x")+1) % 2)*2
-            else
-                tile = 0xe7
-            end
-        end
-        --if tile==0xe1 then tile=0x00 end
-        if tile==0xe2 then tile=0xed + (x+1) % 4 end
-        return tile
-    end
+--    if o.player.pendant and jomaMarsh() then
+--        if tile==0xe0 then
+--            tile=0xf6 + ((memory.getregister("x")+1) % 2)*2
+--        end
+--        if tile==0xe1 then
+--            if tileY==0x19 then
+--                tile=0xf7 + ((memory.getregister("x")+1) % 2)*2
+--            else
+--                tile = 0xe7
+--            end
+--        end
+--        if tile==0xe2 then tile=0xed + (x+1) % 4 end
+--        return tile
+--    end
 
 --    if tile==0xe1 then tile=0xe7 end
 --    if tile==0xe2 then tile=0xe7 end
@@ -4214,7 +4259,7 @@ function onVBlank()
     if game.applyPlayerPalette and action then
         game.applyPlayerPalette = game.applyPlayerPalette - 1
         if game.applyPlayerPalette <= 0 then
-            if spidey.debug then spidey.message("apply palette") end
+            if spidey.debug.enabled then spidey.message("apply palette") end
             memory.writebyteppu(0x3f10, o.player.palette[1])
             memory.writebyteppu(0x3f11, o.player.palette[2])
             memory.writebyteppu(0x3f12, o.player.palette[3])
@@ -4746,11 +4791,13 @@ function spidey.update(inp,joy)
     hearts=string.format('%01X%02X',memory.readbyte(0x0049),memory.readbyte(0x0048))
     pattern1=memory.readbyte(0x0101)
     pattern2=memory.readbyte(0x0102)
-    inTown = (pattern1==0x00 and pattern2==0x01)
+    --inTown = (pattern1==0x00 and pattern2==0x01)
+    inTown = (area1==0)
+    inDoor = (areaFlags==0x01)
     inMansion = (pattern1==0x08)
     
---    pattern1=06
---    pattern1=04
+--    pattern1=0
+--    pattern2=1
 --    memory.writebyte(0x0101, pattern1)
     
     --gui.text(20,50,string.format("mode=%02x mode2=%02x",game.mode, game.mode2))
@@ -5118,8 +5165,14 @@ function spidey.update(inp,joy)
     end
     
     if game.mode==0x04 and game.modeCounter == 0x80 then
-        if joy[1].right_press then game.saveSlot = math.min(99,game.saveSlot+1) end
-        if joy[1].left_press then game.saveSlot = math.max(1,game.saveSlot-1) end
+        if joy[1].right_press_repeat and game.saveSlot<99 then
+            game.saveSlot = math.min(99,game.saveSlot+1)
+            queueSound(0x05)
+        end
+        if joy[1].left_press_repeat and game.saveSlot>1 then
+            game.saveSlot = math.max(1,game.saveSlot-1)
+            queueSound(0x05)
+        end
     end
     
     --if subScreen.enter then enterSubScreen() end
@@ -5489,7 +5542,7 @@ function spidey.update(inp,joy)
         
         game.medusa.enabled = false
         for k,v in ipairs(cv2data.medusaHeads) do
-            if area1 == v.area[1] and area2 == v.area[2] and area3 == v.area[3] and area4 == v.area[4] then
+            if area1 == v.area[1] and area2 == v.area[2] and area3 == v.area[3] and area4 == (v.area[4] or area4) then
                 if o.player.x+scrollx>=v.x1 and o.player.x+scrollx<=v.x2 then
                     game.medusa.enabled = true
                 end
@@ -6746,7 +6799,7 @@ function spidey.update(inp,joy)
                 if items.index[o.custom[i].itemName] then
                     item = items[items.index[o.custom[i].itemName]]
                     if item.type=="gold" then 
-                        o.custom[i].gfx=gfx.gold[3]
+                        o.custom[i].gfx=gfx.moneybag
                     end
                 end
                 
@@ -6774,7 +6827,14 @@ function spidey.update(inp,joy)
                 local x,y=o.custom[i].x-scrollx, o.custom[i].y-scrolly
                 --gfx.draw(o.custom[i].x-scrollx-4, o.custom[i].y-scrolly+8, o.custom[i].gfx or gfx.items.bag)
                 
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, o.custom[i].gfx or gfx.items.bag)
+                local xo,yo = -2,-6
+                if item.type=="gold" then 
+                    o.custom[i].gfx = gfx.moneybag
+                    xo=-2
+                    yo=-10
+                end
+                
+                gfx.draw(o.custom[i].x-scrollx+xo, o.custom[i].y-scrolly+yo, o.custom[i].gfx or gfx.items.bag)
                 
                 if o.custom[i].xdist <= 12 and o.custom[i].ydist <= 12 then
                     o.custom[i].destroy = 1
@@ -6889,7 +6949,7 @@ function spidey.update(inp,joy)
                 end
             elseif o.custom[i].type=="heart" or o.custom[i].type=="bigheart" then
                 local big = (o.custom[i].type == "bigheart")
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.cv2heart)
+                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.heart)
 --                if big then
 --                    gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.cv2heart)
 --                else

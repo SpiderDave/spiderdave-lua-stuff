@@ -162,7 +162,10 @@ registerExec(0x88ba+3,1,1,"onSetWhipHitbox2")
 registerExec(0x88fc,1,1,"onSetHitboxCollision1")
 registerExec(0x8916,1,1,"onSetHitboxCollision2")
 
+registerExec(0xea52+2,7,1,"onLoadTileSquareoid")
 
+
+registerExec(0xc559+2,7,1,"onSetStartingHearts")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -825,3 +828,18 @@ function _onSetHitboxCollision2(address,len,t)
     end
 end
 
+-- note: this is called multiple times for one squareoid
+function _onLoadTileSquareoid(address,len,t)
+    if type(onLoadTileSquareoid)=="function" then
+        
+        local a = onLoadTileSquareoid(t.a, memory.readbyte(0x0058), math.floor(memory.readbyte(0x6a)/4))
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSetStartingHearts(address,len,t)
+    if type(onSetStartingHearts)=="function" then
+        local a = onSetStartingHearts(tonumber(string.format("%02x",t.a)))
+        if a then memory.setregister("a", tonumber(string.format("%02d",a),16)) end
+    end
+end
