@@ -147,3 +147,13 @@ cv2/images/png/medusa1.png
 cv2/images/png/medusa2.png
 cv2/images/png/medusa1h.png
 cv2/images/png/medusa2h.png
+cv2/sound/cv1/23.wav
+Spidey/SpideyStuff.lua
+Spidey/TSerial.lua
+Spidey/default_font.lua
+Spidey/graphics.lua
+Spidey/sound.lua
+Spidey/util.lua
+Spidey/tools/NirCmd/NirCmd.chm
+Spidey/tools/NirCmd/nircmd.exe
+Spidey/tools/NirCmd/nircmdc.exe

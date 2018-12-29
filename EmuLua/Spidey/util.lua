@@ -114,4 +114,28 @@ function util.removeLineBreaks(s)
     return s
 end
 
+function util.getScriptFolder()
+    local str = debug.getinfo(2, "S").source:sub(2)
+    if util.isWindows() then
+        return str:match("(.*[/\\])")
+    else
+        return str:match("(.*/)")
+    end
+end
+
+-- Check if we're on Windows
+function util.isWindows()
+    return (package.config:sub(1,1)=="\\")
+end
+
+function util.fixPathSlashes(p)
+    
+    if util.isWindows() then
+        p = string.gsub(p, "/","\\")
+    else
+        p = string.gsub(p, "\\","/")
+    end
+    return p
+end
+
 return util

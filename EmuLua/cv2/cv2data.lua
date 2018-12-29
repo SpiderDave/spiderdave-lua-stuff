@@ -212,7 +212,12 @@ cv2.enemies = {
     [0x3E] = {name="Falling Rock", exp=0, hp="initial"},
     [0x3F] = {name="Thornweed", exp=1},
     [0x40] = {name="Swamp Worm (high)", exp=1},
-    [0x41] = {name="High Jump Blob", exp=1},
+    [0x41] = {
+        name="High Jump Blob",
+        exp=1,
+        hp=4,
+        attack=7,
+    },
     [0x42] = {name="Camilla", exp=50},
     [0x43] = {
         name="Marsh",
@@ -739,7 +744,7 @@ cv2.credits = [[
 
 
 Coding..............SpiderDave
-Candle Editor.....krunkcleanup
+Candle Edits......krunkcleanup
 Graphics................Konami
 Graphics/edit.......THiN CRUST
 Play Testing......krunkcleanup
@@ -753,6 +758,10 @@ Play Testing.........Snorenado
 cv2.medusaHeads = {
     {x1=0xae, x2=0x250, area = {0x04,0x00,0x00}, location="Vrad Mountain", },
     {x1=0x180, x2=0x3d9, area = {0x03,0x00,0x00}, location="Camilla Cemetary", },
+}
+
+cv2.sounds = {
+    getMoneyBag = "cv1/23.wav"
 }
 
 

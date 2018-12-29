@@ -126,7 +126,6 @@ require("cv2.callbacks")
 local hitboxes = require("cv2.hitboxes")
 local config={}
 
-
 function config.load(filename)
     if not util.fileExists(filename) then return end
     local file = io.open(filename, "r")
@@ -151,9 +150,19 @@ config.load("cv2/config.txt")
 spidey.joyAliases.confirm = config.button_confirm or spidey.joyAliases.confirm
 spidey.joyAliases.cancel = config.button_cancel or spidey.joyAliases.cancel
 
-
 local graphics = require("Spidey.graphics")
 graphics:init(config.graphics_mode or "")
+
+
+local sound = require("spidey.sound")
+sound:init(util, util.getScriptFolder())
+
+for k,v in pairs(cv2data.sounds) do
+    sound:makeAlias(k, "cv2/sound/"..v)
+end
+
+if not config.externalSound then sound.enabled=false end
+
 
 --local textMap = " ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
 local textMap = " ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
@@ -165,6 +174,7 @@ end
 textMap2["\n"]=0xfe
 
 game = {}
+game.scriptPath = util.getScriptFolder()
 game.paused = false
 game.map = cv2data.map
 game.map.x=0
@@ -223,18 +233,18 @@ game.debugMenuItems = {
         game.setDebugMenuTab("debug")
     end},
     {tab="cheats", text="Fill HP", action=function()
-        o.player.hp = o.player.maxHp
-        memory.writebyte(0x0080, o.player.hp)
+        objects.player.hp = objects.player.maxHp
+        memory.writebyte(0x0080, objects.player.hp)
         --queueSound(0x1f)
     end},
     {tab="cheats", text="Fill hearts", action=function()
-        o.player.hearts = o.player.maxHearts
-        setHearts(o.player.hearts)
+        objects.player.hearts = objects.player.maxHearts
+        setHearts(objects.player.hearts)
         --queueSound(0x1f)
     end},
     {tab="cheats", text="Add 1000 gold", action=function()
-        o.player.gold = o.player.gold + 1000
-        memory.writeword(0x7000+1, o.player.gold)
+        objects.player.gold = objects.player.gold + 1000
+        memory.writeword(0x7000+1, objects.player.gold)
     end},
     {tab="cheats", text=function() return "No Enemies "..(config.noEnemies and "on" or "off") end, action=function()
         config.noEnemies = not config.noEnemies
@@ -248,6 +258,9 @@ game.debugMenuItems = {
     end},
     {tab="-cheats", text=function() return "Save Game - slot "..game.saveSlot end, action=function()
         saveGame(game.saveSlot)
+    end},
+    {tab="debug", text="sfxtest", action=function()
+        sound:play("getMoneyBag")
     end},
     {tab="debug", text="Warp", action=function()
         game.setDebugMenuTab("warp")
@@ -404,8 +417,8 @@ mnu.items={
                 returnScroll2 = memory.readbyte(0x0046a),
                 returnX = memory.readbyte(0x04a0),
                 returnY = memory.readbyte(0x04b2),
-                playerX=o.player.x,
-                playerY=o.player.y,
+                playerX=objects.player.x,
+                playerY=objects.player.y,
                 scrollX=scrollx,
                 scrollY=scrolly,
             }
@@ -459,7 +472,7 @@ mnu.items={
                 if e then
                     out=out..string.format("%s\nExp: %s\nHP: %s\nAttack: %s\n", e.name, e.exp or "?",e.hp or "?", e.attack or "?")
                 
-                    local oldWhip = o.player.whipItem
+                    local oldWhip = objects.player.whipItem
                     
                     
 --                    +--------------+--------------+--------------+--------------+--------------+--------------+--------------+
@@ -484,7 +497,7 @@ mnu.items={
                         for _,level in ipairs(levels) do
                             out=out..string.format("| %-12s |","level "..level)
                             for _,whip in ipairs(whips) do
-                                o.player.whipItem = whip.index
+                                objects.player.whipItem = whip.index
                                 stats = getStats(level)
                                 local nHits = math.ceil(e.hp/stats.damage)
                                 out=out..string.format(" %-12s |",nHits)
@@ -501,7 +514,7 @@ mnu.items={
 --                    for _,level in ipairs(levels) do
 --                        for _,item in ipairs(items) do
 --                            if item.type=="whip" then
---                                o.player.whipItem = item.index
+--                                objects.player.whipItem = item.index
 --                                stats = getStats(level)
 --                                local nHits
                                 
@@ -517,12 +530,12 @@ mnu.items={
                 
             end
             
-            o.player.whipItem = oldWhip
+            objects.player.whipItem = oldWhip
             
             writetofile('cv2/damage.txt', out)
             emu.message("output to cv2/damage.txt")
---            local armorDef = items[o.player.armor or items.index["Red Tunic"]].ar or 0
---            local weaponPower = items[o.player.whipItem or items.index["Leather Whip"]].attack or 0
+--            local armorDef = items[objects.player.armor or items.index["Red Tunic"]].ar or 0
+--            local weaponPower = items[objects.player.whipItem or items.index["Leather Whip"]].attack or 0
 --            cv2data.enemies
         end
     },
@@ -960,57 +973,56 @@ weapons.gfx={}
 
 local locations = cv2data.locations
 
-o={}
-o.count=12
-o.player = {}
-o.boss={}
+objects = {}
+objects.count=12
+objects.player = {}
+objects.boss={}
 
-o.player.gold = 0
-o.player.maxHearts = config.maxHearts or 99
-o.player.clues = {}
+objects.player.gold = 0
+objects.player.maxHearts = config.maxHearts or 99
+objects.player.clues = {}
 
-for i=0,o.count-1 do
-    o[i]={}
+for i=0,objects.count-1 do
+    objects[i]={}
 end
 
 
-o.player.bossdoor=function()
+objects.player.bossdoor=function()
     --Don't let player leave room
     n=0x17
-    if o.player.x<0+n then o.player.x=0+n end
-    if o.player.x>255-n then o.player.x=255-n end
-    if o.player.y<0+n then o.player.y=0+n end
-    if o.player.y>255-n then o.player.y=255-n end
-    memory.writebyte(0x0348, o.player.x)
-    memory.writebyte(0x0324, o.player.y)
-    o.player.inBossRoom=true
+    if objects.player.x<0+n then objects.player.x=0+n end
+    if objects.player.x>255-n then objects.player.x=255-n end
+    if objects.player.y<0+n then objects.player.y=0+n end
+    if objects.player.y>255-n then objects.player.y=255-n end
+    memory.writebyte(0x0348, objects.player.x)
+    memory.writebyte(0x0324, objects.player.y)
+    objects.player.inBossRoom=true
 end
 
-o.whip={}
-o.whip[0]={}
-o.whip[1]={}
-o.weapons={}
-o.weapons[0]={}
-o.weapons[1]={}
-o.weapons[2]={}
+objects.whip={}
+objects.whip[0]={}
+objects.whip[1]={}
+objects.weapons={}
+objects.weapons[0]={}
+objects.weapons[1]={}
+objects.weapons[2]={}
 
-o.custom={}
-o.custom.count=500
-o.custom.destroyall=function()
-    for _i=0,o.custom.count-1 do
-        if o.custom[_i].deSpawn then
-            o.custom[_i].deSpawn()
+objects.custom={}
+objects.custom.count=500
+objects.custom.destroyall=function()
+    for i=0,objects.custom.count-1 do
+        if objects.custom[i] and objects.custom[i].deSpawn then
+            objects.custom[i].deSpawn()
         end
-        o.custom[_i] = {active=0}
+        objects.custom[i]={custom=true, type='',active=0,x=0,y=0}
     end
 end
-for i=0,o.custom.count-1 do
-    o.custom[i]={type='',active=0,x=0,y=0}
-end
 
-o.custom.isOnScreen=function(i)
-    if not o.custom[i].area then return false end
-    return (area1==o.custom[i].area[1] and area2==o.custom[i].area[2] and area3==o.custom[i].area[3] and areaFlags==(o.custom[i].area[4] or areaFlags))
+objects.custom.destroyall()
+
+objects.custom.isOnScreen=function(i)
+    if not objects.custom[i].area then return false end
+    return (area1==objects.custom[i].area[1] and area2==objects.custom[i].area[2] and area3==objects.custom[i].area[3] and areaFlags==(objects.custom[i].area[4] or areaFlags))
 end
 
 function saveCandles()
@@ -1049,7 +1061,7 @@ function collision(t1,t2)
 end
 
 
-o.custom.createCandles = function()
+objects.custom.createCandles = function()
     for k,v in ipairs(candles) do
         local candle = createObject("candle", v.x, v.y)
         candle.area = {
@@ -1064,22 +1076,22 @@ o.custom.createCandles = function()
     end
 end
 
-o.custom.createLevelObjects = function()
+objects.custom.createLevelObjects = function()
     for k,v in ipairs(levelObjects) do
         local i=getunusedcustom()
         if i then
-            o.custom[i].type = v.type
-            o.custom[i].area = {
+            objects.custom[i].type = v.type
+            objects.custom[i].area = {
                 [1]=v.area[1],
                 [2]=v.area[2],
                 [3]=v.area[3],
                 [4]=v.area[4],
             }
-            o.custom[i].x = v.x
-            o.custom[i].y = v.y
-            o.custom[i].outscreen = v.outscreen
-            o.custom[i].active = v.active
-            o.custom[i].itemName = v.name
+            objects.custom[i].x = v.x
+            objects.custom[i].y = v.y
+            objects.custom[i].outscreen = v.outscreen
+            objects.custom[i].active = v.active
+            objects.custom[i].itemName = v.name
         end
     end
 end
@@ -1098,7 +1110,7 @@ end
 
 function getCustomCount(t)
     local count=0
-    for k,v in ipairs(o.custom) do
+    for k,v in ipairs(objects.custom) do
         if v.active==1 and v.type==t then
             count=count+1
         end
@@ -1107,9 +1119,9 @@ function getCustomCount(t)
 end
 
 function isCustomDuplicate(i)
-    for k,v in ipairs(o.custom) do
-        if k~=i and v.active==1 and v.type==o.custom[i].type then
-            if v.originX == o.custom[i].originX and v.originY == o.custom[i].originY then
+    for k,v in ipairs(objects.custom) do
+        if k~=i and v.active==1 and v.type==objects.custom[i].type then
+            if v.originX == objects.custom[i].originX and v.originY == objects.custom[i].originY then
                 return true
             end
         end
@@ -1120,7 +1132,7 @@ end
 
 
 function destroyEnemies()
-    for i=0,o.count-1 do
+    for i=0,objects.count-1 do
         memory.writebyte(0x03ba+i,0)
         memory.writebyte(0x0306+i,0)
     end
@@ -1155,12 +1167,12 @@ function saveGame(slot)
     end
     
     local saveData = {
-        hearts = o.player.hearts,
-        maxHearts = o.player.maxHearts,
-        hp = o.player.hp,
-        maxHp = o.player.maxHp,
-        whip = o.player.whip,
-        level = o.player.level,
+        hearts = objects.player.hearts,
+        maxHearts = objects.player.maxHearts,
+        hp = objects.player.hp,
+        maxHp = objects.player.maxHp,
+        whip = objects.player.whip,
+        level = objects.player.level,
         time1=memory.readbyte(0x0086),
         time2=memory.readbyte(0x0085),
         day = day,
@@ -1170,12 +1182,12 @@ function saveGame(slot)
         subScreenRelic = subScreen.relic or relics.current,
         relicsCurrent = relics.current,
         weapon = weapons.current,
-        gold = o.player.gold,
-        items = o.player.items,
-        lives = o.player.lives,
-        exp = o.player.exp,
-        laurels = o.player.laurels,
-        garlic = o.player.garlic,
+        gold = objects.player.gold,
+        items = objects.player.items,
+        lives = objects.player.lives,
+        exp = objects.player.exp,
+        laurels = objects.player.laurels,
+        garlic = objects.player.garlic,
         area1=area1,
         area2=area2,
         area3=area3,
@@ -1185,12 +1197,12 @@ function saveGame(slot)
         returnScroll2 = returnScroll2,
         returnX=returnX,
         returnY=returnY,
-        whipItem = o.player.whipItem,
-        weaponItem = o.player.weaponItem,
-        armor=o.player.armor,
-        accessory=o.player.accessory,
+        whipItem = objects.player.whipItem,
+        weaponItem = objects.player.weaponItem,
+        armor=objects.player.armor,
+        accessory=objects.player.accessory,
         itemList = itemList2,
-        clues = o.player.clues,
+        clues = objects.player.clues,
     }
     
     local t= TSerial.pack(saveData)
@@ -1219,12 +1231,12 @@ function loadGame(slot, setArea)
     
     local saveData = TSerial.unpack(getfilecontents(string.format("cv2/SaveGame%d.dat",slot)))
     
-    o.player.hearts = saveData.hearts
-    o.player.maxHearts = saveData.maxHearts
-    o.player.hp = saveData.hp
-    o.player.maxHp = saveData.maxHp
-    o.player.whip = saveData.whip
-    o.player.level = saveData.level
+    objects.player.hearts = saveData.hearts
+    objects.player.maxHearts = saveData.maxHearts
+    objects.player.hp = saveData.hp
+    objects.player.maxHp = saveData.maxHp
+    objects.player.whip = saveData.whip
+    objects.player.level = saveData.level
     local time1 = saveData.time1
     local time2 = saveData.time2
     day = saveData.day
@@ -1234,16 +1246,16 @@ function loadGame(slot, setArea)
     subScreen.relic = saveData.subScreenRelic
     relics.current = saveData.relicsCurrent
     weapons.current = saveData.weapon
-    o.player.gold = saveData.gold
-    o.player.items = saveData.items
-    o.player.lives = saveData.lives
-    o.player.exp = saveData.exp
-    o.player.laurels = saveData.laurels
-    o.player.garlic = saveData.garlic
-    o.player.weaponItem = saveData.weaponItem
-    o.player.whipItem = saveData.whipItem
-    o.player.armor = saveData.armor
-    o.player.accessory = saveData.accessory
+    objects.player.gold = saveData.gold
+    objects.player.items = saveData.items
+    objects.player.lives = saveData.lives
+    objects.player.exp = saveData.exp
+    objects.player.laurels = saveData.laurels
+    objects.player.garlic = saveData.garlic
+    objects.player.weaponItem = saveData.weaponItem
+    objects.player.whipItem = saveData.whipItem
+    objects.player.armor = saveData.armor
+    objects.player.accessory = saveData.accessory
     --itemList = saveData.itemList or itemList
     itemList = saveData.itemList
     
@@ -1257,15 +1269,15 @@ function loadGame(slot, setArea)
     returnX = saveData.returnX
     returnY = saveData.returnY
     
-    o.player.clues = saveData.clues or {}
+    objects.player.clues = saveData.clues or {}
     
     --subScreen.relic = relics.current
     
-    setHearts(o.player.hearts)
-    memory.writebyte(0x0080, o.player.hp)
-    memory.writebyte(0x0081, o.player.maxHp)
-    memory.writebyte(0x0434, o.player.whip)
-    memory.writebyte(0x008b, o.player.level)
+    setHearts(objects.player.hearts)
+    memory.writebyte(0x0080, objects.player.hp)
+    memory.writebyte(0x0081, objects.player.maxHp)
+    memory.writebyte(0x0434, objects.player.whip)
+    memory.writebyte(0x008b, objects.player.level)
     memory.writebyte(0x0086, time1)
     memory.writebyte(0x0085, time2)
     memory.writebyte(0x0083, day)
@@ -1280,23 +1292,23 @@ function loadGame(slot, setArea)
 
     memory.writebyte(0x0090, weapons.current)
     
-    memory.writeword(0x7000+1, o.player.gold)
-    memory.writebyte(0x004a, o.player.items % 0x100)
-    memory.writebyte(0x0092, (o.player.items - (o.player.items % 0x100))/0x100)
-    memory.writebyte(0x0031, o.player.lives)
+    memory.writeword(0x7000+1, objects.player.gold)
+    memory.writebyte(0x004a, objects.player.items % 0x100)
+    memory.writebyte(0x0092, (objects.player.items - (objects.player.items % 0x100))/0x100)
+    memory.writebyte(0x0031, objects.player.lives)
     
-    local e = tonumber(string.format("%04d",o.player.exp),16)
+    local e = tonumber(string.format("%04d",objects.player.exp),16)
     memory.writebyte(0x46, e % 0x100)
     memory.writebyte(0x47, (e-(e % 0x100))/0x100)
     
-    memory.writebyte(0x004c, o.player.laurels)
-    memory.writebyte(0x004d, o.player.garlic)
+    memory.writebyte(0x004c, objects.player.laurels)
+    memory.writebyte(0x004d, objects.player.garlic)
     
     
-    setWeapon(o.player.weaponItem)
-    setWhip(o.player.whipItem)
-    setArmor(o.player.armor)
-    setAccessory(o.player.accessory)
+    setWeapon(objects.player.weaponItem)
+    setWhip(objects.player.whipItem)
+    setArmor(objects.player.armor)
+    setAccessory(objects.player.accessory)
     
     updateItems()
     
@@ -1342,8 +1354,8 @@ function removeItem(name, amount)
                 item.amount=(item.amount or 0)-amount
                 newList[#newList+1] = item
             else
-                if item.index==o.player.weaponItem then
-                    o.player.weaponItem = nil
+                if item.index==objects.player.weaponItem then
+                    objects.player.weaponItem = nil
                     weapons.current=0
                     setWeapon(0)
                 end
@@ -1393,14 +1405,15 @@ function getItem(n, showMessage, delay)
     end
     
     if item.type =="gold" then
-        o.player.gold = o.player.gold+item.gold
-        memory.writeword(0x7000+1, o.player.gold)
+        sound:play("getMoneyBag")
+        objects.player.gold = objects.player.gold+item.gold
+        memory.writeword(0x7000+1, objects.player.gold)
         --if showMessage then emu.message(string.format("you got %d gold.", item.gold or 0)) end
         if showMessage then createItemPopUp(string.format("%d gold",item.gold or 0)) end
         return
     elseif item.type =="food" then
-        o.player.hp=math.min(o.player.maxHp, o.player.hp+(item.hp or 1))
-        memory.writebyte(0x0080, o.player.hp)
+        objects.player.hp=math.min(objects.player.maxHp, objects.player.hp+(item.hp or 1))
+        memory.writebyte(0x0080, objects.player.hp)
 
         --if showMessage then emu.message(string.format("you got %s.", item.name)) end
         if showMessage then createItemPopUp(item.name) end
@@ -1549,7 +1562,7 @@ function getExtraData()
             {name = "Red Tunic"},
         }
         
-        for i = 0, o.player.whip do
+        for i = 0, objects.player.whip do
             itemList[#itemList+1] = {name = cv2data.whips.names[i]}
         end
         
@@ -1559,15 +1572,15 @@ function getExtraData()
             end
         end
         
-        o.player.gold = 50
-        memory.writeword(0x7000+1, o.player.gold)
+        objects.player.gold = 50
+        memory.writeword(0x7000+1, objects.player.gold)
         
         memory.writebyte(0x7400, game.saveSlot)
         --if game.saveSlot == 0 then emu.pause() end
         --emu.message(string.format("%02x %02x",game.saveSlot,memory.readbyte(0x7400)))
         --emu.message(game.saveSlot)
     end
-    o.player.gold = memory.readword(0x7000+1)
+    objects.player.gold = memory.readword(0x7000+1)
     --0x7000+3 = msgMode
     --0x7000+4 = msgChoice
     --0x7000+10 = armor
@@ -1650,48 +1663,48 @@ function getExtraData()
     end
     
     -- 13 clues 0x7401 to 0x740e
-    o.player.clues = {}
+    objects.player.clues = {}
     for i=1, 13 do
-        o.player.clues[i] = (memory.readbyte(0x7400+i)~=0)
+        objects.player.clues[i] = (memory.readbyte(0x7400+i)~=0)
     end
     
 end
 
 function setArmor(n)
-    o.player.armor = n or o.player.armor
-    if (o.player.armor or 0) == 0 then
-        o.player.armor = items.index["Red Plate"]
+    objects.player.armor = n or objects.player.armor
+    if (objects.player.armor or 0) == 0 then
+        objects.player.armor = items.index["Red Plate"]
         if not items.index["Red Plate"] then emu.pause() end
     end
     
-    memory.writebyte(0x7000+10, o.player.armor or 0)
-    if o.player.armor == 0 then 
+    memory.writebyte(0x7000+10, objects.player.armor or 0)
+    if objects.player.armor == 0 then 
         -- no armor
-        o.player.armor = nil
-        o.player.palette = cv2data.palettes.simon[1].palette
+        objects.player.armor = nil
+        objects.player.palette = cv2data.palettes.simon[1].palette
     else
-        o.player.palette = items[o.player.armor].palette
+        objects.player.palette = items[objects.player.armor].palette
     end
 end
 
 function setAccessory(n)
-    o.player.accessory = n or o.player.accessory
-    memory.writebyte(0x7000+13, o.player.accessory or 0)
-    if o.player.accessory == 0 then 
+    objects.player.accessory = n or objects.player.accessory
+    memory.writebyte(0x7000+13, objects.player.accessory or 0)
+    if objects.player.accessory == 0 then 
         -- no accessory
-        o.player.accessory = nil
-        --o.player.palette = cv2data.palettes.simon[1].palette
+        objects.player.accessory = nil
+        --objects.player.palette = cv2data.palettes.simon[1].palette
     else
-        --o.player.palette = items[o.player.armor].palette
+        --objects.player.palette = items[objects.player.armor].palette
     end
 
-    if o.player.accessory == items.index["Soul of Bat"] then
-        if not o.player.batMode then
-            --o.player.batMode=true
+    if objects.player.accessory == items.index["Soul of Bat"] then
+        if not objects.player.batMode then
+            --objects.player.batMode=true
             --memory.writebyte(0x03b5,0xff) --help disable whip
         end
-    elseif o.player.batMode then
-        o.player.batMode = false
+    elseif objects.player.batMode then
+        objects.player.batMode = false
         -- reenable whip better
         whipframe=00
         memory.writebyte(0x0445,whipframe)
@@ -1700,40 +1713,40 @@ function setAccessory(n)
 end
 
 function setWhip(n)
-    o.player.whipItem = n or o.player.whipItem
-    if (o.player.whipItem or 0) == 0 then
-        o.player.whipItem = items.index["Leather Whip"]
+    objects.player.whipItem = n or objects.player.whipItem
+    if (objects.player.whipItem or 0) == 0 then
+        objects.player.whipItem = items.index["Leather Whip"]
     end
 
-    --emu.message(string.format("setwhip %d",o.player.whipItem))
-    memory.writebyte(0x7000+11, o.player.whipItem)
-    if o.player.whipItem == 0 then 
+    --emu.message(string.format("setwhip %d",objects.player.whipItem))
+    memory.writebyte(0x7000+11, objects.player.whipItem)
+    if objects.player.whipItem == 0 then 
         -- no whip
-        o.player.whipItem = nil
+        objects.player.whipItem = nil
         memory.writebyte(0x0434, 0)
     else
-        memory.writebyte(0x0434, items[o.player.whipItem].whipBase)
+        memory.writebyte(0x0434, items[objects.player.whipItem].whipBase)
     end
 end
 
 function setWeapon(n)
-    o.player.weaponItem = n or o.player.weaponItem
-    memory.writebyte(0x7000+12, o.player.weaponItem or 0)
-    if not items[o.player.weaponItem] then
-    --if o.player.weaponItem == 0 then 
+    objects.player.weaponItem = n or objects.player.weaponItem
+    memory.writebyte(0x7000+12, objects.player.weaponItem or 0)
+    if not items[objects.player.weaponItem] then
+    --if objects.player.weaponItem == 0 then 
         -- no weapon
-        o.player.weaponItem = nil
+        objects.player.weaponItem = nil
         weapons.current=0
         memory.writebyte(0x0090, weapons.current)
     else
-        weapons.current=items[o.player.weaponItem].weaponBase or items[o.player.weaponItem].weaponIndex or 0
+        weapons.current=items[objects.player.weaponItem].weaponBase or items[objects.player.weaponItem].weaponIndex or 0
         memory.writebyte(0x0090, weapons.current)
     end
 end
 
 function numClues()
     local n=0
-    for k,clue in ipairs(o.player.clues) do
+    for k,clue in ipairs(objects.player.clues) do
         if clue then n=n+1 end
     end
     return n
@@ -1828,8 +1841,8 @@ function warpPlayer(w)
     returnScroll2=w.returnScroll2
     returnX=w.returnX
     returnY=w.returnY
-    o.player.x=w.playerX
-    o.player.y=w.playerY
+    objects.player.x=w.playerX
+    objects.player.y=w.playerY
     scrollx=w.scrollX
     scrolly=w.scrollY
     
@@ -1843,8 +1856,8 @@ function warpPlayer(w)
     memory.writebyte(0x4a0, returnX)
     memory.writebyte(0x4b2, returnY)
     
-    memory.writebyte(0x0348, o.player.x)
-    memory.writebyte(0x0324, o.player.y)
+    memory.writebyte(0x0348, objects.player.x)
+    memory.writebyte(0x0324, objects.player.y)
     
     setScroll()
 
@@ -1862,8 +1875,8 @@ function setScroll(x,y)
 end
 
 function getunused()
-    for _i=0,o.count-1 do
-        if o[_i].type==0 then
+    for _i=0,objects.count-1 do
+        if objects[_i].type==0 then
             return _i
         end
     end
@@ -1897,13 +1910,13 @@ function drawSubScreen()
     gui.drawbox(x+28-5-1, y+28-4+1, x+24+8*w+4+3, 28+24+h*08+4+1-1+4, "clear", borderColor)
     
     drawfont(x+28,y+28+8*1,font[subScreenFont], "Simon")
-    drawfont(x+28+8*17,y+28+8*1,font[subScreenFont], string.format("Level %02d", o.player.level+1))
+    drawfont(x+28+8*17,y+28+8*1,font[subScreenFont], string.format("Level %02d", objects.player.level+1))
     
-    drawfont(x+28+8*16,y+28+8*17,font[itemFont], string.format("Lives: %02d",o.player.lives-1))
+    drawfont(x+28+8*16,y+28+8*17,font[itemFont], string.format("Lives: %02d",objects.player.lives-1))
     drawfont(x+28+8*0,y+28+8*19,font[subScreenFont], string.format("Day %d",day+1))
     drawfont(x+28+8*14,y+28+8*19,font[subScreenFont], string.format("Time: %s",time))
     
---    local s = string.format("%d/%d", o.player.hp, o.player.maxHp)
+--    local s = string.format("%d/%d", objects.player.hp, objects.player.maxHp)
 --    drawfont(x+28+8*11,y+28+8*4,font[subScreenFont], " HP:")
 --    drawfont(x+28+8*(11+12-#s),y+28+8*4,font[subScreenFont], s)
     -- for now, draw a line to fix missing slash character
@@ -1912,14 +1925,14 @@ function drawSubScreen()
     --drawfont(x+28+8*11,y+28+8*5,font[subScreenFont], "Exp:    1234")
     
 --    drawfont(x+28+8*11,y+28+8*5,font[subScreenFont], string.format("Exp:  %6d", getCurrentExp()))
---    drawfont(x+28+8*10,y+28+8*6,font[subScreenFont], string.format("Next:  %6d", o.player.expNext))
+--    drawfont(x+28+8*10,y+28+8*6,font[subScreenFont], string.format("Next:  %6d", objects.player.expNext))
     
     --gui.drawbox(x+28+8*0, y+28+8*9+3, x+28+8*23+6,y+28+8*9+4, "clear", borderColor)
     
     gui.drawbox(x+28+8*0, y+28+8*9+3, x+28+8*9,y+28+8*17+4, "clear", borderColor)
     
-    --drawfont(x+28,y+28+8*8,font[itemFont], cv2data.whips.names[o.player.whip])
-    --drawfont(x+28+8*12,y+28+8*10,font[itemFont], cv2data.whips.names[o.player.whip])
+    --drawfont(x+28,y+28+8*8,font[itemFont], cv2data.whips.names[objects.player.whip])
+    --drawfont(x+28+8*12,y+28+8*10,font[itemFont], cv2data.whips.names[objects.player.whip])
     
     local stats = getStats()
     drawfont(x+28+8*18,y+28+8*3,font[itemFont], string.format("ATT: %d\nDEF: %d", stats.atk, stats.def))
@@ -1936,17 +1949,17 @@ function drawSubScreen()
     end
     drawfont(x+44,y+28+8*16,font[itemFont], "Map")
     
-    if o.player.armor then
-        drawInventoryItemName(x+8*13+1,y+28+8*11,getInventoryIndex(items[o.player.armor].name))
+    if objects.player.armor then
+        drawInventoryItemName(x+8*13+1,y+28+8*11,getInventoryIndex(items[objects.player.armor].name))
     end
-    if o.player.whipItem then
-        drawInventoryItemName(x+8*13+1,y+28+8*12,getInventoryIndex(items[o.player.whipItem].name))
+    if objects.player.whipItem then
+        drawInventoryItemName(x+8*13+1,y+28+8*12,getInventoryIndex(items[objects.player.whipItem].name))
     end
-    if o.player.weaponItem then
-        drawInventoryItemName(x+8*13+1,y+28+8*13,getInventoryIndex(items[o.player.weaponItem].name))
+    if objects.player.weaponItem then
+        drawInventoryItemName(x+8*13+1,y+28+8*13,getInventoryIndex(items[objects.player.weaponItem].name))
     end
-    if o.player.accessory then
-        drawInventoryItemName(x+8*13+1,y+28+8*14,getInventoryIndex(items[o.player.accessory].name))
+    if objects.player.accessory then
+        drawInventoryItemName(x+8*13+1,y+28+8*14,getInventoryIndex(items[objects.player.accessory].name))
     end
     
     -- draw relics
@@ -1981,22 +1994,22 @@ function drawSubScreen()
     
     -- laurels count
 --    gfx.draw(x+28+8*0,y+28+8*6,gfx.weapons[8])
---    drawfont(x+28+8*1,y+28+8*6,font[itemFont], string.format(":%02d",o.player.laurels or 0))
+--    drawfont(x+28+8*1,y+28+8*6,font[itemFont], string.format(":%02d",objects.player.laurels or 0))
     
     -- garlic count
 --    gfx.draw(x+28+8*0,y+28+8*7,gfx.weapons[9])
---    drawfont(x+28+8*1,y+28+8*7,font[itemFont], string.format(":%02d",o.player.garlic or 0))
+--    drawfont(x+28+8*1,y+28+8*7,font[itemFont], string.format(":%02d",objects.player.garlic or 0))
     
     --gfx.draw(x+28+8*19,y+28+8*11,gfx.items.bag)
     
     
-    --local s = string.format("%d/%d", o.player.hp, o.player.maxHp)
+    --local s = string.format("%d/%d", objects.player.hp, objects.player.maxHp)
     
-    drawfont(x+28+8*0,y+28+8*3,font[itemFont], string.format("   HP: %d/%d",o.player.hp, o.player.maxHp))
-    drawfont(x+28+8*0,y+28+8*4,font[itemFont], string.format("Heart: %02d",o.player.hearts or 0))
+    drawfont(x+28+8*0,y+28+8*3,font[itemFont], string.format("   HP: %d/%d",objects.player.hp, objects.player.maxHp))
+    drawfont(x+28+8*0,y+28+8*4,font[itemFont], string.format("Heart: %02d",objects.player.hearts or 0))
     drawfont(x+28+8*0,y+28+8*5,font[subScreenFont], string.format("  Exp: %d", getCurrentExp()))
-    drawfont(x+28+8*0,y+28+8*6,font[subScreenFont], string.format(" Next: %d", o.player.expNext))
-    drawfont(x+28+8*0,y+28+8*7,font[itemFont], string.format(" Gold: %d",o.player.gold or 0))
+    drawfont(x+28+8*0,y+28+8*6,font[subScreenFont], string.format(" Next: %d", objects.player.expNext))
+    drawfont(x+28+8*0,y+28+8*7,font[itemFont], string.format(" Gold: %d",objects.player.gold or 0))
     
     
     -- draw weapons and items
@@ -2036,8 +2049,8 @@ function drawSubScreen()
         --drawfont(x+28,y+28+1,font[subScreenFont], string.format("Clues %d/13", numClues()))
         drawfont(x+28,y+28+1,font[subScreenFont], "Clues")
         drawfont(x+28,y+28+1+8*2,font[subScreenFont], string.format("- %02d -",subScreen.clue))
-        --if cv2data.clues[subScreen.clue] and o.player.clues[subScreen.clue] then
-        if cv2data.clues[subScreen.clue] and o.player.clues[subScreen.clue] then
+        --if cv2data.clues[subScreen.clue] and objects.player.clues[subScreen.clue] then
+        if cv2data.clues[subScreen.clue] and objects.player.clues[subScreen.clue] then
             local txt = cv2data.messages[subScreen.clues[subScreen.clue]][1].text
             --txt = txt:gsub("\n", "\n\n")
             drawfont(x+28,y+28+1+8*4,font[current_font], txt)
@@ -2138,8 +2151,8 @@ function drawSubScreen()
                     drawfont(x+28+8*3+4,y+28+8*(1+y2*2),font[itemFont], string.format("%s %d", itemList[i].name, itemList[i].amount or 0))
                 else
                     local n = itemList[i].name
-                    if n=="Laurel" then n=string.format("%s (%d)",n, o.player.laurels) end
-                    if n=="Garlic" then n=string.format("%s (%d)",n, o.player.garlic) end
+                    if n=="Laurel" then n=string.format("%s (%d)",n, objects.player.laurels) end
+                    if n=="Garlic" then n=string.format("%s (%d)",n, objects.player.garlic) end
                     drawfont(x+28+8*3+4,y+28+8*(1+y2*2),font[itemFont], n)
                 end
             else
@@ -2227,8 +2240,8 @@ function drawInventoryItemName(x,y,i)
         drawfont(x+8+4,y,font[itemFont], string.format("%s %d", itemList[i].name, itemList[i].amount or 0))
     else
         local n = itemList[i].shortName
-        if n=="Laurel" then n=string.format("%s (%d)",n, o.player.laurels) end
-        if n=="Garlic" then n=string.format("%s (%d)",n, o.player.garlic) end
+        if n=="Laurel" then n=string.format("%s (%d)",n, objects.player.laurels) end
+        if n=="Garlic" then n=string.format("%s (%d)",n, objects.player.garlic) end
         drawfont(x+8+4,y,font[itemFont], n)
     end
 end
@@ -2286,8 +2299,8 @@ function drawHUD()
             drawfont(8*14,8*5+5,spidey.debug.font, string.format("Area: %02x %02x %02x %02x",area1,area2,area3, returnArea))
             drawfont(8*14,8*6+5,spidey.debug.font, string.format("Area flags: %02x", areaFlags))
             drawfont(8*14,8*7+5,spidey.debug.font, string.format("Scroll: %02x %02x",scrollx, scrolly))
-            drawfont(8*14,8*8+5,spidey.debug.font, string.format("Player: %02x %02x",o.player.x, o.player.y))
-            drawfont(8*14,8*9+5,spidey.debug.font, string.format("        %02x %02x",scrollx+o.player.x,scrolly+o.player.y))
+            drawfont(8*14,8*8+5,spidey.debug.font, string.format("Player: %02x %02x",objects.player.x, objects.player.y))
+            drawfont(8*14,8*9+5,spidey.debug.font, string.format("        %02x %02x",scrollx+objects.player.x,scrolly+objects.player.y))
             drawfont(8*14,8*10+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
         end
         
@@ -2299,20 +2312,20 @@ function drawHUD()
         
         drawfont(0+1,8*2+4,font[current_font], "PLAYER")
         drawfont(0+1,8*3+4,font[current_font], "ENEMY")
-        o.player.hp=o.player.hp or 0
-        o.player.maxHp=o.player.maxHp or 0
-        if o.player.inBossRoom==true then
+        objects.player.hp=objects.player.hp or 0
+        objects.player.maxHp=objects.player.maxHp or 0
+        if objects.player.inBossRoom==true then
             --drawfont(0,40,font[current_font], "yep")
-            o.boss.maxHp=o.boss.maxHp or 140
-            o.boss.hp=memory.readbyte(0x4c8)
+            objects.boss.maxHp=objects.boss.maxHp or 140
+            objects.boss.hp=memory.readbyte(0x4c8)
         else
             --drawfont(0,40,font[current_font], "nope")
-            o.boss.maxHp=nil
-            o.boss.hp=nil
+            objects.boss.maxHp=nil
+            objects.boss.hp=nil
         end
         -- Draw new life bar; Always shows 16 bars.
         for x=1,16 do
-            if x<=math.floor((o.player.hp/o.player.maxHp)*16) then
+            if x<=math.floor((objects.player.hp/objects.player.maxHp)*16) then
                 gui.drawbox((x-1)*4+8*7, 8*2+4+1,(x-1)*4+8*7+  2, 8*2+4+1+  5, "#d82800", "#d82800")
             else
                 gui.drawbox((x-1)*4+8*7, 8*2+4+1,(x-1)*4+8*7+  2, 8*2+4+1+  5, "black", "white")
@@ -2320,7 +2333,7 @@ function drawHUD()
         end
         
         for x=1,16 do
-            if (not o.player.inBossRoom) or x<=math.floor((o.boss.hp/o.boss.maxHp)*16) then
+            if (not objects.player.inBossRoom) or x<=math.floor((objects.boss.hp/objects.boss.maxHp)*16) then
                 gui.drawbox((x-1)*4+8*7, 8*3+4+1,(x-1)*4+8*7+  2, 8*3+4+1+  5, "#fc7460", "#fc7460")
             else
                 gui.drawbox((x-1)*4+8*7, 8*3+4+1,(x-1)*4+8*7+  2, 8*3+4+1+  5, "black", "white")
@@ -2328,8 +2341,8 @@ function drawHUD()
         end
         
         gfx.draw(8*21-1,8*2+4,gfx.cv2heart)
-        drawfont(8*22,8*2+4,font[current_font], string.format('-%02s',o.player.hearts or 0))
-        drawfont(8*21,8*3+4,font[current_font], string.format('P-%02s',(o.player.lives or 1) - 1))
+        drawfont(8*22,8*2+4,font[current_font], string.format('-%02s',objects.player.hearts or 0))
+        drawfont(8*21,8*3+4,font[current_font], string.format('P-%02s',(objects.player.lives or 1) - 1))
         
         drawfont(8*21-1,8+4,font[current_font], "time:"..time)
         --drawfont(256-4-8*5,8+4,font[current_font], time)
@@ -2358,8 +2371,8 @@ function drawHUD()
         gui.drawbox(128+1,20+1,148+11-1,20+21-1, "clear", "#d82800")
         
         
-        if o.player.weaponItem then
-            weaponName = items[o.player.weaponItem].name
+        if objects.player.weaponItem then
+            weaponName = items[objects.player.weaponItem].name
         else
             weaponName = nil
         end
@@ -2371,7 +2384,7 @@ function drawHUD()
         elseif weaponName == "Cross" then
             gfx.draw(140,11+16,gfx.items.cross)
         elseif weaponName then
-            gfx.draw(145-5,11+16,gfx.weapons[items[o.player.weaponItem].weaponIndex])
+            gfx.draw(145-5,11+16,gfx.weapons[items[objects.player.weaponItem].weaponIndex])
         end
         
 end
@@ -2381,11 +2394,11 @@ function getheart()
     --if n==-1 then n=0 end
 
 
---                o[i].hp=0xef
---                o[i].hp=1
---                memory.writebyte(0x04c8+i, o[i].hp)
---                o[i].frame=0x8b
---                memory.writebyte(0x0306+i, o[i].frame)
+--                objects[i].hp=0xef
+--                objects[i].hp=1
+--                memory.writebyte(0x04c8+i, objects[i].hp)
+--                objects[i].frame=0x8b
+--                memory.writebyte(0x0306+i, objects[i].frame)
 
 
     --type = 0x05
@@ -2399,24 +2412,24 @@ function getheart()
     memory.writebyte(0x46e+i,0x00) --state2
     memory.writebyte(0x0306+i, 0x9c) -- frame
     memory.writebyte(0x0306+i, 0) -- frame
---    memory.writebyte(0x34e+i,o.player.x-scrollx)
---    memory.writebyte(0x32a+i,o.player.y-scrolly)
-    memory.writebyte(0x34e+i,o.player.x)
-    memory.writebyte(0x32a+i,o.player.y)
-    --o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
+--    memory.writebyte(0x34e+i,objects.player.x-scrollx)
+--    memory.writebyte(0x32a+i,objects.player.y-scrolly)
+    memory.writebyte(0x34e+i,objects.player.x)
+    memory.writebyte(0x32a+i,objects.player.y)
+    --objects[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
 end
 
 
 function hurtplayer(data)
     --atm, we hurt the player by creating an unfriendly heart on top of him
-    if o.player.inv>0 then return end --if he's invincible, don't bother.
+    if objects.player.inv>0 then return end --if he's invincible, don't bother.
     local onum = getunused()
     if not onum then return false end --should create an alternate method if it fails
     --memory.writebyte(0x03ba+onum,0x36) --burn
     memory.writebyte(0x03ba+onum,0x37) --heart
     --memory.writebyte(0x03ba+onum,0x38)
-    memory.writebyte(0x034e+onum,o.player.x)
-    memory.writebyte(0x032a+onum,o.player.y)
+    memory.writebyte(0x034e+onum,objects.player.x)
+    memory.writebyte(0x032a+onum,objects.player.y)
     memory.writebyte(0x03de+onum,0x01) --not friendly
     memory.writebyte(0x03f0+onum,0x01) --helps to init it; frame?
     memory.writebyte(0x0396+onum,0x01) --x speed
@@ -2426,7 +2439,7 @@ function hurtplayer(data)
 end
 
 function hurtenemy(ii)
-    if o[ii].stun>0 then return end --if he's invincible, don't bother.
+    if objects[ii].stun>0 then return end --if he's invincible, don't bother.
     onum = 2
     --memory.writebyte(0x03b7+onum,0x36) --burn
     --memory.writebyte(0x03b7+onum,0x37) --heart
@@ -2437,8 +2450,8 @@ function hurtenemy(ii)
     --memory.writebyte(0x03b7+onum,0x37) -- heart
     memory.writebyte(0x03b7+onum,0x48)
     
-    memory.writebyte(0x034b+onum,o[ii].x)
-    memory.writebyte(0x0327+onum,o[ii].y)
+    memory.writebyte(0x034b+onum,objects[ii].x)
+    memory.writebyte(0x0327+onum,objects[ii].y)
     memory.writebyte(0x03de-3+onum,0x00) -- player team
     --memory.writebyte(0x03ed+onum,0x01) --helps to init it; frame?
     memory.writebyte(0x03ed+onum,0x80) --helps to init it; frame?
@@ -2456,7 +2469,7 @@ function hurtenemy(ii)
 end
 
 function _hurtenemy(ii)
-    if o[ii].stun>0 then return end --if he's invincible, don't bother.
+    if objects[ii].stun>0 then return end --if he's invincible, don't bother.
     --onum = getunused()
     onum = 2
     if not onum then return false end --should create an alternate method if it fails
@@ -2467,8 +2480,8 @@ function _hurtenemy(ii)
     --memory.writebyte(0x03b7+onum,0x06) --sacred flame
     memory.writebyte(0x03b7+onum,0x02)
     
-    memory.writebyte(0x034b+onum,o[ii].x)
-    memory.writebyte(0x0327+onum,o[ii].y)
+    memory.writebyte(0x034b+onum,objects[ii].x)
+    memory.writebyte(0x0327+onum,objects[ii].y)
     memory.writebyte(0x03de-3+onum,0x00) -- player team
     memory.writebyte(0x03ed+onum,0x01) --helps to init it; frame?
     memory.writebyte(0x0303+onum,0x00) --frame
@@ -2514,7 +2527,7 @@ emu.registerexit(function(x)
 end)
 
 function onLoadState()
-    o.custom.destroyall()
+    objects.custom.destroyall()
 end
 
 -- whip reach if n=1
@@ -2531,15 +2544,17 @@ end
 --end
 
 function onLoadTileSquareoid(t,x,y)
+    --spidey.message("%s %s",inTown and "yes" or "no",inDoor and "yes" or "no")
+    
     -- remove water in town
     if inTown and not inDoor and t==0x24 then t=0x01 end
     
     if config.levelReplaceTest and inTown and not inDoor then
-        if y==0x0a then
+        if y==0x0d then
             t=0x01 -- floor
-        elseif y==0x07 and x % 4==0 then
+        elseif y==0x0a and x % 4==1 then
             t=0x21 --window top
-        elseif y==0x08 and x % 4==0 then
+        elseif y==0x0b and x % 4==1 then
             t=0x2c --window bottom
         else
             t=0x38 --wall
@@ -2547,7 +2562,7 @@ function onLoadTileSquareoid(t,x,y)
     end
     
 --    t=math.min(0xff, x*8+y)
-    if o.player.pendant and jomaMarsh() then
+    if objects.player.pendant and jomaMarsh() then
         if y==6 then t=0x17 end
     end
     
@@ -2567,7 +2582,7 @@ end
 
 -- check if attack is sub weapon or whip
 function onWhipOrSubWeapon(isSub)
---    if o.player.whipItem == items.index["Thief's Dagger"] then
+--    if objects.player.whipItem == items.index["Thief's Dagger"] then
 --        isSub=true
 --        return isSub
 --    end
@@ -2619,7 +2634,7 @@ end
 --        memory.setregister("a",0x10)
 --        memory.setregister("y",0x00)
 --        local i=x-6
---        emu.message(string.format("%02X %02X",o[i].type,a))
+--        emu.message(string.format("%02X %02X",objects[i].type,a))
 --    end
 --)
 
@@ -2764,10 +2779,10 @@ function onMessage(messageNum, cancel)
     
     for i,clue in ipairs(cv2data.clues) do
         if messageNum == clue then
-            if o.player.clues[i] then
+            if objects.player.clues[i] then
                 cancel = true
             else
-                o.player.clues[i] = true
+                objects.player.clues[i] = true
                 memory.writebyte(0x7400+i, 1)
             end
         end
@@ -2910,12 +2925,12 @@ function onWhipDamage(damage, target)
     
     damage = stats.damage
     
-    if o.player.whipItem == items.index["Poison Whip"] then
+    if objects.player.whipItem == items.index["Poison Whip"] then
         createPoison(target)
     end
     
     if config.testStats then
-        emu.message(string.format("whip damage %d, item=%d",damage, o.player.whipItem or 0))
+        emu.message(string.format("whip damage %d, item=%d",damage, objects.player.whipItem or 0))
     end
     return damage
 end
@@ -2935,8 +2950,8 @@ function addExp(n)
     e=math.min(9999, e+n)
     
     
-    o.player.gold = o.player.gold+5
-    memory.writeword(0x7000+1, o.player.gold)
+    objects.player.gold = objects.player.gold+5
+    memory.writeword(0x7000+1, objects.player.gold)
     
     local need = getExpNeeded()
     
@@ -2951,8 +2966,8 @@ function addExp(n)
         
         e=e-getTotalExpNeeded()
         
-        o.player.level = math.min(o.player.level+1, 99)
-        memory.writebyte(0x008b, o.player.level)
+        objects.player.level = math.min(objects.player.level+1, 99)
+        memory.writebyte(0x008b, objects.player.level)
     end
     
     e = tonumber(string.format("%04d",e),16)
@@ -2961,17 +2976,17 @@ function addExp(n)
 end
 
 function setHearts(n)
-    o.player.hearts = n
-    if o.player.hearts > o.player.maxHearts then
-        o.player.hearts = o.player.maxHearts
+    objects.player.hearts = n
+    if objects.player.hearts > objects.player.maxHearts then
+        objects.player.hearts = objects.player.maxHearts
     end
-    if o.player.hearts < 0 then o.player.hearts=0 end
-    memory.writebyte(0x48, tonumber(string.format("%02d",o.player.hearts % 100),16))
-    memory.writebyte(0x49, tonumber(string.format("%02d",(o.player.hearts-(o.player.hearts % 100))/100),16))
+    if objects.player.hearts < 0 then objects.player.hearts=0 end
+    memory.writebyte(0x48, tonumber(string.format("%02d",objects.player.hearts % 100),16))
+    memory.writebyte(0x49, tonumber(string.format("%02d",(objects.player.hearts-(objects.player.hearts % 100))/100),16))
 end
 
 function addHearts(n)
-    setHearts(o.player.hearts+n)
+    setHearts(objects.player.hearts+n)
 end
 
 function playSound(n)
@@ -2995,10 +3010,10 @@ end
 -- buying (cost)
 -- changes sp weapon cost too, but we fix that elsewhere
 function onHeartCost(cost)
-    if o.player.gold >= cost then
+    if objects.player.gold >= cost then
         -- deduct from gold here
-        o.player.gold = o.player.gold-cost
-        memory.writeword(0x7000+1, o.player.gold)
+        objects.player.gold = objects.player.gold-cost
+        memory.writeword(0x7000+1, objects.player.gold)
         
         -- no heart cost
         cost = 0
@@ -3121,16 +3136,16 @@ function onEnemyDamage(i,t,damage)
     
     --emu.message(string.format("Damage %02X",damage))
     
-    if night and o.player.armor == items.index["Night Armor"] then
+    if night and objects.player.armor == items.index["Night Armor"] then
         if damage>=1 then
             damage = math.max(1, math.floor(damage * .6))
         end
     end
     
     -- apply accessory damage reduction
-    if o.player.accessory then
-        if items[o.player.accessory].damageReduction and damage>=1 then
-            damage = math.max(1, math.floor(damage - items[o.player.accessory].damageReduction))
+    if objects.player.accessory then
+        if items[objects.player.accessory].damageReduction and damage>=1 then
+            damage = math.max(1, math.floor(damage - items[objects.player.accessory].damageReduction))
         end
     end
     
@@ -3203,10 +3218,10 @@ function onSetWhipFrameDelay(delay, whipState)
 end
 
 function canThrowWeapon()
-    if not o.player.weaponItem then return false end
-    local weaponName = items[o.player.weaponItem].name
-    local cost = items[o.player.weaponItem].heartCost or 0
-    if cost > o.player.hearts then return false end
+    if not objects.player.weaponItem then return false end
+    local weaponName = items[objects.player.weaponItem].name
+    local cost = items[objects.player.weaponItem].heartCost or 0
+    if cost > objects.player.hearts then return false end
     
     if getCustomCount("holyfire")>0 then return false end
     if weaponName=="Banshee Boomerang" and getCustomCount("bansheeboomerang")>=3 then return false end
@@ -3222,16 +3237,16 @@ function onThrowWeapon(weaponType, abort)
     
     -- used to abort the normal weapon creation but not the custom cost.
     local abortWeaponOnly = false
-    local weaponName = items[o.player.weaponItem].name
+    local weaponName = items[objects.player.weaponItem].name
     
     -- heart cost
-    local cost = items[o.player.weaponItem].heartCost or 0
+    local cost = items[objects.player.weaponItem].heartCost or 0
     
 
-    if o.player.armor == items.index["Adventure Armor"] then
+    if objects.player.armor == items.index["Adventure Armor"] then
         if cost>1 then cost = cost-1 end
     end
-    if o.player.accessory == items.index["Charm"] then
+    if objects.player.accessory == items.index["Charm"] then
         if cost>1 then cost = cost-1 end
     end
     
@@ -3240,8 +3255,8 @@ function onThrowWeapon(weaponType, abort)
     end
     
     
-    if o.player.weaponItem and items[o.player.weaponItem].stack then
-        removeItem(items[o.player.weaponItem].name,1)
+    if objects.player.weaponItem and items[objects.player.weaponItem].stack then
+        removeItem(items[objects.player.weaponItem].name,1)
     end
     
     abort = false
@@ -3253,11 +3268,11 @@ function onThrowWeapon(weaponType, abort)
         abort = true
     end
 
-    if cost > o.player.hearts then
+    if cost > objects.player.hearts then
         -- abort weapon
         abort = true -- use this to cancel axes/boomerang
     end
---        if o.player.hearts==0 then
+--        if objects.player.hearts==0 then
 --            memory.setregister("a",0)
 --            memory.writebyte(0x40e,0)
 --        end
@@ -3267,7 +3282,7 @@ function onThrowWeapon(weaponType, abort)
     if weaponName=="Banshee Boomerang" and not abort then
         abortWeaponOnly = true
         if getCustomCount("bansheeboomerang")<3 then
-            createBoomerang(o.player.x,o.player.y)
+            createBoomerang(objects.player.x,objects.player.y)
         else
             abort = true
         end
@@ -3275,7 +3290,7 @@ function onThrowWeapon(weaponType, abort)
     if weaponName=="Axe" and not abort then
         abortWeaponOnly = true
         if getCustomCount("axe")<3 then
-            createAxe(o.player.x,o.player.y)
+            createAxe(objects.player.x,objects.player.y)
         else
             abort = true
         end
@@ -3283,7 +3298,7 @@ function onThrowWeapon(weaponType, abort)
     
     if not abort then
         -- spend hearts
-        setHearts(o.player.hearts - cost)
+        setHearts(objects.player.hearts - cost)
     end
     return weaponType, abort or abortWeaponOnly
 end
@@ -3298,7 +3313,7 @@ function onCreateEnemy(i,enemyType)
     --if t==0x03 then t=0x0d end -- turn skeletons to jumping skeleton
     
     -- joma marsh
-    if o.player.pendant and jomaMarsh() then
+    if objects.player.pendant and jomaMarsh() then
         enemyType = 0
     end
     
@@ -3409,12 +3424,12 @@ function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
     if not spidey.debug.enabled then return end
     
     local i=getunusedcustom()
-    o.custom[i].type = "marker"
-    o.custom[i].eName = enemyName
-    o.custom[i].x=enemyX+scrollx
-    o.custom[i].y=enemyY+scrolly
-    o.custom[i].outscreen=true
-    o.custom[i].active=1
+    objects.custom[i].type = "marker"
+    objects.custom[i].eName = enemyName
+    objects.custom[i].x=enemyX+scrollx
+    objects.custom[i].y=enemyY+scrolly
+    objects.custom[i].outscreen=true
+    objects.custom[i].active=1
     
     
 --    memory.writebyte(0x03ba+x,0)
@@ -3431,7 +3446,7 @@ end
 function onCreateEnemyProjectile(i,t,x,y)
     if t==0x0c then
         t=0
-        --createBone(o[i].x-scrollx,o[i].y-scrolly)
+        --createBone(objects[i].x-scrollx,objects[i].y-scrolly)
         --for j=1, 2 do
         local boneInterval = 2
         local nBones = 1
@@ -3440,15 +3455,15 @@ function onCreateEnemyProjectile(i,t,x,y)
             nBones = 2
         end
 
-        if o[i].state2==boneInterval then
+        if objects[i].state2==boneInterval then
             for j=1, nBones do
                 createBone(x,y)
             end
-            o[i].state2=0
-            memory.writebyte(0x046e+i, o[i].state2)
+            objects[i].state2=0
+            memory.writebyte(0x046e+i, objects[i].state2)
         else
-            o[i].state2=o[i].state2+1
-            memory.writebyte(0x046e+i, o[i].state2)
+            objects[i].state2=objects[i].state2+1
+            memory.writebyte(0x046e+i, objects[i].state2)
         end
         
         --createBoomerang(x,y)
@@ -3471,55 +3486,65 @@ end
 function createDiamondTrail(x,y)
     local i=getunusedcustom()
     if (i) then
-        o.custom[i].type="diamondtrail"
-        o.custom[i].x=x+scrollx
-        o.custom[i].y=y+scrolly
---        o.custom[i].xs=math.random(-5,5)*.2
---        o.custom[i].ys=math.random(-5,5)*.1-2.8
-        o.custom[i].xs=0
-        o.custom[i].ys=0
-        o.custom[i].active=1
+        objects.custom[i].type="diamondtrail"
+        objects.custom[i].x=x+scrollx
+        objects.custom[i].y=y+scrolly
+--        objects.custom[i].xs=math.random(-5,5)*.2
+--        objects.custom[i].ys=math.random(-5,5)*.1-2.8
+        objects.custom[i].xs=0
+        objects.custom[i].ys=0
+        objects.custom[i].active=1
     end
 end
 
 function createLevelUpText()
     local i=getunusedcustom()
     if i then
-        o.custom[i].type="levelup"
-        o.custom[i].x=o.player.x+scrollx
-        o.custom[i].y=o.player.y+scrolly-32
-        o.custom[i].active=1
+        objects.custom[i].type="levelup"
+        objects.custom[i].x=objects.player.x+scrollx
+        objects.custom[i].y=objects.player.y+scrolly-32
+        objects.custom[i].active=1
     end
 end
 
 function createItemPopUp(text)
-    local obj = createObject("itemPopUp", o.player.x+scrollx, o.player.y+scrolly-32)
+    local obj = createObject("itemPopUp", objects.player.x+scrollx, objects.player.y+scrolly-32)
     obj.text = text
 --    local i=getunusedcustom()
 --    if i then
---        o.custom[i].type="itemPopUp"
---        o.custom[i].x=o.player.x+scrollx
---        o.custom[i].y=o.player.y+scrolly-32
---        o.custom[i].active=1
---        o.custom[i].text=text
+--        objects.custom[i].type="itemPopUp"
+--        objects.custom[i].x=objects.player.x+scrollx
+--        objects.custom[i].y=objects.player.y+scrolly-32
+--        objects.custom[i].active=1
+--        objects.custom[i].text=text
 --    end
 end
 
 function createBone(x,y)
     local i=getunusedcustom()
-    if (i) then
-        o.custom[i].type="bone"
-                --o.custom[i].x=inp.xmouse+scrollx
-        --o.custom[i].y=inp.ymouse+scrolly
-        o.custom[i].x=x+scrollx
-        o.custom[i].y=y+scrolly
-        o.custom[i].xs=math.random(-5,5)*.2
-        --o.custom[i].xs=1
-        o.custom[i].ys=math.random(-5,5)*.1-2.8
-        --o.custom[i].ys=0
-        --o.custom[i].xs=0
-        --o.custom[i].ys=0
-        o.custom[i].active=1
+    if i then
+        objects.custom[i].type="bone"
+                --objects.custom[i].x=inp.xmouse+scrollx
+        --objects.custom[i].y=inp.ymouse+scrolly
+        objects.custom[i].x=x+scrollx
+        objects.custom[i].y=y+scrolly
+        --objects.custom[i].xs=math.random(-5,5)*.2
+        objects.custom[i].xs=math.random(2,4)*.2*playerDirection(objects.custom[i])
+        
+        --objects.custom[i].xs=1
+        objects.custom[i].ys=math.random(-5,5)*.1-2.8
+        --objects.custom[i].ys=0
+        --objects.custom[i].xs=0
+        --objects.custom[i].ys=0
+        objects.custom[i].active=1
+    end
+end
+
+function playerDirection(source)
+    if source.custom then
+        if source.x < scrollx+objects.player.x then return 1 else return -1 end
+    else
+        if source.x < objects.player.x then return 1 else return -1 end
     end
 end
 
@@ -3527,70 +3552,70 @@ function createPoison(enemyIndex)
     local i=getunusedcustom()
     if not i then return end
     
-    o.custom[i].type = "poison"
-    o.custom[i].target = enemyIndex
-    o.custom[i].outscreen=true
-    o.custom[i].active=1
+    objects.custom[i].type = "poison"
+    objects.custom[i].target = enemyIndex
+    objects.custom[i].outscreen=true
+    objects.custom[i].active=1
 end
 
 function createPoisonDrip(target)
     local i=getunusedcustom()
     if not i then return end
     
-    o.custom[i].type = "poisonDrip"
-    o.custom[i].target = target
-    o.custom[i].x=o[target].x-scrollx
-    o.custom[i].y=o[target].y-scrolly
-    o.custom[i].outscreen=true
-    o.custom[i].active=1
+    objects.custom[i].type = "poisonDrip"
+    objects.custom[i].target = target
+    objects.custom[i].x=objects[target].x-scrollx
+    objects.custom[i].y=objects[target].y-scrolly
+    objects.custom[i].outscreen=true
+    objects.custom[i].active=1
 end
 
 function createAxe(x,y)
     local i=getunusedcustom()
     if (i) then
-        o.custom[i].type="axe"
-        o.custom[i].x=x+scrollx
-        o.custom[i].y=y+scrolly
-        --o.custom[i].xs=math.random(-5,5)*.2
-        --o.custom[i].ys=math.random(-5,5)*.1-2.8
-        o.custom[i].hasHit=false
-        o.custom[i].xs=4*.2
-        o.custom[i].ys=-5*.1-2.8
-        o.custom[i].facing=o.player.facing
-        if o.custom[i].facing==1 then 
+        objects.custom[i].type="axe"
+        objects.custom[i].x=x+scrollx
+        objects.custom[i].y=y+scrolly
+        --objects.custom[i].xs=math.random(-5,5)*.2
+        --objects.custom[i].ys=math.random(-5,5)*.1-2.8
+        objects.custom[i].hasHit=false
+        objects.custom[i].xs=4*.2
+        objects.custom[i].ys=-5*.1-2.8
+        objects.custom[i].facing=objects.player.facing
+        if objects.custom[i].facing==1 then 
         else 
-            o.custom[i].xs=o.custom[i].xs*-1
+            objects.custom[i].xs=objects.custom[i].xs*-1
         end
-        o.custom[i].active=1
+        objects.custom[i].active=1
     end
 end
 
 function createBoomerang(x,y)
     local i=getunusedcustom()
     if (i) then
-        o.custom[i].type="bansheeboomerang"
-        o.custom[i].rebound = false
-        o.custom[i].x=x+scrollx
-        o.custom[i].y=y+scrolly
-        --o.custom[i].rnd=math.random(0,90000)
-        --o.custom[i].xs=math.random(-5,5)*.2
-        --o.custom[i].xs=1
-        o.custom[i].facing=o.player.facing
-        if o.custom[i].facing==1 then 
-            o.custom[i].xs=1.5 
+        objects.custom[i].type="bansheeboomerang"
+        objects.custom[i].rebound = false
+        objects.custom[i].x=x+scrollx
+        objects.custom[i].y=y+scrolly
+        --objects.custom[i].rnd=math.random(0,90000)
+        --objects.custom[i].xs=math.random(-5,5)*.2
+        --objects.custom[i].xs=1
+        objects.custom[i].facing=objects.player.facing
+        if objects.custom[i].facing==1 then 
+            objects.custom[i].xs=1.5 
         else 
-            o.custom[i].xs=-1.5 
+            objects.custom[i].xs=-1.5 
         end
-        o.custom[i].ys=0
-        o.custom[i].active=1
+        objects.custom[i].ys=0
+        objects.custom[i].active=1
     end
 end
 
 function createMedusaHead()
     local x,y
     
-    y=scrolly+o.player.y-0x20
-    local facing = 1-o.player.facing
+    y=scrolly+objects.player.y-0x20
+    local facing = 1-objects.player.facing
     if facing==1 then 
         x = scrollx+0x08
     else 
@@ -3611,15 +3636,15 @@ function createCustomHeart(x,y, floor)
 end
 
 
---    for i=1,o.custom.count-1 do
---        if o.custom[i].active==0 then
---            o.custom[i] = {x=0,y=0}
---            o.custom[i].originX = o.custom[i].x
---            o.custom[i].originY = o.custom[i].y
---            o.custom[i].outscreen=nil
---            o.custom[i].alivetime=0
---            o.custom[i].xs=0
---            o.custom[i].ys=0
+--    for i=1,objects.custom.count-1 do
+--        if objects.custom[i].active==0 then
+--            objects.custom[i] = {x=0,y=0}
+--            objects.custom[i].originX = objects.custom[i].x
+--            objects.custom[i].originY = objects.custom[i].y
+--            objects.custom[i].outscreen=nil
+--            objects.custom[i].alivetime=0
+--            objects.custom[i].xs=0
+--            objects.custom[i].ys=0
 --            return i
 --        end
 --    end
@@ -3628,8 +3653,8 @@ end
 
 function createObject(t,x,y)
     local unusedIndex
-     for i=1,o.custom.count-1 do
-        if o.custom[i].active==0 then
+     for i=1,objects.custom.count-1 do
+        if objects.custom[i].active==0 then
             unusedIndex = i
             break
         end
@@ -3638,21 +3663,22 @@ function createObject(t,x,y)
     if not unusedIndex then return false end
     
     local i = unusedIndex
-    o.custom[i] = {}
-    o.custom[i].type = t
-    o.custom[i].facing = 1
-    o.custom[i].x = x or 0
-    o.custom[i].y = y or 0
-    o.custom[i].xs = 0
-    o.custom[i].ys = 0
-    o.custom[i].originX = 0
-    o.custom[i].originY = 0
-    o.custom[i].outscreen=nil
-    o.custom[i].alivetime=0
-    o.custom[i].aliveTime=0
-    o.custom[i].active=1
-    o.custom[i].area = {area1,area2,area3,areaFlags}
-    return o.custom[i], i
+    objects.custom[i] = {}
+    objects.custom[i].custom = true
+    objects.custom[i].type = t
+    objects.custom[i].facing = 1
+    objects.custom[i].x = x or 0
+    objects.custom[i].y = y or 0
+    objects.custom[i].xs = 0
+    objects.custom[i].ys = 0
+    objects.custom[i].originX = 0
+    objects.custom[i].originY = 0
+    objects.custom[i].outscreen=nil
+    objects.custom[i].alivetime=0
+    objects.custom[i].aliveTime=0
+    objects.custom[i].active=1
+    objects.custom[i].area = {area1,area2,area3,areaFlags}
+    return objects.custom[i], i
 end
 
 
@@ -3672,21 +3698,21 @@ function onStartGame()
 end
 
 function onRestartGame()
-    if o.player.inBossRoom == true then
+    if objects.player.inBossRoom == true then
         if area1==0x01 and area2==0x06 and area3==0x02 then
             -- Camille
             area3=0x01
             scrollx=0x200
             scrolly=0x66c
-            o.player.x=0xd8
-            o.player.y=0xbd
+            objects.player.x=0xd8
+            objects.player.y=0xbd
         elseif area1==0x01 and area2==0x09 and area3==0x02 then
             -- Death
             area3=0x01
             scrollx=0
             scrolly=0x66c
-            o.player.x=0x1a
-            o.player.y=0xbd
+            objects.player.x=0x1a
+            objects.player.y=0xbd
         else
             return
         end
@@ -3694,14 +3720,14 @@ function onRestartGame()
         a=area3
         memory.setregister("a",a)
         setScroll()
-        memory.writebyte(0x0348, o.player.x)
-        memory.writebyte(0x0324, o.player.y)
+        memory.writebyte(0x0348, objects.player.x)
+        memory.writebyte(0x0324, objects.player.y)
         return area3
     end
 end
 
 function onWalkSpeed(speed)
-    if o.player.armor == items.index["Zombie Armor"] then
+    if objects.player.armor == items.index["Zombie Armor"] then
         speed=speed *.6
     end
     return speed
@@ -3709,7 +3735,7 @@ end
 
 -- stop moving left/right
 function onWalkStop()
-    o.player.sp=0
+    objects.player.sp=0
 end
 
 function onSetJumpSpeedX(v)
@@ -3719,12 +3745,12 @@ end
 function onSetJumpSpeedY(v, onPlatform)
     -- This should be 0xfc but it doesn't look right, but 0xfb does.
     if config.platformVelocityFix then
-        if o.player.platformIndex then
+        if objects.player.platformIndex then
             -- Cancel x velocity of jumping straight up on a platform.
             memory.writebyte(0x6c,0)
             memory.writebyte(0x6d,0)
             
-            if o[o.player.platformIndex].xs == 0 then
+            if objects[objects.player.platformIndex].xs == 0 then
                 -- for some reason on the vertical platforms you gotta make it 0xfb not 0xfc
                 v=0xfb
             else
@@ -3744,9 +3770,9 @@ end
     --local state = memory.readbyte(0x3d8)
 --    if state==0x09 or state==0x0a then
 --        a=0x0a
---        o.player.lockPosition = {
---            frame = o.player.facing,
---            frame = o.player.frame,
+--        objects.player.lockPosition = {
+--            frame = objects.player.facing,
+--            frame = objects.player.frame,
 --            scrollX=scrollx,
 --            scrollY=scrolly,
 --            c=0x30,
@@ -3772,30 +3798,30 @@ function onExpGain(e)
 end
 
 function getTotalExpNeeded(level)
-    level = level or o.player.level
+    level = level or objects.player.level
     --do return 10 end
     return level*50+100
 end
 
 function getExpNeeded(level)
-    level = level or o.player.level
+    level = level or objects.player.level
     --do return 10 end
-    return level*50+100 - o.player.exp
+    return level*50+100 - objects.player.exp
 end
 
 function getCurrentExp()
-    --spidey.message(o.player.exp)
-    local exp = o.player.exp
-    for i=0, o.player.level-1 do
+    --spidey.message(objects.player.exp)
+    local exp = objects.player.exp
+    for i=0, objects.player.level-1 do
        exp=exp + getTotalExpNeeded(i)
     end
     return exp
 end
 
 function getStats(level)
-    level = level or o.player.level
-    local armorDef = items[o.player.armor or items.index["Red Tunic"]].ar or 0
-    local weaponPower = items[o.player.whipItem or items.index["Leather Whip"]].attack or 0
+    level = level or objects.player.level
+    local armorDef = items[objects.player.armor or items.index["Red Tunic"]].ar or 0
+    local weaponPower = items[objects.player.whipItem or items.index["Leather Whip"]].attack or 0
     
     local stats = {}
     stats.str = 8 + math.floor(level * .5)
@@ -3833,7 +3859,7 @@ end
 --local f = function(address)
 --    local a,x,y,s,p,pc=memory.getregisters()
     
---    if o.player.level>6 then -- for now, use stats for level 6 at levels > 6
+--    if objects.player.level>6 then -- for now, use stats for level 6 at levels > 6
 --        if address == 0x881c+3 then
 --            a = 0x3b
 --        else
@@ -3848,7 +3874,7 @@ end
 
 -- intercept getting pointer to level data stuff
 function onSetPlayerLevelDataPointer(low, high)
-    if o.player.level>6 then -- for now, use stats for level 6 at levels > 6 (0x8c3b)
+    if objects.player.level>6 then -- for now, use stats for level 6 at levels > 6 (0x8c3b)
         if low then
             return 0x3b
         else
@@ -3901,7 +3927,7 @@ function onPlaceStageTile(tile)
     local tileY = memory.readbyte(0x6a)
     local x = memory.getregister("x")
     --joma marsh
---    if o.player.pendant and jomaMarsh() then
+--    if objects.player.pendant and jomaMarsh() then
 --        if tile==0xe0 then
 --            tile=0xf6 + ((memory.getregister("x")+1) % 2)*2
 --        end
@@ -3927,7 +3953,7 @@ end
 -- reduce enemy stun time from 0x10
 function onEnemyStun(stunTime)
     stunTime = 0x0b
---    if o.player.whipItem == items.index["Poison Whip"] then
+--    if objects.player.whipItem == items.index["Poison Whip"] then
 --        stunTime=0x0e
 --    end
     return stunTime
@@ -4133,14 +4159,14 @@ memory.registerexec(0xede9,1, function()
         if itemNum == 2 then
             getItem("Laurel", true)
             getItem("Laurel", false)
-            o.player.laurels = o.player.laurels +2
-            memory.writebyte(0x004c, o.player.laurels)
+            objects.player.laurels = objects.player.laurels +2
+            memory.writebyte(0x004c, objects.player.laurels)
         end
         if itemNum == 3 then
             getItem("Garlic", true)
             getItem("Garlic", false)
-            o.player.garlic = o.player.garlic +2
-            memory.writebyte(0x004d, o.player.garlic)
+            objects.player.garlic = objects.player.garlic +2
+            memory.writebyte(0x004d, objects.player.garlic)
         end
 
 --        relics.list[cv2data.relics[itemNum+1].varName]=true
@@ -4260,9 +4286,9 @@ function onVBlank()
         game.applyPlayerPalette = game.applyPlayerPalette - 1
         if game.applyPlayerPalette <= 0 then
             if spidey.debug.enabled then spidey.message("apply palette") end
-            memory.writebyteppu(0x3f10, o.player.palette[1])
-            memory.writebyteppu(0x3f11, o.player.palette[2])
-            memory.writebyteppu(0x3f12, o.player.palette[3])
+            memory.writebyteppu(0x3f10, objects.player.palette[1])
+            memory.writebyteppu(0x3f11, objects.player.palette[2])
+            memory.writebyteppu(0x3f12, objects.player.palette[3])
             game.applyPlayerPalette = false
         end
     end
@@ -4276,9 +4302,9 @@ memory.registerexec(0xc85a,1, function()
     
     local a,x,y,s,p,pc=memory.getregisters()
     
-    o.player.palette = o.player.palette or cv2data.palettes.simon[1].palette 
-    --o.player.paletteIndex = o.player.paletteIndex or 1
-    ---local palette = cv2data.palettes.simon[o.player.paletteIndex].palette
+    objects.player.palette = objects.player.palette or cv2data.palettes.simon[1].palette 
+    --objects.player.paletteIndex = objects.player.paletteIndex or 1
+    ---local palette = cv2data.palettes.simon[objects.player.paletteIndex].palette
 --    palette = {0x0f, 0x0f, 0x16, 0x20} -- original black and red
 --    palette = {0x0f, 0x0f, 0x1c, 0x20} -- black and blue
 --    palette = {0x0f, 0x0f, 0x17, 0x37} -- original look, slightly less red, more skin tone
@@ -4290,7 +4316,7 @@ memory.registerexec(0xc85a,1, function()
     
     if x>=0x13 and x<=0x16 then
         local i = x-0x13+1
-        a = o.player.palette[i]
+        a = objects.player.palette[i]
         memory.setregister("a", a)
     end
     
@@ -4383,7 +4409,10 @@ memory.registerexec(0xc127,1, function()
         if a==0x0f then a=0x62 end
     end
     
-    if a == 0x0e and o.player.whipItem == items.index["Thief's Dagger"] then a=0x11 end
+    if a == 0x0e and objects.player.whipItem == items.index["Thief's Dagger"] then a=0x11 end
+    
+    -- Remove blob sfx if in camilla cemetary
+    if a == 0x0b and displayarea=="Camilla Cemetery" then a=0x62 end
     
     -- Change Golden Knife sound effect
     if a == 0x13 then a=0x11 end
@@ -4522,15 +4551,15 @@ function onSubWeaponBreak(currentWeapon, i)
         for j=0,0 do
             local onum=getunusedcustom()
             if (onum) then
-                o.custom[onum].type="holyfire"
-                o.custom[onum].x=o.weapons[i].x+scrollx
-                o.custom[onum].y=o.weapons[i].y+scrolly
-                --o.custom[onum].xs=math.random(-5,5)*.4
-                --o.custom[onum].ys=-j*.2-2
-                o.custom[onum].xs=0
-                o.custom[onum].ys=0
-                o.custom[onum].active=1
-                o.custom[onum].outscreen=true
+                objects.custom[onum].type="holyfire"
+                objects.custom[onum].x=objects.weapons[i].x+scrollx
+                objects.custom[onum].y=objects.weapons[i].y+scrolly
+                --objects.custom[onum].xs=math.random(-5,5)*.4
+                --objects.custom[onum].ys=-j*.2-2
+                objects.custom[onum].xs=0
+                objects.custom[onum].ys=0
+                objects.custom[onum].active=1
+                objects.custom[onum].outscreen=true
             end
         end
     end
@@ -4617,13 +4646,13 @@ function hasRelic(n)
     return (relics.main == bit.bor(relics.main, 2^(n-1)))
 end
 function hasItem(n)
-    return (o.player.items == bit.bor(o.player.items, 2^(n-1)))
+    return (objects.player.items == bit.bor(objects.player.items, 2^(n-1)))
 end
 
 savestate.registerload(function()
-    o.custom.destroyall()
-    o.custom.createCandles()
-    o.custom.createLevelObjects()
+    objects.custom.destroyall()
+    objects.custom.createCandles()
+    objects.custom.createLevelObjects()
 end)
 
 emu.registerexit(function(x)
@@ -5050,56 +5079,56 @@ function spidey.update(inp,joy)
     --gui.drawbox(0, 0, 256, 240, "black", "black")
     if action or pausemenu then
         
-        o.player.hp=memory.readbyte(0x0080)
-        o.player.maxHp=memory.readbyte(0x0081)
+        objects.player.hp=memory.readbyte(0x0080)
+        objects.player.maxHp=memory.readbyte(0x0081)
         --memory.writebyte(0x008b, 0x63) -- level 99
-        o.player.level=memory.readbyte(0x008b)
-        o.player.lives=memory.readbyte(0x0031)
-        o.player.laurels = memory.readbyte(0x004c)
-        o.player.garlic = memory.readbyte(0x004d)
-        o.player.hearts = tonumber(string.format('%01X%02X',memory.readbyte(0x0049),memory.readbyte(0x0048)))
+        objects.player.level=memory.readbyte(0x008b)
+        objects.player.lives=memory.readbyte(0x0031)
+        objects.player.laurels = memory.readbyte(0x004c)
+        objects.player.garlic = memory.readbyte(0x004d)
+        objects.player.hearts = tonumber(string.format('%01X%02X',memory.readbyte(0x0049),memory.readbyte(0x0048)))
         
-        if o.player.hearts > o.player.maxHearts then
-            o.player.hearts = o.player.maxHearts
-            memory.writebyte(0x48, tonumber(string.format("%02d",o.player.hearts % 100),16))
-            memory.writebyte(0x49, tonumber(string.format("%02d",(o.player.hearts-(o.player.hearts % 100))/100),16))
+        if objects.player.hearts > objects.player.maxHearts then
+            objects.player.hearts = objects.player.maxHearts
+            memory.writebyte(0x48, tonumber(string.format("%02d",objects.player.hearts % 100),16))
+            memory.writebyte(0x49, tonumber(string.format("%02d",(objects.player.hearts-(objects.player.hearts % 100))/100),16))
         end
         
-        o.player.whip = memory.readbyte(0x0434)
-        o.player.items = memory.readbyte(0x004a)+memory.readbyte(0x0092)*0x100
+        objects.player.whip = memory.readbyte(0x0434)
+        objects.player.items = memory.readbyte(0x004a)+memory.readbyte(0x0092)*0x100
         
         -- new hp formula
-        --o.player.maxHp=0x30+1*o.player.level+4*relics.nParts
-        o.player.maxHp=0x30+1*relics.nParts
-        memory.writebyte(0x0081, o.player.maxHp)
+        --objects.player.maxHp=0x30+1*objects.player.level+4*relics.nParts
+        objects.player.maxHp=0x30+1*relics.nParts
+        memory.writebyte(0x0081, objects.player.maxHp)
         
-        o.player.hp=math.min(o.player.maxHp, o.player.hp)
-        memory.writebyte(0x0080, o.player.hp)
+        objects.player.hp=math.min(objects.player.maxHp, objects.player.hp)
+        memory.writebyte(0x0080, objects.player.hp)
         
-        o.player.exp = math.min(9999, tonumber(string.format("%02x%02x", memory.readbyte(0x47), memory.readbyte(0x46))))
-        o.player.expNext = getExpNeeded()
+        objects.player.exp = math.min(9999, tonumber(string.format("%02x%02x", memory.readbyte(0x47), memory.readbyte(0x46))))
+        objects.player.expNext = getExpNeeded()
         
         getExtraData()
         
         -- this is a first time thing
         if not game.customLoaded then
-            o.custom.destroyall()
-            o.custom.createCandles()
-            o.custom.createLevelObjects()
+            objects.custom.destroyall()
+            objects.custom.createCandles()
+            objects.custom.createLevelObjects()
             game.customLoaded = true
         end
         
          -- joma marsh
          if action and not jomaMarsh() then
-             --o.player.pendant = (locations.getAreaName(area1,area2,area3) == "Joma Marsh" and o.player.accessory == items.index["Pendant"] then
-             o.player.pendant = (o.player.accessory == items.index["Pendant"])
+             --objects.player.pendant = (locations.getAreaName(area1,area2,area3) == "Joma Marsh" and objects.player.accessory == items.index["Pendant"] then
+             objects.player.pendant = (objects.player.accessory == items.index["Pendant"])
          end
     end
     
     if action then
-        o.player.inBossRoom = false
+        objects.player.inBossRoom = false
         if spidey.debug.enabled then
-            drawfont(0,5+8*5,spidey.debug.font,string.format("HP: %02X/%02X",o.player.hp or 0,o.player.maxHp or 0))
+            drawfont(0,5+8*5,spidey.debug.font,string.format("HP: %02X/%02X",objects.player.hp or 0,objects.player.maxHp or 0))
             drawfont(0,5+8*6,spidey.debug.font,string.format("Relics: %02X",relics.nParts) )
         end
     end
@@ -5291,9 +5320,9 @@ function spidey.update(inp,joy)
                     game.map.visible = not game.map.visible
                 end
                 if subScreen.cursorY == 0 and subScreen.cursorX == 1 then
-                    o.player.whip = o.player.whip + 1
-                    if o.player.whip > 4 then o.player.whip = 0 end
-                    memory.writebyte(0x0434, o.player.whip)
+                    objects.player.whip = objects.player.whip + 1
+                    if objects.player.whip > 4 then objects.player.whip = 0 end
+                    memory.writebyte(0x0434, objects.player.whip)
                     emu.pause()
                 end
                 if subScreen.cursorY == 3 then
@@ -5372,41 +5401,41 @@ function spidey.update(inp,joy)
         memory.writebyte(0x0445,whipframe)
     end
     
-    if action and o.player.whipItem == items.index["Thief's Dagger"] then
+    if action and objects.player.whipItem == items.index["Thief's Dagger"] then
         memory.writebyte(0x0434,0x0d) -- whip
         local whipDelay = memory.readbyte(0x0457)
         whipDelay = math.min(whipDelay, 0x04)
         memory.writebyte(0x0457,whipDelay)
         local whipframe = memory.readbyte(0x0445)
         for i=0, 1 do
-            o.whip[i].frame = 0
-            memory.writebyte(0x0301+i, o.whip[i].frame)
+            objects.whip[i].frame = 0
+            memory.writebyte(0x0301+i, objects.whip[i].frame)
         end
         
         local facing=1
-        if o.player.facing==0 then facing=-1 end
+        if objects.player.facing==0 then facing=-1 end
         
         local yo=0
-        if o.player.ducking then yo=yo+3 end
+        if objects.player.ducking then yo=yo+3 end
         
         if whipframe==0x03 then
-            gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+10)*facing, o.player.y-2+2+yo, "white", "grey")
-            gui.drawbox(o.player.x+12*facing, o.player.y-2+yo, o.player.x+(12+12)*facing, o.player.y-2+2+yo, "white", "clear")
-            gui.drawbox(o.player.x+12*facing, o.player.y-4+yo, o.player.x+(12+2)*facing, o.player.y-2+4+yo, "white", "clear")
+            gui.drawbox(objects.player.x+12*facing, objects.player.y-2+yo, objects.player.x+(12+10)*facing, objects.player.y-2+2+yo, "white", "grey")
+            gui.drawbox(objects.player.x+12*facing, objects.player.y-2+yo, objects.player.x+(12+12)*facing, objects.player.y-2+2+yo, "white", "clear")
+            gui.drawbox(objects.player.x+12*facing, objects.player.y-4+yo, objects.player.x+(12+2)*facing, objects.player.y-2+4+yo, "white", "clear")
         end
     end
     
     if action and joy[1].down and joy[1].A_press then
-        if o.player.accessory == items.index["Soul of Bat"] then
-            if o.player.batMode == true then
-                o.player.batMode = false
+        if objects.player.accessory == items.index["Soul of Bat"] then
+            if objects.player.batMode == true then
+                objects.player.batMode = false
                 bat = false
                 -- reenable whip better
                 whipframe=00
                 memory.writebyte(0x0445,whipframe)
             else
-                o.player.batMode = true
-                o.player.batDelay = 0x12
+                objects.player.batMode = true
+                objects.player.batDelay = 0x12
                 bat = true
                 memory.writebyte(0x03b5,0xff) --help disable whip
             end
@@ -5479,12 +5508,12 @@ function spidey.update(inp,joy)
             end
         end
         
-        if o.player.batDelay then
+        if objects.player.batDelay then
             memory.writebyte(0x006d,0)
             memory.writebyte(0x036c,0)
-            if o.player.batDelay==0x12 then memory.writebyte(0x036c,0xf5) end
-            o.player.batDelay = o.player.batDelay - 1
-            if o.player.batDelay <=0 then o.player.batDelay = false end
+            if objects.player.batDelay==0x12 then memory.writebyte(0x036c,0xf5) end
+            objects.player.batDelay = objects.player.batDelay - 1
+            if objects.player.batDelay <=0 then objects.player.batDelay = false end
         end
         
         memory.writebyte(0x0300,simon_frame)
@@ -5492,14 +5521,14 @@ function spidey.update(inp,joy)
     end
     
     --destroy custom objects if going between screens
-    if screenload then o.custom.destroyall() end
-    if screenload then o.custom.createCandles() end
-    if screenload then o.custom.createLevelObjects() end
+    if screenload then objects.custom.destroyall() end
+    if screenload then objects.custom.createCandles() end
+    if screenload then objects.custom.createLevelObjects() end
     
     if (action) then
-        if o.player.lockPosition then
---            memory.writebyte(0x0348, o.player.lockPosition.x)
---            memory.writebyte(0x0324, o.player.lockPosition.y)
+        if objects.player.lockPosition then
+--            memory.writebyte(0x0348, objects.player.lockPosition.x)
+--            memory.writebyte(0x0324, objects.player.lockPosition.y)
 
 
             -- freeze x and y speed
@@ -5517,33 +5546,33 @@ function spidey.update(inp,joy)
             memory.writebyte(0x55, 0)
             --memory.writebyte(0x67, 0)
             
-            scrollx=o.player.lockPosition.scrollX
-            scrolly=o.player.lockPosition.scrollY
+            scrollx=objects.player.lockPosition.scrollX
+            scrolly=objects.player.lockPosition.scrollY
             setScroll()
             
-            o.player.frame = o.player.lockPosition.frame
-            memory.writebyte(0x0300, o.player.frame)
+            objects.player.frame = objects.player.lockPosition.frame
+            memory.writebyte(0x0300, objects.player.frame)
             
-            o.player.frame = o.player.lockPosition.facing
-            memory.writebyte(0x0420, o.player.facing)
+            objects.player.frame = objects.player.lockPosition.facing
+            memory.writebyte(0x0420, objects.player.facing)
 
-            o.player.lockPosition.c=o.player.lockPosition.c-1
-            if o.player.lockPosition.c<=0 then
-                o.player.lockPosition = nil
+            objects.player.lockPosition.c=objects.player.lockPosition.c-1
+            if objects.player.lockPosition.c<=0 then
+                objects.player.lockPosition = nil
             end
         end
         
-        o.player.x=memory.readbyte(0x0348)
-        o.player.y=memory.readbyte(0x0324)
-        o.player.inv=memory.readbyte(0x04f8)
-        o.player.frame = memory.readbyte(0x0300)
-        o.player.state=memory.readbyte(0x03d8)
-        o.player.ducking = (o.player.frame==0x05 or o.player.frame==0x2a or o.player.frame==0x2b or o.player.frame==0x2c)
+        objects.player.x=memory.readbyte(0x0348)
+        objects.player.y=memory.readbyte(0x0324)
+        objects.player.inv=memory.readbyte(0x04f8)
+        objects.player.frame = memory.readbyte(0x0300)
+        objects.player.state=memory.readbyte(0x03d8)
+        objects.player.ducking = (objects.player.frame==0x05 or objects.player.frame==0x2a or objects.player.frame==0x2b or objects.player.frame==0x2c)
         
         game.medusa.enabled = false
         for k,v in ipairs(cv2data.medusaHeads) do
             if area1 == v.area[1] and area2 == v.area[2] and area3 == v.area[3] and area4 == (v.area[4] or area4) then
-                if o.player.x+scrollx>=v.x1 and o.player.x+scrollx<=v.x2 then
+                if objects.player.x+scrollx>=v.x1 and objects.player.x+scrollx<=v.x2 then
                     game.medusa.enabled = true
                 end
                 if spidey.debug.enabled then
@@ -5610,17 +5639,17 @@ function spidey.update(inp,joy)
         -- Check if the player is in the in air hurt frame.  If so, reset 
         -- the invincible counter.  This way, you doesn't start flashing until
         -- you hit the ground.
-        if o.player.inv > 0 and o.player.frame == 0x73 then
-            o.player.inv=0x40
-            if o.player.armor == items.index["Magic Armor"] then
+        if objects.player.inv > 0 and objects.player.frame == 0x73 then
+            objects.player.inv=0x40
+            if objects.player.armor == items.index["Magic Armor"] then
                 -- 50% more inv time
-                o.player.inv=o.player.inv + 0x20
+                objects.player.inv=objects.player.inv + 0x20
             end
-            memory.writebyte(0x04f8, o.player.inv)
+            memory.writebyte(0x04f8, objects.player.inv)
         end
         
         -- Make player flash when hurt.
-        if (o.player.inv > 0 and o.player.frame~=0x73 and o.player.frame~=0x74) and o.player.inv % 4 < 1 then
+        if (objects.player.inv > 0 and objects.player.frame~=0x73 and objects.player.frame~=0x74) and objects.player.inv % 4 < 1 then
             --memory.writebyte(0x0300,0) --simon frame
             memory.writebyte(0x03c6,0x04) -- render player off
         else
@@ -5628,154 +5657,154 @@ function spidey.update(inp,joy)
         end
         
         
-        o.player.facing=memory.readbyte(0x0420)
+        objects.player.facing=memory.readbyte(0x0420)
         stuff=memory.readbyte(0x004a)
-        o.player.hasgoldendagger=(stuff==bit.bor(stuff, 2^2))
+        objects.player.hasgoldendagger=(stuff==bit.bor(stuff, 2^2))
         stuff=memory.readbyte(0x0092)
 
         for i=0,1 do
-            o.whip[i].type=memory.readbyte(0x03b5+i)
-            o.whip[i].frame=memory.readbyte(0x0301+i)
-            o.whip[i].x=memory.readbyte(0x0349+i)
-            o.whip[i].y=memory.readbyte(0x0325+i)
-            o.whip[i].ys=memory.readbyte(0x036d+i)
-            o.whip[i].xs=memory.readbyte(0x0391+i)
-            o.whip[i].hp=memory.readbyte(0x04c3+i)
-            if o.whip[i].type ~=0 then
-                if spidey.debug.enabled then gui.text(o.whip[i].x,o.whip[i].y, string.format("%u %02X\n(%3u,%3u) %2i %2i",i,o.whip[i].type,o.whip[i].x,o.whip[i].y,signed8bit(o.whip[i].xs),signed8bit(o.whip[i].ys)),"blue",'white') end
+            objects.whip[i].type=memory.readbyte(0x03b5+i)
+            objects.whip[i].frame=memory.readbyte(0x0301+i)
+            objects.whip[i].x=memory.readbyte(0x0349+i)
+            objects.whip[i].y=memory.readbyte(0x0325+i)
+            objects.whip[i].ys=memory.readbyte(0x036d+i)
+            objects.whip[i].xs=memory.readbyte(0x0391+i)
+            objects.whip[i].hp=memory.readbyte(0x04c3+i)
+            if objects.whip[i].type ~=0 then
+                if spidey.debug.enabled then gui.text(objects.whip[i].x,objects.whip[i].y, string.format("%u %02X\n(%3u,%3u) %2i %2i",i,objects.whip[i].type,objects.whip[i].x,objects.whip[i].y,signed8bit(objects.whip[i].xs),signed8bit(objects.whip[i].ys)),"blue",'white') end
             end
         end
         
         
         for i=0,2 do
-            o.weapons[i].type=memory.readbyte(0x03b7+i)
-            o.weapons[i].frame=memory.readbyte(0x0303+i)
-            o.weapons[i].x=memory.readbyte(0x0348+3+i)
-            o.weapons[i].y=memory.readbyte(0x0324+3+i)
-            o.weapons[i].ys=memory.readbyte(0x036c+3+i)
-            o.weapons[i].xs=memory.readbyte(0x0396-3+i)
-            o.weapons[i].hp=memory.readbyte(0x04c8-3+i)
-            if o.weapons[i].type==0 then
-                o.weapons[i].alivetime=0
+            objects.weapons[i].type=memory.readbyte(0x03b7+i)
+            objects.weapons[i].frame=memory.readbyte(0x0303+i)
+            objects.weapons[i].x=memory.readbyte(0x0348+3+i)
+            objects.weapons[i].y=memory.readbyte(0x0324+3+i)
+            objects.weapons[i].ys=memory.readbyte(0x036c+3+i)
+            objects.weapons[i].xs=memory.readbyte(0x0396-3+i)
+            objects.weapons[i].hp=memory.readbyte(0x04c8-3+i)
+            if objects.weapons[i].type==0 then
+                objects.weapons[i].alivetime=0
             else
-                o.weapons[i].alivetime=(o.weapons[i].alivetime or 0)+1
+                objects.weapons[i].alivetime=(objects.weapons[i].alivetime or 0)+1
             end
-            --o.weapons[i].hp=0x01
+            --objects.weapons[i].hp=0x01
             
-            if false and o.weapons[i].type==0x01 then
-                o.weapons[i].type=0
-                o.weapons[i].frame=0
-                memory.writebyte(0x03ba-3+i,o.weapons[i].type)
-                memory.writebyte(0x0303+i,o.weapons[i].frame)
+            if false and objects.weapons[i].type==0x01 then
+                objects.weapons[i].type=0
+                objects.weapons[i].frame=0
+                memory.writebyte(0x03ba-3+i,objects.weapons[i].type)
+                memory.writebyte(0x0303+i,objects.weapons[i].frame)
                 boomerangobj=getunusedcustom()
                 if (boomerangobj) then
-                    --o.custom[boomerangobj].type="fireball"
-                    o.custom[boomerangobj].type="bansheeboomerang"
-                    o.custom[boomerangobj].rebound=false
-                    o.custom[boomerangobj].x=o.weapons[i].x+scrollx
-                    o.custom[boomerangobj].y=o.weapons[i].y+scrolly
-                    o.custom[boomerangobj].facing=o.player.facing
-                    if o.custom[boomerangobj].facing==1 then 
-                        o.custom[boomerangobj].xs=1.5 
+                    --objects.custom[boomerangobj].type="fireball"
+                    objects.custom[boomerangobj].type="bansheeboomerang"
+                    objects.custom[boomerangobj].rebound=false
+                    objects.custom[boomerangobj].x=objects.weapons[i].x+scrollx
+                    objects.custom[boomerangobj].y=objects.weapons[i].y+scrolly
+                    objects.custom[boomerangobj].facing=objects.player.facing
+                    if objects.custom[boomerangobj].facing==1 then 
+                        objects.custom[boomerangobj].xs=1.5 
                     else 
-                        o.custom[boomerangobj].xs=-1.5 
+                        objects.custom[boomerangobj].xs=-1.5 
                     end
-                    o.custom[boomerangobj].ys=0
-                    o.custom[boomerangobj].active=1
+                    objects.custom[boomerangobj].ys=0
+                    objects.custom[boomerangobj].active=1
                 end
             end
             
-            memory.writebyte(0x04c8-3+i,o.weapons[i].hp)
-            if o.weapons[i].type ~=0 then
-                --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",o[i].type,o[i].x,o[i].y,o[i].hp))
-                --if debug then gui.text(o[i].x,o[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x,o[i].y,signed8bit(o[i].xs),signed8bit(o[i].ys))) end
-                if spidey.debug.enabled then gui.text(o.weapons[i].x,o.weapons[i].y, string.format("%u %02X\n(%3u,%3u) %2i %2i",i,o.weapons[i].type,o.weapons[i].x,o.weapons[i].y,signed8bit(o[i].xs),signed8bit(o[i].ys)),"red") end
+            memory.writebyte(0x04c8-3+i,objects.weapons[i].hp)
+            if objects.weapons[i].type ~=0 then
+                --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",objects[i].type,objects[i].x,objects[i].y,objects[i].hp))
+                --if debug then gui.text(objects[i].x,objects[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,objects[i].type,objects[i].hp,objects[i].x,objects[i].y,signed8bit(objects[i].xs),signed8bit(objects[i].ys))) end
+                if spidey.debug.enabled then gui.text(objects.weapons[i].x,objects.weapons[i].y, string.format("%u %02X\n(%3u,%3u) %2i %2i",i,objects.weapons[i].type,objects.weapons[i].x,objects.weapons[i].y,signed8bit(objects[i].xs),signed8bit(objects[i].ys)),"red") end
             end
-            if o.weapons[i].type==0x04 then --holy water
-                o.weapons[i].frame=0
-                memory.writebyte(0x0303+i,o.weapons[i].frame)
+            if objects.weapons[i].type==0x04 then --holy water
+                objects.weapons[i].frame=0
+                memory.writebyte(0x0303+i,objects.weapons[i].frame)
                 -- Replace old holy water sprite with blue bottle.
-                gfx.draw(o.weapons[i].x-8, o.weapons[i].y-9, gfx.holywater.test)
-                --gfx.draw(o.weapons[i].x-4, o.weapons[i].y-5, gfx.holywater.new)
-            elseif o.weapons[i].type==0x05 then --diamond
-                o.weapons[i].frame=0
-                memory.writebyte(0x0303+i,o.weapons[i].frame)
-                drawfont(o.weapons[i].x, o.weapons[i].y,font[4], ".")
-                --gui.line(o.weapons[i].x, o.weapons[i].y, o.weapons[i].x+1, o.weapons[i].y+1)
-                createDiamondTrail(o.weapons[i].x, o.weapons[i].y)
-            elseif o.weapons[i].type==0x09 then --garlic
+                gfx.draw(objects.weapons[i].x-8, objects.weapons[i].y-9, gfx.holywater.test)
+                --gfx.draw(objects.weapons[i].x-4, objects.weapons[i].y-5, gfx.holywater.new)
+            elseif objects.weapons[i].type==0x05 then --diamond
+                objects.weapons[i].frame=0
+                memory.writebyte(0x0303+i,objects.weapons[i].frame)
+                drawfont(objects.weapons[i].x, objects.weapons[i].y,font[4], ".")
+                --gui.line(objects.weapons[i].x, objects.weapons[i].y, objects.weapons[i].x+1, objects.weapons[i].y+1)
+                createDiamondTrail(objects.weapons[i].x, objects.weapons[i].y)
+            elseif objects.weapons[i].type==0x09 then --garlic
                 -- make disappear after a while
-                if o.weapons[i].alivetime>400 then
-                    o.weapons[i].type = 0
-                    o.weapons[i].frame = 0
-                    memory.writebyte(0x03b7+i, o.weapons[i].type)
-                    memory.writebyte(0x0303+i, o.weapons[i].frame)
+                if objects.weapons[i].alivetime>400 then
+                    objects.weapons[i].type = 0
+                    objects.weapons[i].frame = 0
+                    memory.writebyte(0x03b7+i, objects.weapons[i].type)
+                    memory.writebyte(0x0303+i, objects.weapons[i].frame)
                 end
             end
         end
         
-        o.player.platformIndex = nil
-        for i=0,o.count-1 do
-            o[i] = {}
-            o[i].type=memory.readbyte(0x03ba+i)
-            o[i].name = cv2data.enemies[o[i].type].name
-            o[i].frame=memory.readbyte(0x0306+i)
-            o[i].x=memory.readbyte(0x0348+6+i)
-            o[i].y=memory.readbyte(0x0324+6+i)
-            o[i].ys=memory.readbyte(0x036c+6+i)
-            o[i].xs=memory.readbyte(0x0396+i)
-            --o[i].show=(memory.readbyte(0x03cc+i) <0x80)
-            o[i].show=(memory.readbyte(0x03cc+i) ==0)
-            o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
-            o[i].facing=memory.readbyte(0x0420+6+i)
-            o[i].carrying=memory.readbyte(0x0480+i) --platforms: 00 = not carrying simon, ff = carrying simon
-            o[i].stun=memory.readbyte(0x04fe+i)
-            o[i].palette=memory.readbyte(0x0318+i)
-            o[i].state=memory.readbyte(0x044a+i) --sometimes it's counter
-            o[i].state2=memory.readbyte(0x046e+i)
-            o[i].statecounter=memory.readbyte(0x04b6+i) --used with drac, carmilla, others?
-            o[i].xdist=math.abs(o.player.x-o[i].x)
-            o[i].ydist=math.abs(o.player.y-o[i].y)
-            o[i].facingplayer=((o[i].x<o.player.x and o[i].facing==1) or (o[i].x>o.player.x and o[i].facing==0))
-            o[i].hp=memory.readbyte(0x04c8+i) --note: if hp==0, it can't be hit
+        objects.player.platformIndex = nil
+        for i=0,objects.count-1 do
+            objects[i] = {}
+            objects[i].type=memory.readbyte(0x03ba+i)
+            objects[i].name = cv2data.enemies[objects[i].type].name
+            objects[i].frame=memory.readbyte(0x0306+i)
+            objects[i].x=memory.readbyte(0x0348+6+i)
+            objects[i].y=memory.readbyte(0x0324+6+i)
+            objects[i].ys=memory.readbyte(0x036c+6+i)
+            objects[i].xs=memory.readbyte(0x0396+i)
+            --objects[i].show=(memory.readbyte(0x03cc+i) <0x80)
+            objects[i].show=(memory.readbyte(0x03cc+i) ==0)
+            objects[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
+            objects[i].facing=memory.readbyte(0x0420+6+i)
+            objects[i].carrying=memory.readbyte(0x0480+i) --platforms: 00 = not carrying simon, ff = carrying simon
+            objects[i].stun=memory.readbyte(0x04fe+i)
+            objects[i].palette=memory.readbyte(0x0318+i)
+            objects[i].state=memory.readbyte(0x044a+i) --sometimes it's counter
+            objects[i].state2=memory.readbyte(0x046e+i)
+            objects[i].statecounter=memory.readbyte(0x04b6+i) --used with drac, carmilla, others?
+            objects[i].xdist=math.abs(objects.player.x-objects[i].x)
+            objects[i].ydist=math.abs(objects.player.y-objects[i].y)
+            objects[i].facingplayer=((objects[i].x<objects.player.x and objects[i].facing==1) or (objects[i].x>objects.player.x and objects[i].facing==0))
+            objects[i].hp=memory.readbyte(0x04c8+i) --note: if hp==0, it can't be hit
             
-            if o[i].carrying == 0xff then
+            if objects[i].carrying == 0xff then
                 -- platform is carrying Simon
-                o.player.platformIndex = i
+                objects.player.platformIndex = i
             end
             
-            if o[i].type ~=0 and o[i].hp>0-1 and o[i].show then
-                --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",o[i].type,o[i].x,o[i].y,o[i].hp))
-                if spidey.debug.enabled then gui.text(o[i].x,o[i].y-32, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x+scrollx,o[i].y+scrolly,signed8bit(o[i].xs),signed8bit(o[i].ys))) end
+            if objects[i].type ~=0 and objects[i].hp>0-1 and objects[i].show then
+                --gui.text(8,8+8*i, string.format("%02X (%3u, %3u) %2u",objects[i].type,objects[i].x,objects[i].y,objects[i].hp))
+                if spidey.debug.enabled then gui.text(objects[i].x,objects[i].y-32, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,objects[i].type,objects[i].hp,objects[i].x+scrollx,objects[i].y+scrolly,signed8bit(objects[i].xs),signed8bit(objects[i].ys))) end
                 if spidey.debug.enabled then
-                    if game.data and game.data.enemies and game.data.enemies[o[i].type] and game.data.enemies[o[i].type].damage then
+                    if game.data and game.data.enemies and game.data.enemies[objects[i].type] and game.data.enemies[objects[i].type].damage then
                         local dnum=1
                         if game.night then dnum=2 end
-                        gui.text(o[i].x,o[i].y+8*2, string.format("damage: %u",game.data.enemies[o[i].type].damage[dnum] or 0))
+                        gui.text(objects[i].x,objects[i].y+8*2, string.format("damage: %u",game.data.enemies[objects[i].type].damage[dnum] or 0))
                     end
                 end
             end
             
             
---            o[i].palette=0
---            memory.writebyte(0x0318+i, o[i].palette)
+--            objects[i].palette=0
+--            memory.writebyte(0x0318+i, objects[i].palette)
             
-            if o[i].type==0x30 then
-                o[i].hp=1 --give fireballs hp so they can be killed
-                memory.writebyte(0x04c8+i,o[i].hp)
+            if objects[i].type==0x30 then
+                objects[i].hp=1 --give fireballs hp so they can be killed
+                memory.writebyte(0x04c8+i,objects[i].hp)
             end
             
             
             -- ferryman doesn't bounce off docks (needs work)
-            if o[i].type == 0x3c then
-                --gui.text(50,50, string.format("state: %02X %02X %02X",o[i].state,o[i].state2,o[i].statecounter))
-                if o[i].x+scrollx==270 and o[i].facing==0 then
-                    o[i].state=0x01; memory.writebyte(0x044a+i,o[i].state)
+            if objects[i].type == 0x3c then
+                --gui.text(50,50, string.format("state: %02X %02X %02X",objects[i].state,objects[i].state2,objects[i].statecounter))
+                if objects[i].x+scrollx==270 and objects[i].facing==0 then
+                    objects[i].state=0x01; memory.writebyte(0x044a+i,objects[i].state)
                     memory.writebyte(0x0396+i,0) --xs
                     memory.writebyte(0x0372+i,0) --ys
                 end
-                if o[i].x+scrollx==241 and o[i].facing==1 then
-                    o[i].state=0x01; memory.writebyte(0x044a+i,o[i].state)
+                if objects[i].x+scrollx==241 and objects[i].facing==1 then
+                    objects[i].state=0x01; memory.writebyte(0x044a+i,objects[i].state)
                     memory.writebyte(0x0396+i,0) --xs
                     memory.writebyte(0x0372+i,0) --ys
                 end
@@ -5784,326 +5813,330 @@ function spidey.update(inp,joy)
             
             -- custom heart object
             if false then
-            --if o[i].type==0x37 and o[i].team~=01 and o[i].hp~=99 then
-                o[i].type=0x00
-                memory.writebyte(0x03ba+i,o[i].type)
-                o[i].frame=0x00
-                memory.writebyte(0x0306+i, o[i].frame)
+            --if objects[i].type==0x37 and objects[i].team~=01 and objects[i].hp~=99 then
+                objects[i].type=0x00
+                memory.writebyte(0x03ba+i,objects[i].type)
+                objects[i].frame=0x00
+                memory.writebyte(0x0306+i, objects[i].frame)
                 heartobj=getunusedcustom()
                 if (heartobj) then
-                    o.custom[heartobj].type="heart"
-                    o.custom[heartobj].x=o[i].x+scrollx
-                    o.custom[heartobj].y=o[i].y+scrolly
-                    o.custom[heartobj].facing=o.player.facing
-                    o.custom[heartobj].xs=0
-                    o.custom[heartobj].ys=0
-                    o.custom[heartobj].active=1
+                    objects.custom[heartobj].type="heart"
+                    objects.custom[heartobj].x=objects[i].x+scrollx
+                    objects.custom[heartobj].y=objects[i].y+scrolly
+                    objects.custom[heartobj].facing=objects.player.facing
+                    objects.custom[heartobj].xs=0
+                    objects.custom[heartobj].ys=0
+                    objects.custom[heartobj].active=1
                 end
             end
         end
 
     if config.testMarker then gui.text(100,100,"test marker 1") end
---    if o.player.platformIndex then
---        spidey.message("%02x", o.player.platformIndex)
+--    if objects.player.platformIndex then
+--        spidey.message("%02x", objects.player.platformIndex)
 --    end
     
     --do extra enemy stuff
-    for i=0,o.count-1 do
-        if o[i].name=="Merchant" then
+    for i=0,objects.count-1 do
+        if objects[i].name=="Merchant" then
             if config.stationaryMerchant then
-                o[i].stun=1
-                memory.writebyte(0x04fe+i, o[i].stun)
+                objects[i].stun=1
+                memory.writebyte(0x04fe+i, objects[i].stun)
                 
-                o[i].palette=0
-                memory.writebyte(0x0318+i, o[i].palette)
+                objects[i].palette=0
+                memory.writebyte(0x0318+i, objects[i].palette)
                 
-                if o[i].xdist < 0x30 and o[i].ydist < 0x30 and (not o[i].facingplayer) and spidey.counter % 20 == 0 then
-                    o[i].facing=1-o[i].facing
-                    memory.writebyte(0x0420+6+i, o[i].facing)
+                if objects[i].xdist < 0x30 and objects[i].ydist < 0x30 and (not objects[i].facingplayer) and spidey.counter % 20 == 0 then
+                    objects[i].facing=1-objects[i].facing
+                    memory.writebyte(0x0420+6+i, objects[i].facing)
                 end
             end
         end
 
-        if o[i].show and o[i].name == "Skeleton" then
-            o[i].statecounter=(o[i].statecounter+1) % 256
-            memory.writebyte(0x04b6+i, o[i].statecounter)
+        if objects[i].show and objects[i].name == "Skeleton" then
+            objects[i].statecounter=(objects[i].statecounter+1) % 256
+            memory.writebyte(0x04b6+i, objects[i].statecounter)
             local nBones = 1
             local interval = 120
 --            nBones=2
 --            interval=100
-            if o[i].statecounter % 128==0 then
+            if objects[i].statecounter % 128==0 then
                 if game.night then
                     nBones = 2
                     interval = 100
                 end
                 for j=1, nBones do
-                    if o[i].stun == 0 then
-                        createBone(o[i].x,o[i].y)
+                    if objects[i].stun == 0 and objects[i].facingplayer then
+                        createBone(objects[i].x,objects[i].y)
                     end
                 end
             end
         end
-        if o[i].name == "Jumping Skeleton" then
-            --gui.text(o[i].x,o[i].y+8*2, string.format("state: %02x %02x %02x %d %d",o[i].state, o[i].state2, o[i].statecounter, o[i].xs, o[i].ys))
+        if objects[i].name == "Jumping Skeleton" then
+            --gui.text(objects[i].x,objects[i].y+8*2, string.format("state: %02x %02x %02x %d %d",objects[i].state, objects[i].state2, objects[i].statecounter, objects[i].xs, objects[i].ys))
         end
-        if o[i].name == "Book" then
+        if objects[i].name == "Book" then
             for clueNum,clue in ipairs(cv2data.clues) do
-                if o[i].hp == clue and o.player.clues[clueNum] then
-                    o[i].type=0
-                    o[i].frame=0
-                    memory.writebyte(0x03ba+i,o[i].type)
-                    memory.writebyte(0x0306+i,o[i].frame)
+                if objects[i].hp == clue and objects.player.clues[clueNum] then
+                    objects[i].type=0
+                    objects[i].frame=0
+                    memory.writebyte(0x03ba+i,objects[i].type)
+                    memory.writebyte(0x0306+i,objects[i].frame)
                 end
             end
         end
-        if o[i].name == "Orb" then
+        if objects[i].name == "Orb" then
             for _,v in ipairs(cv2data.mansions) do
                 if locations.getAreaName(area1, area2, area3) == v.name then
                     if relics.list[v.relic] then
                         -- orbs/bags don't appear if you already have the item
-                        o[i].type=0
-                        o[i].frame=0
-                        memory.writebyte(0x03ba+i,o[i].type)
-                        memory.writebyte(0x0306+i,o[i].frame)
+                        objects[i].type=0
+                        objects[i].frame=0
+                        memory.writebyte(0x03ba+i,objects[i].type)
+                        memory.writebyte(0x0306+i,objects[i].frame)
                     else
                         -- fix for an obscure bug
-                        o[i].hp = v.orbValue
-                        memory.writebyte(0x04c8+i,o[i].hp)
+                        objects[i].hp = v.orbValue
+                        memory.writebyte(0x04c8+i,objects[i].hp)
                     end
                 end
             end
         end
-        if o[i].name == "Heart" then
-            --spidey.message("%02x",o[i].team)
-            if o[i].xs==1 then -- we set this to mark it as custom damager heart
+        if objects[i].name == "Heart" then
+            --spidey.message("%02x",objects[i].team)
+            if objects[i].xs==1 then -- we set this to mark it as custom damager heart
             else
                 -- hearts always small
---                o[i].hp=0xef
---                o[i].hp=1
---                memory.writebyte(0x04c8+i, o[i].hp)
---                o[i].frame=0x8b
---                memory.writebyte(0x0306+i, o[i].frame)
-                o[i].destroy = true
+--                objects[i].hp=0xef
+--                objects[i].hp=1
+--                memory.writebyte(0x04c8+i, objects[i].hp)
+--                objects[i].frame=0x8b
+--                memory.writebyte(0x0306+i, objects[i].frame)
+                objects[i].destroy = true
             end
-        elseif o[i].name == "High Jump Blob" and not inMansion then
-            o[i].frame=0x00
-            memory.writebyte(0x0306+i, o[i].frame)
+        elseif objects[i].name == "High Jump Blob" and not inMansion then
+            objects[i].hp=1
+            memory.writebyte(0x04c8+i, objects[i].hp)
+
+            objects[i].frame=0x00
+            memory.writebyte(0x0306+i, objects[i].frame)
             
             local frame = math.floor(spidey.counter /7) % 2+1
-            --gfx.draw(o[i].x, o[i].y-8, gfx.fleaman[o[i].facing % 2][frame])
-            gfx.draw(o[i].x, o[i].y-9, gfx.fleaman[1-(o[i].facing % 2)+1][frame])
+            --gfx.draw(objects[i].x, objects[i].y-8, gfx.fleaman[objects[i].facing % 2][frame])
+            gfx.draw(objects[i].x, objects[i].y-9, gfx.fleaman[1-(objects[i].facing % 2)+1][frame])
 
             
-            --gfx.draw(o[i].x, o[i].y, gfx.fleaman[1])
-        elseif o[i].name == "Werewolf" then
+            --gfx.draw(objects[i].x, objects[i].y, gfx.fleaman[1])
+        elseif objects[i].name == "Werewolf" then
             -- The werewolf's senses are better at night; greater rush distance and they can turn to rush at night.
             local rushDistance = 0x32
-            if game.night then rushDistance=0x60 end
+            if game.night then rushDistance=0x5f end
             
-            --gui.text(o[i].x,o[i].y+8*2, string.format("state: %02x %02x %02x %d %d",o[i].state, o[i].state2, o[i].statecounter, o[i].xs, o[i].ys))
-            if o[i].state == 1 and o[i].state2==3 then
-                -- reset after a jump
-                o[i].state2=0
-                memory.writebyte(0x046e+i, o[i].state2)
-                o[i].statecounter=0
-                memory.writebyte(0x04b6+i, o[i].statecounter)
+            --gui.text(objects[i].x,objects[i].y+8*2, string.format("state: %02x %02x %02x %d %d",objects[i].state, objects[i].state2, objects[i].statecounter, objects[i].xs, objects[i].ys))
+            if objects[i].state == 1 and objects[i].state2==3 then
+                -- reset after a jump (state2=0)
+                objects[i].state2=0
+                memory.writebyte(0x046e+i, objects[i].state2)
+                objects[i].statecounter=0
+                memory.writebyte(0x04b6+i, objects[i].statecounter)
             end
             
-            if o[i].state == 1 and o[i].state2==0 and o[i].xdist < rushDistance and o[i].ydist <0x05 and (o[i].facingplayer or night) then
-                if not o[i].facingplayer then
-                    o[i].facing=1-o[i].facing
-                    memory.writebyte(0x0420+6+i, o[i].facing)
-                    o[i].xs=(0x100-o[i].xs) % 0x100
-                    memory.writebyte(0x0396+i, o[i].xs)
-                    o[i].facingplayer = true
+            if objects[i].state == 1 and objects[i].state2==0 and objects[i].xdist < rushDistance and objects[i].ydist <0x05 and (objects[i].facingplayer or night) then
+                -- rush (state2=2)
+                if not objects[i].facingplayer then
+                    objects[i].facing=1-objects[i].facing
+                    memory.writebyte(0x0420+6+i, objects[i].facing)
+                    objects[i].xs=(0x100-objects[i].xs) % 0x100
+                    memory.writebyte(0x0396+i, objects[i].xs)
+                    objects[i].facingplayer = true
                 end
-                o[i].state2=2
-                memory.writebyte(0x046e+i, o[i].state2)
+                objects[i].state2=2
+                memory.writebyte(0x046e+i, objects[i].state2)
             end
-            if o[i].state2 == 2 and o[i].statecounter == 0 then
-                o[i].statecounter=1
-                memory.writebyte(0x04b6+i, o[i].statecounter)
-                if o[i].xs==0 then
+            if objects[i].state2 == 2 and objects[i].statecounter == 0 then
+                objects[i].statecounter=1
+                memory.writebyte(0x04b6+i, objects[i].statecounter)
+                if objects[i].xs==0 then
                     
-                    o[i].x=o[i].x+6
-                    memory.writebyte(0x0348+6+i,o[i].x)
-                    --memory.writebyte(0x0324+6+i,o[i].y)
+                    objects[i].x=objects[i].x+6
+                    memory.writebyte(0x0348+6+i,objects[i].x)
+                    --memory.writebyte(0x0324+6+i,objects[i].y)
                     
                     
-                    o[i].xs=1+1
-                    memory.writebyte(0x0396+i,o[i].xs)
+                    objects[i].xs=1+1
+                    memory.writebyte(0x0396+i,objects[i].xs)
                 end
-                if o[i].xs==255 then
+                if objects[i].xs==255 then
 
-                    o[i].x=o[i].x-6
-                    memory.writebyte(0x0348+6+i,o[i].x)
+                    objects[i].x=objects[i].x-6
+                    memory.writebyte(0x0348+6+i,objects[i].x)
 
-                    o[i].xs=254-1
-                    memory.writebyte(0x0396+i,o[i].xs)
+                    objects[i].xs=254-1
+                    memory.writebyte(0x0396+i,objects[i].xs)
                 end
             end
 
-            if o[i].state == 2 and o[i].state2 == 2 and o[i].statecounter==1 then
-                o[i].state2=3
-                memory.writebyte(0x046e+i, o[i].state2)
-                o[i].statecounter=1
-                memory.writebyte(0x04b6+i, o[i].statecounter)
+            if objects[i].state == 2 and objects[i].state2 == 2 and objects[i].statecounter==1 then
+                objects[i].state2=3
+                memory.writebyte(0x046e+i, objects[i].state2)
+                objects[i].statecounter=1
+                memory.writebyte(0x04b6+i, objects[i].statecounter)
                 
                 
-                if o[i].xs==0 then
-                    o[i].xs=1+1
-                    memory.writebyte(0x0396+i,o[i].xs)
+                if objects[i].xs==0 then
+                    objects[i].xs=1+1
+                    memory.writebyte(0x0396+i,objects[i].xs)
                 end
-                if o[i].xs==255 then
-                    o[i].xs=254-1
-                    memory.writebyte(0x0396+i,o[i].xs)
-                end
-            end
-            
-            if o[i].state == 2 and o[i].state2 == 3 then
-                o[i].statecounter=o[i].statecounter+1
-                memory.writebyte(0x04b6+i, o[i].statecounter)
-                if o[i].statecounter==0x0a then
-                    o[i].ys = 255
-                    memory.writebyte(0x036c+6+i, o[i].ys)
+                if objects[i].xs==255 then
+                    objects[i].xs=254-1
+                    memory.writebyte(0x0396+i,objects[i].xs)
                 end
             end
             
---            if o[i].state == 2 and o[i].ys == 253 then
---                o[i].ys = 255
---                o[i].state = 1
---                memory.writebyte(0x036c+6+i, o[i].ys)
---                memory.writebyte(0x044a+i,o[i].state)
---                if o[i].xs==0 then
---                    o[i].xs=1
---                    memory.writebyte(0x0396+i,o[i].xs)
+            if objects[i].state == 2 and objects[i].state2 == 3 then
+                objects[i].statecounter=objects[i].statecounter+1
+                memory.writebyte(0x04b6+i, objects[i].statecounter)
+                if objects[i].statecounter==0x0a then
+                    objects[i].ys = 255
+                    memory.writebyte(0x036c+6+i, objects[i].ys)
+                end
+            end
+            
+--            if objects[i].state == 2 and objects[i].ys == 253 then
+--                objects[i].ys = 255
+--                objects[i].state = 1
+--                memory.writebyte(0x036c+6+i, objects[i].ys)
+--                memory.writebyte(0x044a+i,objects[i].state)
+--                if objects[i].xs==0 then
+--                    objects[i].xs=1
+--                    memory.writebyte(0x0396+i,objects[i].xs)
 --                end
---                if o[i].xs==255 then
---                    o[i].xs=254
---                    memory.writebyte(0x0396+i,o[i].xs)
+--                if objects[i].xs==255 then
+--                    objects[i].xs=254
+--                    memory.writebyte(0x0396+i,objects[i].xs)
 --                end
 --            end
         end
         
-        if o[i].type==0x03 and o[i].stun==0 and o[i].xdist < 40 and o[i].xdist > 16 and o[i].ydist<10 and o[i].facingplayer==false and (emu.framecount() % 48) then
+        if objects[i].type==0x03 and objects[i].stun==0 and objects[i].xdist < 40 and objects[i].xdist > 16 and objects[i].ydist<10 and objects[i].facingplayer==false and (emu.framecount() % 48) then
             --skeletons turn to face player sometimes
-            o[i].facing=1-o[i].facing; memory.writebyte(0x0420+6+i,o[i].facing)
-            o[i].xs=255-o[i].xs; memory.writebyte(0x0396+i,o[i].xs)
-            --gui.text(o[i].x,o[i].y-8, "*")
+            objects[i].facing=1-objects[i].facing; memory.writebyte(0x0420+6+i,objects[i].facing)
+            objects[i].xs=255-objects[i].xs; memory.writebyte(0x0396+i,objects[i].xs)
+            --gui.text(objects[i].x,objects[i].y-8, "*")
         end
         
-        if o[i].type==0x30 then -- Fireballs
-            if signed8bit(o[i].xs) >= 0 then
-                if o[i].facing==0 then o[i].facing=1; memory.writebyte(0x0420+6+i, o[i].facing) end
+        if objects[i].type==0x30 then -- Fireballs
+            if signed8bit(objects[i].xs) >= 0 then
+                if objects[i].facing==0 then objects[i].facing=1; memory.writebyte(0x0420+6+i, objects[i].facing) end
             else
-                if o[i].facing==1 then o[i].facing=0; memory.writebyte(0x0420+6+i, o[i].facing) end
+                if objects[i].facing==1 then objects[i].facing=0; memory.writebyte(0x0420+6+i, objects[i].facing) end
             end
         end
-        if o[i].type==0x32 then --Fire guy fireballs: 
+        if objects[i].type==0x32 then --Fire guy fireballs: 
             -- Fix it so they face the proper direction
-            if o[i].xs ==bit.bor(o[i].xs, 2^7) then
-                if o[i].facing==1 then o[i].facing=0; memory.writebyte(0x0420+6+i, o[i].facing) end
+            if objects[i].xs ==bit.bor(objects[i].xs, 2^7) then
+                if objects[i].facing==1 then objects[i].facing=0; memory.writebyte(0x0420+6+i, objects[i].facing) end
             else
-                if o[i].facing==0 then o[i].facing=1; memory.writebyte(0x0420+6+i, o[i].facing) end
+                if objects[i].facing==0 then objects[i].facing=1; memory.writebyte(0x0420+6+i, objects[i].facing) end
             end
-            o[i].hp=1 --give fireballs hp so they can be killed
-            memory.writebyte(0x04c8+i,o[i].hp)
+            objects[i].hp=1 --give fireballs hp so they can be killed
+            memory.writebyte(0x04c8+i,objects[i].hp)
         end
         
-        if config.floatingEyes and o[i].name=="Eyeball" then --floating eyes
+        if config.floatingEyes and objects[i].name=="Eyeball" then --floating eyes
                 -- They first start by slowly heading towards you (state=0).
                 -- Then, they kite (state=1).
                 -- If you turn away, they strike periodically (state=2).
                 
-                --o[i].skullc = ((o[i].skullc or 0) +1) % 1000
+                --objects[i].skullc = ((objects[i].skullc or 0) +1) % 1000
                 
-                if o[i].state <2 then
-                    o[i].state2=(o[i].state2+1) % 0x100
-                    memory.writebyte(0x046e+i, o[i].state2)
+                if objects[i].state <2 then
+                    objects[i].state2=(objects[i].state2+1) % 0x100
+                    memory.writebyte(0x046e+i, objects[i].state2)
                 end
                 
-                if o[i].state==0 then
-                    if o[i].xdist < 0x40 and o[i].ydist < 0x40 then
+                if objects[i].state==0 then
+                    if objects[i].xdist < 0x40 and objects[i].ydist < 0x40 then
                         --spidey.message("circle")
-                        o[i].state = 1
-                        memory.writebyte(0x044a+i, o[i].state)
-                        --memory.writebyte(0x046e+i, o[i].state2)
+                        objects[i].state = 1
+                        memory.writebyte(0x044a+i, objects[i].state)
+                        --memory.writebyte(0x046e+i, objects[i].state2)
                     else
                     end
-                elseif o[i].state==1 then
-                    if o[i].xdist < 0x60 and o[i].ydist < 0x60 then
-                        --o[i].skullc = ((spidey.counter or 0) +1) % 1000
-                        o[i].skullc = o[i].state2
-                        o[i].y=o[i].y+math.cos(o[i].skullc *.08)*2
+                elseif objects[i].state==1 then
+                    if objects[i].xdist < 0x60 and objects[i].ydist < 0x60 then
+                        --objects[i].skullc = ((spidey.counter or 0) +1) % 1000
+                        objects[i].skullc = objects[i].state2
+                        objects[i].y=objects[i].y+math.cos(objects[i].skullc *.08)*2
                         
-                        if o[i].facing==0 then
-                            o[i].x=o[i].x+math.sin(o[i].skullc *.01)*2
+                        if objects[i].facing==0 then
+                            objects[i].x=objects[i].x+math.sin(objects[i].skullc *.01)*2
                         else
-                            o[i].x=o[i].x+math.sin(o[i].skullc *.01)*-2
+                            objects[i].x=objects[i].x+math.sin(objects[i].skullc *.01)*-2
                         end
-                        memory.writebyte(0x0348+6+i,o[i].x)
-                        memory.writebyte(0x0324+6+i,o[i].y)
+                        memory.writebyte(0x0348+6+i,objects[i].x)
+                        memory.writebyte(0x0324+6+i,objects[i].y)
                         
                         -- if player back turned
-                        if (o[i].x<o.player.x and o.player.facing==1) or (o[i].x>o.player.x and o.player.facing==0) then
-                            if o[i].state2 % 28 ==0x10 then
-                                o[i].state = 2
-                                memory.writebyte(0x044a+i, o[i].state)
-                                o[i].state2=0x2d
-                                memory.writebyte(0x046e+i, o[i].state2)
+                        if (objects[i].x<objects.player.x and objects.player.facing==1) or (objects[i].x>objects.player.x and objects.player.facing==0) then
+                            if objects[i].state2 % 28 ==0x10 then
+                                objects[i].state = 2
+                                memory.writebyte(0x044a+i, objects[i].state)
+                                objects[i].state2=0x2d
+                                memory.writebyte(0x046e+i, objects[i].state2)
                             end
                         end
                     end
-                elseif o[i].state==2 then
-                    o[i].state2=o[i].state2-1
-                    memory.writebyte(0x046e+i, o[i].state2)
+                elseif objects[i].state==2 then
+                    objects[i].state2=objects[i].state2-1
+                    memory.writebyte(0x046e+i, objects[i].state2)
 
                     --spidey.message("attack")
-                    if o[i].xdist>0x0e then
-                        if o[i].facing==1 then
-                            o[i].x=o[i].x+2
+                    if objects[i].xdist>0x0e then
+                        if objects[i].facing==1 then
+                            objects[i].x=objects[i].x+2
                         else
-                            o[i].x=o[i].x-2
+                            objects[i].x=objects[i].x-2
                         end
                     end
                     
                         -- if player facing the eye
-                        if (o[i].x<o.player.x and o.player.facing==0) or (o[i].x>o.player.x and o.player.facing==1) then
-                            o[i].state = 1
-                            memory.writebyte(0x044a+i, o[i].state)
+                        if (objects[i].x<objects.player.x and objects.player.facing==0) or (objects[i].x>objects.player.x and objects.player.facing==1) then
+                            objects[i].state = 1
+                            memory.writebyte(0x044a+i, objects[i].state)
 
                         end
                     
-                    --o[i].y=o[i].y+math.cos(o[i].state2 *.04)*2
-                    memory.writebyte(0x0348+6+i,o[i].x)
-                    memory.writebyte(0x0324+6+i,o[i].y)
-                    if o[i].state2==0 then
-                        o[i].state = 1
-                        memory.writebyte(0x044a+i, o[i].state)
+                    --objects[i].y=objects[i].y+math.cos(objects[i].state2 *.04)*2
+                    memory.writebyte(0x0348+6+i,objects[i].x)
+                    memory.writebyte(0x0324+6+i,objects[i].y)
+                    if objects[i].state2==0 then
+                        objects[i].state = 1
+                        memory.writebyte(0x044a+i, objects[i].state)
                     end
                     
                 end
         end
         
-        if o[i].name == "MedusaX" then
-            --o[i].
+        if objects[i].name == "MedusaX" then
+            --objects[i].
             
-            if o[i].state==0 then
-                o[i].state=o[i].x
-                o[i].state2=o[i].y
-                memory.writebyte(0x044a+i, o[i].state)
-                memory.writebyte(0x046e+i, o[i].state2)
+            if objects[i].state==0 then
+                objects[i].state=objects[i].x
+                objects[i].state2=objects[i].y
+                memory.writebyte(0x044a+i, objects[i].state)
+                memory.writebyte(0x046e+i, objects[i].state2)
             end
             
-            local x = o[i].state
-            local y = o[i].state2
+            local x = objects[i].state
+            local y = objects[i].state2
             
-            o[i].statecounter = ((o[i].statecounter or 0) +1) % 0x100
-            memory.writebyte(0x04b6+i, o[i].statecounter)
---            y=y+math.cos(o[i].statecounter *.04)*2
---            x=x-math.sin(o[i].statecounter *.01)*2
-            y=y+math.cos(o[i].statecounter *.04)*1
-            x=x-math.sin(o[i].statecounter *.01)*1
+            objects[i].statecounter = ((objects[i].statecounter or 0) +1) % 0x100
+            memory.writebyte(0x04b6+i, objects[i].statecounter)
+--            y=y+math.cos(objects[i].statecounter *.04)*2
+--            x=x-math.sin(objects[i].statecounter *.01)*2
+            y=y+math.cos(objects[i].statecounter *.04)*1
+            x=x-math.sin(objects[i].statecounter *.01)*1
 
             memory.writebyte(0x0348+6+i,x)
             memory.writebyte(0x0324+6+i,y)
@@ -6112,406 +6145,406 @@ function spidey.update(inp,joy)
             memory.writebyte(0x046e+i,y)
 
 
---            if o[i].state+o[i].state2+o[i].statecounter > 0 then
+--            if objects[i].state+objects[i].state2+objects[i].statecounter > 0 then
 --                emu.pause()
                 
 --            end
-            emu.message(string.format("%02x %02x %02x",o[i].state, o[i].state2, o[i].statecounter or 0))
+            emu.message(string.format("%02x %02x %02x",objects[i].state, objects[i].state2, objects[i].statecounter or 0))
         end
         
-        if o[i].type==0x0a and false then --medusa heads
+        if objects[i].type==0x0a and false then --medusa heads
                 --needs work but at least they're wavy
---                emu.message(string.format("%02x",o[i].statecounter))
+--                emu.message(string.format("%02x",objects[i].statecounter))
 --                emu.pause()
-                o[i].skullc = ((o[i].skullc or 0) +1) % 10000
-                o[i].y=o[i].y+math.sin(o[i].skullc *.06)*2
-                memory.writebyte(0x0324+6+i,o[i].y)
+                objects[i].skullc = ((objects[i].skullc or 0) +1) % 10000
+                objects[i].y=objects[i].y+math.sin(objects[i].skullc *.06)*2
+                memory.writebyte(0x0324+6+i,objects[i].y)
                 
---                o[i].x = o[i].lastX or o[i].x
---                memory.writebyte(0x034e+i, o[i].x)
+--                objects[i].x = objects[i].lastX or objects[i].x
+--                memory.writebyte(0x034e+i, objects[i].x)
                 
 
---                o[i].x = o[i].x + 1
+--                objects[i].x = objects[i].x + 1
                 
                 
---                o[i].xs=2
---                memory.writebyte(0x0396+i, o[i].xs)
+--                objects[i].xs=2
+--                memory.writebyte(0x0396+i, objects[i].xs)
                 
---                o[i].xs=2
---                o[i].xs=o[i].lastXs or o[i].xs
---                memory.writebyte(0x0396+i, o[i].xs)
---                o[i].lastXs = o[i].xs
+--                objects[i].xs=2
+--                objects[i].xs=objects[i].lastXs or objects[i].xs
+--                memory.writebyte(0x0396+i, objects[i].xs)
+--                objects[i].lastXs = objects[i].xs
                 
---                o[i].xs=memory.readbyte(0x0396+i)
---                o[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
+--                objects[i].xs=memory.readbyte(0x0396+i)
+--                objects[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
                 
-                o[i].facing=o[i].lastFacing or o[i].facing
-                memory.writebyte(0x0420+6+i, o[i].facing)
+                objects[i].facing=objects[i].lastFacing or objects[i].facing
+                memory.writebyte(0x0420+6+i, objects[i].facing)
                 
-                o[i].lastFacing=o[i].facing
-                o[i].lastX = o[i].x
+                objects[i].lastFacing=objects[i].facing
+                objects[i].lastX = objects[i].x
                 
                 
         end
         
-        if o[i].type==0x10 then --skulls
-                o[i].skullc = spidey.counter
-                o[i].skullc = ((o[i].skullc or 0) +1) % 1000
-                --o[i].y=o[i].y+math.sin(o[i].skullc *.1)*2
-                o[i].y=o[i].y+math.sin(o[i].skullc *.1)*2
-                memory.writebyte(0x0324+6+i,o[i].y)
+        if objects[i].type==0x10 then --skulls
+                objects[i].skullc = spidey.counter
+                objects[i].skullc = ((objects[i].skullc or 0) +1) % 1000
+                --objects[i].y=objects[i].y+math.sin(objects[i].skullc *.1)*2
+                objects[i].y=objects[i].y+math.sin(objects[i].skullc *.1)*2
+                memory.writebyte(0x0324+6+i,objects[i].y)
         end
         
-        if o[i].type==0x38 then --hands
-            --gui.text(8,8*2, string.format("%02x %02X %02X",i,o[i].state,o[i].state2,o[i].statecounter))
-            if o[i].xdist>64 then o[i].frame=0 end
+        if objects[i].type==0x38 then --hands
+            --gui.text(8,8*2, string.format("%02x %02X %02X",i,objects[i].state,objects[i].state2,objects[i].statecounter))
+            if objects[i].xdist>64 then objects[i].frame=0 end
             --[[
-            if o[i].xdist>64 then 
-                o[i].frame=0x8e
-                --o[i].y=180
-                --o[i].state=1
-                --o[i].state2=0
+            if objects[i].xdist>64 then 
+                objects[i].frame=0x8e
+                --objects[i].y=180
+                --objects[i].state=1
+                --objects[i].state2=0
             end
             ]]--
-            --memory.writebyte(0x0324+6+i,o[i].y)
-            memory.writebyte(0x044a+i,o[i].state)
-            memory.writebyte(0x046e+i,o[i].state2)
-            memory.writebyte(0x0306+i,o[i].frame)
+            --memory.writebyte(0x0324+6+i,objects[i].y)
+            memory.writebyte(0x044a+i,objects[i].state)
+            memory.writebyte(0x046e+i,objects[i].state2)
+            memory.writebyte(0x0306+i,objects[i].frame)
         end
         
-        if config.ghosts and o[i].type==0x39 then --ghosts
-            o[i].skullc = ((o[i].skullc or 0) +1) % 1000
-            o[i].y=o[i].y+math.cos(o[i].skullc *.05)*1
-            o[i].frame=0x20 + (math.floor(o[i].skullc / 6) % 2)
-            if (emu.framecount() % 4==0) then o[i].frame=0 end
-            memory.writebyte(0x0324+6+i,o[i].y)
-            memory.writebyte(0x0306+i,o[i].frame)
+        if config.ghosts and objects[i].type==0x39 then --ghosts
+            objects[i].skullc = ((objects[i].skullc or 0) +1) % 1000
+            objects[i].y=objects[i].y+math.cos(objects[i].skullc *.05)*1
+            objects[i].frame=0x20 + (math.floor(objects[i].skullc / 6) % 2)
+            if (emu.framecount() % 4==0) then objects[i].frame=0 end
+            memory.writebyte(0x0324+6+i,objects[i].y)
+            memory.writebyte(0x0306+i,objects[i].frame)
         end
         
-        if o[i].type==0x44 then --Death
-            o.boss.maxHp = 128
+        if objects[i].type==0x44 then --Death
+            objects.boss.maxHp = 128
             if hasInventoryItem("Golden Knife") and not refight_bosses then
                 --Only fight boss once
-                o[i].destroy=true
+                objects[i].destroy=true
             end
                 if config.deathAI then
-                    o[i].skullc = ((o[i].skullc or 0) +1) % 1000
-                    o[i].y=o[i].y+math.cos(o[i].skullc *.03)*2
-                    o[i].x=o[i].x+math.sin(o[i].skullc *.01)*1
-                    o[i].y=o[i].y+math.cos(emu.framecount()*.09)*1
-                    o[i].x=o[i].x+math.sin(emu.framecount()*.09)*1
+                    objects[i].skullc = ((objects[i].skullc or 0) +1) % 1000
+                    objects[i].y=objects[i].y+math.cos(objects[i].skullc *.03)*2
+                    objects[i].x=objects[i].x+math.sin(objects[i].skullc *.01)*1
+                    objects[i].y=objects[i].y+math.cos(emu.framecount()*.09)*1
+                    objects[i].x=objects[i].x+math.sin(emu.framecount()*.09)*1
                     n=40
-                    if o[i].x<0+n then o[i].x=0+n end
-                    if o[i].x>255-n then o[i].x=255-n end
-                    if o[i].y<0+n then o[i].y=0+n end
-                    if o[i].y>255-n then o[i].y=255-n end
-                    memory.writebyte(0x0348+6+i,o[i].x)
-                    memory.writebyte(0x0324+6+i,o[i].y)
-                    memory.writebyte(0x03ba+i,o[i].type)
-                    memory.writebyte(0x0306+i,o[i].frame)
+                    if objects[i].x<0+n then objects[i].x=0+n end
+                    if objects[i].x>255-n then objects[i].x=255-n end
+                    if objects[i].y<0+n then objects[i].y=0+n end
+                    if objects[i].y>255-n then objects[i].y=255-n end
+                    memory.writebyte(0x0348+6+i,objects[i].x)
+                    memory.writebyte(0x0324+6+i,objects[i].y)
+                    memory.writebyte(0x03ba+i,objects[i].type)
+                    memory.writebyte(0x0306+i,objects[i].frame)
                 end
                 
-                o.player.bossdoor()
+                objects.player.bossdoor()
         end
         
-        if o[i].type==0x48 then
-            if o[i].frame >=0x7a and o[i].frame<=0x7d then
+        if objects[i].type==0x48 then
+            if objects[i].frame >=0x7a and objects[i].frame<=0x7d then
             else
-                o[i].destroy=true
-                spidey.message("%02x",o[i].frame)
+                objects[i].destroy=true
+                spidey.message("%02x",objects[i].frame)
             end
             --if frame~=0x29 then
-            --memory.writebyte(0x0306+i,o[i].frame)
+            --memory.writebyte(0x0306+i,objects[i].frame)
         end
-        if o[i].type==0x48 and false then --drac weapon
-            o[i].frame=0x29
-            o[i].type=0x30
+        if objects[i].type==0x48 and false then --drac weapon
+            objects[i].frame=0x29
+            objects[i].type=0x30
             --29 fireball
             --ad knife
             --a8 holy fire
             --d3-d6 big flame (drac spawn)
             --e9-ec big flame (drac death)
-            memory.writebyte(0x03ba+i,o[i].type)
-            memory.writebyte(0x0306+i,o[i].frame)
+            memory.writebyte(0x03ba+i,objects[i].type)
+            memory.writebyte(0x0306+i,objects[i].frame)
         end
         
-        if o[i].type==0x49 then -- magic cross item
-            if hasInventoryItem("Cross") and displayarea=="Laruba" then o[i].destroy = true end
-            if hasInventoryItem("Golden Knife") and displayarea=="Brahm" then o[i].destroy = true end
+        if objects[i].type==0x49 then -- magic cross item
+            if hasInventoryItem("Cross") and displayarea=="Laruba" then objects[i].destroy = true end
+            if hasInventoryItem("Golden Knife") and displayarea=="Brahm" then objects[i].destroy = true end
         end
         
-        if o[i].type==0x42 then --Carmilla (mask boss)
-            o.boss.maxHp=240
+        if objects[i].type==0x42 then --Carmilla (mask boss)
+            objects.boss.maxHp=240
             if hasInventoryItem("Cross") and not refight_bosses then
                 --Only fight boss once
-                o[i].destroy = true
+                objects[i].destroy = true
             end
             
-            --gui.text(8,8*2, string.format("%02x %02X %02X",i,o[i].state,o[i].state2,o[i].statecounter))
+            --gui.text(8,8*2, string.format("%02x %02X %02X",i,objects[i].state,objects[i].state2,objects[i].statecounter))
             
-            o[i].skullc = ((o[i].skullc or 0) +1) % 1000
-            --o[i].y=o[i].y+math.cos(o[i].skullc *.03)*2
-            o[i].x=o[i].x+math.sin(o[i].skullc *.01)*1
-            --o[i].y=o[i].y+math.cos(emu.framecount()*.04)*1
-            o[i].x=o[i].x+math.sin(emu.framecount()*.04)*2
+            objects[i].skullc = ((objects[i].skullc or 0) +1) % 1000
+            --objects[i].y=objects[i].y+math.cos(objects[i].skullc *.03)*2
+            objects[i].x=objects[i].x+math.sin(objects[i].skullc *.01)*1
+            --objects[i].y=objects[i].y+math.cos(emu.framecount()*.04)*1
+            objects[i].x=objects[i].x+math.sin(emu.framecount()*.04)*2
             n=40
-            if o[i].x<0+n then o[i].x=0+n end
-            if o[i].x>255-n then o[i].x=255-n end
-            if o[i].y<0+n then o[i].y=0+n end
-            if o[i].y>255-n then o[i].y=255-n end
+            if objects[i].x<0+n then objects[i].x=0+n end
+            if objects[i].x>255-n then objects[i].x=255-n end
+            if objects[i].y<0+n then objects[i].y=0+n end
+            if objects[i].y>255-n then objects[i].y=255-n end
             
-            memory.writebyte(0x0348+6+i,o[i].x)
-            memory.writebyte(0x0324+6+i,o[i].y)
+            memory.writebyte(0x0348+6+i,objects[i].x)
+            memory.writebyte(0x0324+6+i,objects[i].y)
             
-            o.player.bossdoor()
+            objects.player.bossdoor()
 
-            memory.writebyte(0x03ba+i,o[i].type)
-            memory.writebyte(0x04fe+i,o[i].stun)
-            memory.writebyte(0x0348+6+i,o[i].x)
-            memory.writebyte(0x0324+6+i,o[i].y)
-            memory.writebyte(0x044a+i,o[i].state)
-            memory.writebyte(0x046e+i,o[i].state2)
-            memory.writebyte(0x04b6+i,o[i].statecounter)
-            memory.writebyte(0x0306+i,o[i].frame)
-            memory.writebyte(0x03de+i,o[i].team)
+            memory.writebyte(0x03ba+i,objects[i].type)
+            memory.writebyte(0x04fe+i,objects[i].stun)
+            memory.writebyte(0x0348+6+i,objects[i].x)
+            memory.writebyte(0x0324+6+i,objects[i].y)
+            memory.writebyte(0x044a+i,objects[i].state)
+            memory.writebyte(0x046e+i,objects[i].state2)
+            memory.writebyte(0x04b6+i,objects[i].statecounter)
+            memory.writebyte(0x0306+i,objects[i].frame)
+            memory.writebyte(0x03de+i,objects[i].team)
         end
         
-        if o[i].type==0x47 and config.draculaAI then -- Dracula
-            o.dracula = o.dracula or {}
+        if objects[i].type==0x47 and config.draculaAI then -- Dracula
+            objects.dracula = objects.dracula or {}
             
-            o.player.inBossRoom=true
-            o.boss.maxHp=240
-            --gui.text(o[i].x,o[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,o[i].type,o[i].hp,o[i].x,o[i].y,signed8bit(o[i].xs),signed8bit(o[i].ys)))
+            objects.player.inBossRoom=true
+            objects.boss.maxHp=240
+            --gui.text(objects[i].x,objects[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,objects[i].type,objects[i].hp,objects[i].x,objects[i].y,signed8bit(objects[i].xs),signed8bit(objects[i].ys)))
             
-            o.dracula.move = o.dracula.move or ""
-            o.dracula.movec = o.dracula.movec or 0
+            objects.dracula.move = objects.dracula.move or ""
+            objects.dracula.movec = objects.dracula.movec or 0
             
-            if emu.framecount() % 4==0 then o.dracula.movec=o.dracula.movec+1 end
-            --if spidey.counter % 4==0 then o[i].movec=o[i].movec+1 end
-            --if spidey.counter % 40==0 then o[i].movec=o[i].movec+1 end
+            if emu.framecount() % 4==0 then objects.dracula.movec=objects.dracula.movec+1 end
+            --if spidey.counter % 4==0 then objects[i].movec=objects[i].movec+1 end
+            --if spidey.counter % 40==0 then objects[i].movec=objects[i].movec+1 end
             
             
-            --o.dracula.movename=''
-            --o[i].movename=o[i].movename or ""
-            --o[i].state2=0xff
-            o[i].draccount=memory.readbyte(0x04b6)
-            --o[i].draccount=(o[i].draccount or 1)
-            --o[i].draccount=1
-            --if o[i].frame==0x34 and not joy[2].B and not joy[2].idle then o[i].frame=0x33 end
+            --objects.dracula.movename=''
+            --objects[i].movename=objects[i].movename or ""
+            --objects[i].state2=0xff
+            objects[i].draccount=memory.readbyte(0x04b6)
+            --objects[i].draccount=(objects[i].draccount or 1)
+            --objects[i].draccount=1
+            --if objects[i].frame==0x34 and not joy[2].B and not joy[2].idle then objects[i].frame=0x33 end
             dracsp=2
---            if joy[2].left then o[i].x=o[i].x-dracsp end
---            if joy[2].right then o[i].x=o[i].x+dracsp end
---            if joy[2].up then o[i].y=o[i].y-dracsp end
---            if joy[2].down then o[i].y=o[i].y+dracsp end
---            if joy[2].B_press and o[i].move=='' then
---                o[i].move='shoot'
---                o[i].movec=0
+--            if joy[2].left then objects[i].x=objects[i].x-dracsp end
+--            if joy[2].right then objects[i].x=objects[i].x+dracsp end
+--            if joy[2].up then objects[i].y=objects[i].y-dracsp end
+--            if joy[2].down then objects[i].y=objects[i].y+dracsp end
+--            if joy[2].B_press and objects[i].move=='' then
+--                objects[i].move='shoot'
+--                objects[i].movec=0
 --            end
             
             --[[
             if joy[2].A then
                 n=joy[2].A_press_time
-                --o[i].x=math.random(0,256)
-                o[i].y=o[i].y+math.sin(n *.05)*3
-                --o[i].x=o[i].x+math.cos(emu.framecount() *.15)
-                o[i].movename='hover'
+                --objects[i].x=math.random(0,256)
+                objects[i].y=objects[i].y+math.sin(n *.05)*3
+                --objects[i].x=objects[i].x+math.cos(emu.framecount() *.15)
+                objects[i].movename='hover'
             end
             ]]--
 --            if joy[2].select then
---                o[i].stun=0x08
---                o[i].x=40+87*math.random(0,2)
---                o[i].movename='warp'
+--                objects[i].stun=0x08
+--                objects[i].x=40+87*math.random(0,2)
+--                objects[i].movename='warp'
 --            end
             
-            if o.dracula.move=='' and not o.dracula.moveindex==false then
-                o.dracula.moveindex=(o.dracula.moveindex+1) % #o.dracula.movequeue
-                o.dracula.move=o.dracula.movequeue[o.dracula.moveindex]
-                o.dracula.movec=0
-                if o.dracula.move=='sway' then
-                    o[i].x=128
-                    o[i].y=64
-                    o.dracula.swaycount=0
+            if objects.dracula.move=='' and not objects.dracula.moveindex==false then
+                objects.dracula.moveindex=(objects.dracula.moveindex+1) % #objects.dracula.movequeue
+                objects.dracula.move=objects.dracula.movequeue[objects.dracula.moveindex]
+                objects.dracula.movec=0
+                if objects.dracula.move=='sway' then
+                    objects[i].x=128
+                    objects[i].y=64
+                    objects.dracula.swaycount=0
                 end
             end
             
---            if joy[2].A_press and o[i].move=='' then
---                o[i].x=128
---                o[i].y=64
---                o[i].move='sway'
---                o[i].movec=0
+--            if joy[2].A_press and objects[i].move=='' then
+--                objects[i].x=128
+--                objects[i].y=64
+--                objects[i].move='sway'
+--                objects[i].movec=0
 --                swaycount=0
 --            end
 
---            if joy[2].start_press and o[i].move=='' then
---                o[i].movequeue={'warp2','warp2','warp2','warp2','warp2','warp2','warp2','warp2','warp2','warp2'}
---                o[i].moveindex=1
+--            if joy[2].start_press and objects[i].move=='' then
+--                objects[i].movequeue={'warp2','warp2','warp2','warp2','warp2','warp2','warp2','warp2','warp2','warp2'}
+--                objects[i].moveindex=1
 --            end
             
-            if o[i].draccount==1 and o.dracula.move=='' then
-                --o[i].movequeue={'warp2','warp2','warp2','warp2','warp'}
-                o.dracula.movequeue={'warp','warp','shoot','warp','warp','shoot','warp','shoot','warp','shoot','warp','warp','shoot','shoot','shoot','shoot','warp2','warp2','warp2','sway','warp2','warp2','warp2'}
-                o.dracula.moveindex=1
+            if objects[i].draccount==1 and objects.dracula.move=='' then
+                --objects[i].movequeue={'warp2','warp2','warp2','warp2','warp'}
+                objects.dracula.movequeue={'warp','warp','shoot','warp','warp','shoot','warp','shoot','warp','shoot','warp','warp','shoot','shoot','shoot','shoot','warp2','warp2','warp2','sway','warp2','warp2','warp2'}
+                objects.dracula.moveindex=1
             end
             
-            if o.dracula.move=='shoot' then
-                if o.dracula.movec==1 then
+            if objects.dracula.move=='shoot' then
+                if objects.dracula.movec==1 then
                     --pass
-                elseif o.dracula.movec==2 then
-                    o[i].frame=0x34
-                elseif o.dracula.movec==4 then
-                    o[i].state2=0x11
-                    o.dracula.movec=o.dracula.movec+1
-                elseif o.dracula.movec==7 then
-                    --o[i].frame=0x33
-                elseif o.dracula.movec==8 then
-                    o.dracula.move=''
+                elseif objects.dracula.movec==2 then
+                    objects[i].frame=0x34
+                elseif objects.dracula.movec==4 then
+                    objects[i].state2=0x11
+                    objects.dracula.movec=objects.dracula.movec+1
+                elseif objects.dracula.movec==7 then
+                    --objects[i].frame=0x33
+                elseif objects.dracula.movec==8 then
+                    objects.dracula.move=''
                 end
             end
             
-            if o.dracula.move=='warp' then
-                o[i].frame=0x33
-                o[i].stun=0x08
-                o[i].x=40+87*math.random(0,2)
-                o[i].y=64
-                if o.dracula.movec==1 then
+            if objects.dracula.move=='warp' then
+                objects[i].frame=0x33
+                objects[i].stun=0x08
+                objects[i].x=40+87*math.random(0,2)
+                objects[i].y=64
+                if objects.dracula.movec==1 then
                     --pass
-                elseif o.dracula.movec==20 then
-                    o.dracula.move=''
+                elseif objects.dracula.movec==20 then
+                    objects.dracula.move=''
                 end
             end
             
-            if o[i].move=='sway' and emu.framecount() % 9==0 then
-            --if o.dracula.move=='sway' and spidey.counter % 9==0 then
+            if objects[i].move=='sway' and emu.framecount() % 9==0 then
+            --if objects.dracula.move=='sway' and spidey.counter % 9==0 then
                 onum=getunusedcustom()
                 if (onum) then
-                    o.custom[onum].type="fireball"
-                    o.custom[onum].x=o[i].x+scrollx
-                    o.custom[onum].y=o[i].y+scrolly
-                    o.custom[onum].xs=math.random(-5,5)*.4
-                    o.custom[onum].ys=math.random(-5,5)*.2-2
-                    o.custom[onum].active=1
+                    objects.custom[onum].type="fireball"
+                    objects.custom[onum].x=objects[i].x+scrollx
+                    objects.custom[onum].y=objects[i].y+scrolly
+                    objects.custom[onum].xs=math.random(-5,5)*.4
+                    objects.custom[onum].ys=math.random(-5,5)*.2-2
+                    objects.custom[onum].active=1
                 end
             end
             
-            if o.dracula.move=='sway' then
-                o[i].stun=0x10
-                o[i].team=0x80
-                n=o.dracula.swaycount
-                o[i].y=o[i].y+math.sin(n*.1)*1
-                o[i].x=o[i].x+math.cos(n*.2)*16
-                if o.dracula.movec==1 then
+            if objects.dracula.move=='sway' then
+                objects[i].stun=0x10
+                objects[i].team=0x80
+                n=objects.dracula.swaycount
+                objects[i].y=objects[i].y+math.sin(n*.1)*1
+                objects[i].x=objects[i].x+math.cos(n*.2)*16
+                if objects.dracula.movec==1 then
                     --pass
-                elseif o.dracula.movec==200 then
-                    o[i].stun=0
-                    o[i].team=1
-                    o.dracula.move=''
+                elseif objects.dracula.movec==200 then
+                    objects[i].stun=0
+                    objects[i].team=1
+                    objects.dracula.move=''
                 end
-                o.dracula.swaycount=o.dracula.swaycount+1
+                objects.dracula.swaycount=objects.dracula.swaycount+1
             end
             
-            if o.dracula.move=='warp2' then
-                if o.dracula.movec==1 then
-                    o[i].team=0x80
-                    o[i].frame=0xe9
-                    o[i].stun=0xff
-                elseif o.dracula.movec==2 then
-                    o[i].frame=0xea
-                elseif o.dracula.movec==4 then
-                    o[i].frame=0xeb
-                elseif o.dracula.movec==5 then
-                    o[i].frame=0xec
-                elseif o.dracula.movec==6 then
-                    o[i].frame=0
-                    o[i].y=170
-                elseif o.dracula.movec==7 then
-                    --o[i].x=40+87*math.random(0,2)
-                    o[i].x=40+22*math.random(0,8)
-                elseif o.dracula.movec==30 then
-                    o[i].frame=0xec
-                elseif o.dracula.movec==31 then
-                    o[i].frame=0xeb
-                    o[i].stun=0xff
-                elseif o.dracula.movec==32 then
-                    o[i].frame=0xea
-                elseif o.dracula.movec==33 then
-                    o[i].frame=0xe9
-                elseif o.dracula.movec==34 then
-                    o[i].frame=0x33
-                elseif o.dracula.movec==43 then
-                    o[i].stun=0x00
-                    o[i].team=1
-                elseif o.dracula.movec==53 then
+            if objects.dracula.move=='warp2' then
+                if objects.dracula.movec==1 then
+                    objects[i].team=0x80
+                    objects[i].frame=0xe9
+                    objects[i].stun=0xff
+                elseif objects.dracula.movec==2 then
+                    objects[i].frame=0xea
+                elseif objects.dracula.movec==4 then
+                    objects[i].frame=0xeb
+                elseif objects.dracula.movec==5 then
+                    objects[i].frame=0xec
+                elseif objects.dracula.movec==6 then
+                    objects[i].frame=0
+                    objects[i].y=170
+                elseif objects.dracula.movec==7 then
+                    --objects[i].x=40+87*math.random(0,2)
+                    objects[i].x=40+22*math.random(0,8)
+                elseif objects.dracula.movec==30 then
+                    objects[i].frame=0xec
+                elseif objects.dracula.movec==31 then
+                    objects[i].frame=0xeb
+                    objects[i].stun=0xff
+                elseif objects.dracula.movec==32 then
+                    objects[i].frame=0xea
+                elseif objects.dracula.movec==33 then
+                    objects[i].frame=0xe9
+                elseif objects.dracula.movec==34 then
+                    objects[i].frame=0x33
+                elseif objects.dracula.movec==43 then
+                    objects[i].stun=0x00
+                    objects[i].team=1
+                elseif objects.dracula.movec==53 then
                     onum=getunusedcustom()
                     spx=-2.4
-                    if o.player.x < o[i].x+scrollx then spx=-spx; facing=0 else facing=1 end
+                    if objects.player.x < objects[i].x+scrollx then spx=-spx; facing=0 else facing=1 end
                     if (onum) then
-                        o.custom[onum].type="dracfire"
-                        o.custom[onum].x=o[i].x+scrollx
-                        o.custom[onum].y=o[i].y+scrolly-8-4
-                        o.custom[onum].xs=spx
-                        o.custom[onum].ys=-.39
-                        o.custom[onum].facing=facing
-                        o.custom[onum].active=1
+                        objects.custom[onum].type="dracfire"
+                        objects.custom[onum].x=objects[i].x+scrollx
+                        objects.custom[onum].y=objects[i].y+scrolly-8-4
+                        objects.custom[onum].xs=spx
+                        objects.custom[onum].ys=-.39
+                        objects.custom[onum].facing=facing
+                        objects.custom[onum].active=1
                     end
                     onum=getunusedcustom()
                     if (onum) then
-                        o.custom[onum].type="dracfire"
-                        o.custom[onum].x=o[i].x+scrollx
-                        o.custom[onum].y=o[i].y+scrolly-8
-                        o.custom[onum].xs=spx
-                        o.custom[onum].ys=0
-                        o.custom[onum].facing=facing
-                        o.custom[onum].active=1
+                        objects.custom[onum].type="dracfire"
+                        objects.custom[onum].x=objects[i].x+scrollx
+                        objects.custom[onum].y=objects[i].y+scrolly-8
+                        objects.custom[onum].xs=spx
+                        objects.custom[onum].ys=0
+                        objects.custom[onum].facing=facing
+                        objects.custom[onum].active=1
                     end
                     onum=getunusedcustom()
                     if (onum) then
-                        o.custom[onum].type="dracfire"
-                        o.custom[onum].x=o[i].x+scrollx
-                        o.custom[onum].y=o[i].y+scrolly-8+4
-                        o.custom[onum].xs=spx
-                        o.custom[onum].ys=.39
-                        o.custom[onum].facing=facing
-                        o.custom[onum].active=1
+                        objects.custom[onum].type="dracfire"
+                        objects.custom[onum].x=objects[i].x+scrollx
+                        objects.custom[onum].y=objects[i].y+scrolly-8+4
+                        objects.custom[onum].xs=spx
+                        objects.custom[onum].ys=.39
+                        objects.custom[onum].facing=facing
+                        objects.custom[onum].active=1
                     end
-                    o.dracula.movec=o.dracula.movec+1
-                elseif o.dracula.movec==63 then
-                    o[i].stun=0
-                    o[i].team=1
-                    o.dracula.move=''
+                    objects.dracula.movec=objects.dracula.movec+1
+                elseif objects.dracula.movec==63 then
+                    objects[i].stun=0
+                    objects[i].team=1
+                    objects.dracula.move=''
                 end
             end
             
-            memory.writebyte(0x04fe+i,o[i].stun)
-            memory.writebyte(0x0348+6+i,o[i].x)
-            memory.writebyte(0x0324+6+i,o[i].y)
-            memory.writebyte(0x046e+i,o[i].state2)
-            memory.writebyte(0x0306+i,o[i].frame)
-            memory.writebyte(0x03de+i,o[i].team)
+            memory.writebyte(0x04fe+i,objects[i].stun)
+            memory.writebyte(0x0348+6+i,objects[i].x)
+            memory.writebyte(0x0324+6+i,objects[i].y)
+            memory.writebyte(0x046e+i,objects[i].state2)
+            memory.writebyte(0x0306+i,objects[i].frame)
+            memory.writebyte(0x03de+i,objects[i].team)
             --[[
-            if o[i].stun>1 then
-                o[i].stun=0
-                o[i].y=o[i].y-4
-                o[i].x=128+math.random(-32,32)
-                memory.writebyte(0x04fe+i,o[i].stun)
-                memory.writebyte(0x0348+6+i,o[i].x)
-                memory.writebyte(0x0324+6+i,o[i].y)
+            if objects[i].stun>1 then
+                objects[i].stun=0
+                objects[i].y=objects[i].y-4
+                objects[i].x=128+math.random(-32,32)
+                memory.writebyte(0x04fe+i,objects[i].stun)
+                memory.writebyte(0x0348+6+i,objects[i].x)
+                memory.writebyte(0x0324+6+i,objects[i].y)
             end
             ]]--
-            --if o[i].movename~='' then emu.message(o[i].movename) end
+            --if objects[i].movename~='' then emu.message(objects[i].movename) end
             
             if spidey.debug then
-                drawfont(0,50,font[current_font], string.format("move=%s movec=%02x draccount=%02x",o.dracula.move or "", o.dracula.movec or 0, o[i].draccount or 0))
-                drawfont(0,50+8,font[current_font], string.format("moveindex=%02x",o.dracula.moveindex or 0))
+                drawfont(0,50,font[current_font], string.format("move=%s movec=%02x draccount=%02x",objects.dracula.move or "", objects.dracula.movec or 0, objects[i].draccount or 0))
+                drawfont(0,50+8,font[current_font], string.format("moveindex=%02x",objects.dracula.moveindex or 0))
             end
         end
         
-        if o[i].destroy then
-            o[i].type=0
-            o[i].frame=0
-            o[i].hp = 0
-            memory.writebyte(0x03ba+i,o[i].type)
-            memory.writebyte(0x0306+i,o[i].frame)
-            memory.writebyte(0x04c8+i, o[i].hp)
+        if objects[i].destroy then
+            objects[i].type=0
+            objects[i].frame=0
+            objects[i].hp = 0
+            memory.writebyte(0x03ba+i,objects[i].type)
+            memory.writebyte(0x0306+i,objects[i].frame)
+            memory.writebyte(0x04c8+i, objects[i].hp)
         end
         if config.testMarker then gui.text(100,100+8*2,"test marker 3") end
     end
@@ -6523,28 +6556,28 @@ function spidey.update(inp,joy)
         local i=getunusedcustom()
         i=false --DISABLE
         if (i) then
-            --o.custom[i].type="fireball"
-            o.custom[i].type="bansheeboomerang"
-            o.custom[i].rebound=false
-            o.custom[i].x=inp.xmouse+scrollx
-            o.custom[i].y=inp.ymouse+scrolly
-            --o.custom[i].xs=math.random(-5,5)*.1
-            o.custom[i].xs=1
-            --o.custom[i].ys=math.random(-5,5)*.1-2
-            o.custom[i].ys=0
-            o.custom[i].active=1
+            --objects.custom[i].type="fireball"
+            objects.custom[i].type="bansheeboomerang"
+            objects.custom[i].rebound=false
+            objects.custom[i].x=inp.xmouse+scrollx
+            objects.custom[i].y=inp.ymouse+scrolly
+            --objects.custom[i].xs=math.random(-5,5)*.1
+            objects.custom[i].xs=1
+            --objects.custom[i].ys=math.random(-5,5)*.1-2
+            objects.custom[i].ys=0
+            objects.custom[i].active=1
         end
     end
     
     if cheats.active and (cheats.battest or cheats.leftClick == "battest") and inp.leftbutton_press then
         local i=getunusedcustom()
         if (i) then
-            o.custom[i].type="bigbat"
-            o.custom[i].x=inp.xmouse+scrollx
-            o.custom[i].y=inp.ymouse+scrolly
-            o.custom[i].xs=0
-            o.custom[i].ys=0
-            o.custom[i].active=1
+            objects.custom[i].type="bigbat"
+            objects.custom[i].x=inp.xmouse+scrollx
+            objects.custom[i].y=inp.ymouse+scrolly
+            objects.custom[i].xs=0
+            objects.custom[i].ys=0
+            objects.custom[i].active=1
         end
     end
     
@@ -6629,15 +6662,15 @@ function spidey.update(inp,joy)
         levelObjects[#levelObjects+1] = c
         
         if i then
-            o.custom[i].type=c.type
-            o.custom[i].area={area1,area2,area3,returnArea}
-            o.custom[i].x=math.floor((inp.xmouse+scrollx)/16)*16+8
-            o.custom[i].y=math.floor((inp.ymouse+scrolly)/16)*16-3
-            o.custom[i].outscreen=true
-            o.custom[i].active=1
-            o.custom[i].itemName = c.name
+            objects.custom[i].type=c.type
+            objects.custom[i].area={area1,area2,area3,returnArea}
+            objects.custom[i].x=math.floor((inp.xmouse+scrollx)/16)*16+8
+            objects.custom[i].y=math.floor((inp.ymouse+scrolly)/16)*16-3
+            objects.custom[i].outscreen=true
+            objects.custom[i].active=1
+            objects.custom[i].itemName = c.name
         end
-        emu.message(string.format("Placed item %02x %02x area=%02x %02x %02x %02x", o.custom[i].x, o.custom[i].y, o.custom[i].area[1],o.custom[i].area[2],o.custom[i].area[3],o.custom[i].area[4]))
+        emu.message(string.format("Placed item %02x %02x area=%02x %02x %02x %02x", objects.custom[i].x, objects.custom[i].y, objects.custom[i].area[1],objects.custom[i].area[2],objects.custom[i].area[3],objects.custom[i].area[4]))
     end
     
     
@@ -6661,8 +6694,8 @@ function spidey.update(inp,joy)
                 table.remove(candles, candleIndex)
                 spidey.message("Candle removed %02x %02x",x,y)
                 
-                for i,obj in ipairs(o.custom) do
-                    if obj.type=="candle" and obj.active==1 and o.custom.isOnScreen(i) and obj.x==areaX and obj.y==areaY then
+                for i,obj in ipairs(objects.custom) do
+                    if obj.type=="candle" and obj.active==1 and objects.custom.isOnScreen(i) and obj.x==areaX and obj.y==areaY then
                         obj.destroy = true
                     end
                 end
@@ -6702,8 +6735,8 @@ function spidey.update(inp,joy)
                 table.remove(candles, candleIndex)
                 spidey.message("Candle replaced %02x %02x",x,y)
                 
-                for i,obj in ipairs(o.custom) do
-                    if obj.type=="candle" and obj.active==1 and o.custom.isOnScreen(i) and obj.x==areaX and obj.y==areaY then
+                for i,obj in ipairs(objects.custom) do
+                    if obj.type=="candle" and obj.active==1 and objects.custom.isOnScreen(i) and obj.x==areaX and obj.y==areaY then
                         obj.destroy = true
                     end
                 end
@@ -6719,26 +6752,26 @@ function spidey.update(inp,joy)
             c.y=math.floor((inp.ymouse+scrolly)/16)*16
             c.outscreen=true
             c.active=1
-            c.floor = o.player.y+scrolly+12
+            c.floor = objects.player.y+scrolly+12
             c.location = displayarea
             c.item = config.candleItem
             
             candles[#candles+1] = c
             
             if i then
-                o.custom[i].type="candle"
-                o.custom[i].area={area1,area2,area3,areaFlags}
-                o.custom[i].x=math.floor((inp.xmouse+scrollx)/16)*16
-                o.custom[i].y=math.floor((inp.ymouse+scrolly)/16)*16
-                o.custom[i].outscreen=true
-                o.custom[i].active=1
-                --o.custom[i].floor = o.player.y+12
-                o.custom[i].floor = c.floor
-                o.custom[i].item = c.item
+                objects.custom[i].type="candle"
+                objects.custom[i].area={area1,area2,area3,areaFlags}
+                objects.custom[i].x=math.floor((inp.xmouse+scrollx)/16)*16
+                objects.custom[i].y=math.floor((inp.ymouse+scrolly)/16)*16
+                objects.custom[i].outscreen=true
+                objects.custom[i].active=1
+                --objects.custom[i].floor = objects.player.y+12
+                objects.custom[i].floor = c.floor
+                objects.custom[i].item = c.item
             end
             --local txt = '    {x=0x%02x, y=0x%02x, area = {0x%02x,0x%02x,0x%02x,0x%02x}, floor=0x%02x, location="%s", },\n'
             
-            --spidey.appendToFile("cv2/candles.txt", string.format(txt, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],o.player.y,displayarea))
+            --spidey.appendToFile("cv2/candles.txt", string.format(txt, c.x,c.y,c.area[1],c.area[2],c.area[3],c.area[4],objects.player.y,displayarea))
             saveCandles()
         end
     end
@@ -6750,96 +6783,97 @@ function spidey.update(inp,joy)
     --if cheats.active and cheats.bonetest and inp.leftbutton_press then
         local i=getunusedcustom()
         if (i) then
-            o.custom[i].type="bone"
-            o.custom[i].x=inp.xmouse+scrollx
-            o.custom[i].y=inp.ymouse+scrolly
-            o.custom[i].xs=math.random(-5,5)*.2
-            --o.custom[i].xs=1
-            o.custom[i].ys=math.random(-5,5)*.1-2.8
-            --o.custom[i].ys=0
-            --o.custom[i].xs=0
-            --o.custom[i].ys=0
-            o.custom[i].active=1
+            objects.custom[i].type="bone"
+            objects.custom[i].x=inp.xmouse+scrollx
+            objects.custom[i].y=inp.ymouse+scrolly
+            objects.custom[i].xs=math.random(-5,5)*.2
+            --objects.custom[i].xs=1
+            objects.custom[i].ys=math.random(-5,5)*.1-2.8
+            --objects.custom[i].ys=0
+            --objects.custom[i].xs=0
+            --objects.custom[i].ys=0
+            objects.custom[i].active=1
         end
     end
     
-    for i=0,o.custom.count-1 do
-        if o.custom[i].active==0 then
-            --o.custom[i].aliveTime=0
+    for i=0,objects.custom.count-1 do
+        local this = objects.custom[i]
+        if objects.custom[i].active==0 then
+            --objects.custom[i].aliveTime=0
         end
-        if o.custom[i].active==1 and o.custom.isOnScreen(i) then
-            o.custom[i].xdist=math.abs(o.player.x-o.custom[i].x+scrollx)
-            o.custom[i].ydist=math.abs(o.player.y-o.custom[i].y+scrolly)
-            o.custom[i].aliveTime=math.min((o.custom[i].aliveTime or 0)+1,100000)
-            o.custom[i].alivetime = o.custom[i].aliveTime
-            --gui.drawrect(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, o.custom[i].x+2-scrollx, o.custom[i].y+2-scrolly, "yellow","red")
-            --gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
+        if objects.custom[i].active==1 and objects.custom.isOnScreen(i) then
+            objects.custom[i].xdist=math.abs(objects.player.x-objects.custom[i].x+scrollx)
+            objects.custom[i].ydist=math.abs(objects.player.y-objects.custom[i].y+scrolly)
+            objects.custom[i].aliveTime=math.min((objects.custom[i].aliveTime or 0)+1,100000)
+            objects.custom[i].alivetime = objects.custom[i].aliveTime
+            --gui.drawrect(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly, objects.custom[i].x+2-scrollx, objects.custom[i].y+2-scrolly, "yellow","red")
+            --gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly, cv2fire)
             
-            o.custom[i].x=o.custom[i].x+o.custom[i].xs
-            o.custom[i].y=o.custom[i].y+o.custom[i].ys
+            objects.custom[i].x=objects.custom[i].x+objects.custom[i].xs
+            objects.custom[i].y=objects.custom[i].y+objects.custom[i].ys
             
-            if o.custom[i].type=="fireball" then
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
-                o.custom[i].ys=o.custom[i].ys+.1
-                if o.custom[i].xdist<10 and o.custom[i].ydist<10 then
-                    o.custom[i].destroy = true
+            if objects.custom[i].type=="fireball" then
+                gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly, cv2fire)
+                objects.custom[i].ys=objects.custom[i].ys+.1
+                if objects.custom[i].xdist<10 and objects.custom[i].ydist<10 then
+                    objects.custom[i].destroy = true
                     hurtplayer()
                 end
-            elseif o.custom[i].type=="marker" then
-                gui.text(o.custom[i].x-scrollx, o.custom[i].y-scrolly, o.custom[i].eName or "X","white","clear")
-            elseif o.custom[i].type=="item" then
-                if o.custom[i].alivetime == 1 and hasInventoryItem(o.custom[i].itemName) then 
-                    if (items[items.index[o.custom[i].itemName]].stack or 0)>0 then
+            elseif objects.custom[i].type=="marker" then
+                gui.text(objects.custom[i].x-scrollx, objects.custom[i].y-scrolly, objects.custom[i].eName or "X","white","clear")
+            elseif objects.custom[i].type=="item" then
+                if objects.custom[i].alivetime == 1 and hasInventoryItem(objects.custom[i].itemName) then 
+                    if (items[items.index[objects.custom[i].itemName]].stack or 0)>0 then
                     else
-                        o.custom[i].active = 0
+                        objects.custom[i].active = 0
                     end
                 end
                 
                 local item
-                if items.index[o.custom[i].itemName] then
-                    item = items[items.index[o.custom[i].itemName]]
+                if items.index[objects.custom[i].itemName] then
+                    item = items[items.index[objects.custom[i].itemName]]
                     if item.type=="gold" then 
-                        o.custom[i].gfx=gfx.moneybag
+                        objects.custom[i].gfx=gfx.moneybag
                     end
                 end
                 
                 
-                if o.custom[i].alivetime == 1 then
-                    o.custom[i].ys = .2
-                    o.custom[i].falling = true
+                if objects.custom[i].alivetime == 1 then
+                    objects.custom[i].ys = .2
+                    objects.custom[i].falling = true
                 end
                 
-                if o.custom[i].falling then
-                    o.custom[i].ys = math.min(2.2, o.custom[i].ys * 1.4)
+                if objects.custom[i].falling then
+                    objects.custom[i].ys = math.min(2.2, objects.custom[i].ys * 1.4)
                 end
                 
-                if o.custom[i].floor then
-                    if o.custom[i].y>o.custom[i].floor then
-                        o.custom[i].y=o.custom[i].floor
-                        o.custom[i].ys = 0
-                        o.custom[i].falling=false
+                if objects.custom[i].floor then
+                    if objects.custom[i].y>objects.custom[i].floor then
+                        objects.custom[i].y=objects.custom[i].floor
+                        objects.custom[i].ys = 0
+                        objects.custom[i].falling=false
                     end
                 else
-                    o.custom[i].ys = 0
-                    o.custom[i].falling=false
+                    objects.custom[i].ys = 0
+                    objects.custom[i].falling=false
                 end
                 
-                local x,y=o.custom[i].x-scrollx, o.custom[i].y-scrolly
-                --gfx.draw(o.custom[i].x-scrollx-4, o.custom[i].y-scrolly+8, o.custom[i].gfx or gfx.items.bag)
+                local x,y=objects.custom[i].x-scrollx, objects.custom[i].y-scrolly
+                --gfx.draw(objects.custom[i].x-scrollx-4, objects.custom[i].y-scrolly+8, objects.custom[i].gfx or gfx.items.bag)
                 
                 local xo,yo = -2,-6
                 if item.type=="gold" then 
-                    o.custom[i].gfx = gfx.moneybag
+                    objects.custom[i].gfx = gfx.moneybag
                     xo=-2
                     yo=-10
                 end
                 
-                gfx.draw(o.custom[i].x-scrollx+xo, o.custom[i].y-scrolly+yo, o.custom[i].gfx or gfx.items.bag)
+                gfx.draw(objects.custom[i].x-scrollx+xo, objects.custom[i].y-scrolly+yo, objects.custom[i].gfx or gfx.items.bag)
                 
-                if o.custom[i].xdist <= 12 and o.custom[i].ydist <= 12 then
-                    o.custom[i].destroy = 1
+                if objects.custom[i].xdist <= 12 and objects.custom[i].ydist <= 12 then
+                    objects.custom[i].destroy = 1
                     --playSound(0x10)
-                    getItem(o.custom[i].itemName, true)
+                    getItem(objects.custom[i].itemName, true)
                     --spidey.message("getitem")
                     
 --                        for i=0,255 do
@@ -6856,28 +6890,28 @@ function spidey.update(inp,joy)
 --                            memory.writebyte(0x7100+i*2+1, itemAmount)
 --                        end
                 end
-            elseif o.custom[i].type=="poof" then
-                local x,y=o.custom[i].x-scrollx+1, o.custom[i].y-scrolly
-                if o.custom[i].alivetime<0x0e then 
-                    spidey.drawCircle(x+7,y+4,math.max(1,20-o.custom[i].alivetime*2), string.format("#ffff80%02x",math.max(0,0x3d+spidey.counter % 0x04 - o.custom[i].alivetime*2) ))
+            elseif objects.custom[i].type=="poof" then
+                local x,y=objects.custom[i].x-scrollx+1, objects.custom[i].y-scrolly
+                if objects.custom[i].alivetime<0x0e then 
+                    spidey.drawCircle(x+7,y+4,math.max(1,20-objects.custom[i].alivetime*2), string.format("#ffff80%02x",math.max(0,0x3d+spidey.counter % 0x04 - objects.custom[i].alivetime*2) ))
                 end
-                if o.custom[i].alivetime>0x10 then 
-                    o.custom[i].die = true
+                if objects.custom[i].alivetime>0x10 then 
+                    objects.custom[i].die = true
                 end
-            elseif o.custom[i].type=="candle" then
-                --if o.custom.isOnScreen(i) or true then
-                if o.custom.isOnScreen(i) then
-                    f=math.floor(o.custom[i].alivetime/06) % 2
-                    local x,y=o.custom[i].x-scrollx+1, o.custom[i].y-scrolly-4
-                    --o.custom[i].flicker = 8
-                    o.custom[i].flicker = o.custom[i].flicker or 0
-                    if o.custom[i].flicker == 0 then
-                        if math.random(1,50)==1 then o.custom[i].flicker = math.random(4,10) end
+            elseif this.type=="candle" then
+                --if this.isOnScreen(i) or true then
+                if objects.custom.isOnScreen(i) then
+                    f=math.floor(this.alivetime/06) % 2
+                    local x,y=this.x-scrollx+1, this.y-scrolly-4
+                    --o.flicker = 8
+                    this.flicker = this.flicker or 0
+                    if this.flicker == 0 then
+                        if math.random(1,50)==1 then this.flicker = math.random(4,10) end
                     end
                     
 --                    spidey.drawCircle(x+7-3,y+4,3, "#FFFF9910")
 --                    spidey.drawCircle(x+7+3,y+4,3, "#FFFF9910")
-                    if ((o.custom[i].flicker or 0) == 0) or o.custom[i].alivetime %4>=1 then
+                    if ((this.flicker or 0) == 0) or this.alivetime %4>=1 then
                         --spidey.drawCircle(x+7,y+4,40, "#FFFF9910")
                         if config.qualityPreset == "high" then
                             spidey.drawCircle(x+7,y+4,30+(math.floor(spidey.counter * .25) % 3)*2, string.format("#ffff80%02x",0x0d+spidey.counter % 0x04 ))
@@ -6891,107 +6925,107 @@ function spidey.update(inp,joy)
                             spidey.drawCircle(x+7,y+4,5, "#FFFF9920")
                         end
                     end
-                    o.custom[i].flicker = math.max(o.custom[i].flicker - 1,0)
-                    gfx.draw(o.custom[i].x-scrollx+1, o.custom[i].y-scrolly-4, gfx.candles[f])
+                    this.flicker = math.max(this.flicker - 1,0)
+                    gfx.draw(this.x-scrollx+1, this.y-scrolly-4, gfx.candles[f])
 
-                    local x=o.custom[i].x-scrollx
-                    local y=o.custom[i].y-scrolly
+                    local x=this.x-scrollx
+                    local y=this.y-scrolly
                     local rect = {x-5+7,y-1-3,x+7+7,y+14-3}
                     if config.hitboxes or spidey.debug.enabled then
                         gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
                     end
                     
-                    o.custom[i].hitbox = rect
+                    this.hitbox = rect
                     
                     --if collision(rect, hitboxes.whip.rect) then
                     
-                    o.custom[i].getHit = function()
-                        o.custom[i].destroy = true
+                    this.getHit = function()
+                        this.destroy = true
                         playSound(0x04)
-                        local obj = createObject("poof",o.custom[i].x, o.custom[i].y)
-                        if obj and o.custom[i].item then
-                            if hasInventoryItem(o.custom[i].item) then
-                                obj.item = {type="bigheart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+                        local obj = createObject("poof",this.x, this.y)
+                        if obj and this.item then
+                            if hasInventoryItem(this.item) then
+                                obj.item = {type="bigheart", x=this.x+4, y=this.y+2, floor=this.floor}
                             else
-                                obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName=o.custom[i].item}
+                                obj.item = {type="item", x=this.x+4, y=this.y+2, floor=this.floor, itemName=this.item}
                             end
                         else
-                            obj.item = {type="heart", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor}
+                            obj.item = {type="heart", x=this.x+4, y=this.y+2, floor=this.floor}
                         end
-                        --obj.item = {type="item", x=o.custom[i].x+4, y=o.custom[i].y+2, floor=o.custom[i].floor, itemName="Gold"}
---                        floor = o.custom[i].floor
-                        --local h = createObject("heart",o.custom[i].x, o.custom[i].y)
-                        --h.floor = o.custom[i].floor
+                        --obj.item = {type="item", x=objects.custom[i].x+4, y=objects.custom[i].y+2, floor=objects.custom[i].floor, itemName="Gold"}
+--                        floor = objects.custom[i].floor
+                        --local h = createObject("heart",objects.custom[i].x, objects.custom[i].y)
+                        --h.floor = objects.custom[i].floor
                     end
                 end
-            elseif o.custom[i].type=="holyfire" then
-                o.custom[i].frame = o.custom[i].frame or 0
-                --if o.custom[i].alivetime > 8 and o.custom[i].alivetime %4>2 then
-                if o.custom[i].alivetime % 5==0 then
-                    o.custom[i].frame = (o.custom[i].frame + 1) % 5
+            elseif objects.custom[i].type=="holyfire" then
+                objects.custom[i].frame = objects.custom[i].frame or 0
+                --if objects.custom[i].alivetime > 8 and objects.custom[i].alivetime %4>2 then
+                if objects.custom[i].alivetime % 5==0 then
+                    objects.custom[i].frame = (objects.custom[i].frame + 1) % 5
                 end
                 
-                --gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, gfx.holyfire.test)
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly-15, gfx.holyfire[o.custom[i].frame])
-                for ii=0,o.count-1 do
-                    if o[ii].type~=0 and o[ii].team==1 then
-                        xdist=math.abs(o[ii].x-o.custom[i].x+scrollx)
-                        ydist=math.abs(o[ii].y-o.custom[i].y+scrolly)
+                --gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly, gfx.holyfire.test)
+                gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly-15, gfx.holyfire[objects.custom[i].frame])
+                for ii=0,objects.count-1 do
+                    if objects[ii].type~=0 and objects[ii].team==1 then
+                        xdist=math.abs(objects[ii].x-objects.custom[i].x+scrollx)
+                        ydist=math.abs(objects[ii].y-objects.custom[i].y+scrolly)
                         if xdist<10 and ydist<30 then
-                            --o.custom[i].active=0
+                            --objects.custom[i].active=0
                             hurtenemy(ii)
                             break
                         end
                     end
                 end
-                if o.custom[i].alivetime > 55 then
-                    o.custom[i].destroy=1
+                if objects.custom[i].alivetime > 55 then
+                    objects.custom[i].destroy=1
                 end
-            elseif o.custom[i].type=="heart" or o.custom[i].type=="bigheart" then
-                local big = (o.custom[i].type == "bigheart")
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.heart)
+            elseif objects.custom[i].type=="heart" or objects.custom[i].type=="bigheart" then
+                local big = (objects.custom[i].type == "bigheart")
+                gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.heart)
 --                if big then
---                    gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.cv2heart)
+--                    gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-6-scrolly, big and gfx.bigheart or gfx.cv2heart)
 --                else
---                    gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-6-scrolly, gfx.cv2heart)
+--                    gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-6-scrolly, gfx.cv2heart)
 --                end
                 
-                --o.custom[i].ys=o.custom[i].ys+.1
+                --objects.custom[i].ys=objects.custom[i].ys+.1
 
-                if o.custom[i].alivetime == 1 then
-                    o.custom[i].ys = .1
-                    if big then o.custom[i].ys = 1 end
-                    o.custom[i].falling = true
+                if objects.custom[i].alivetime == 1 then
+                    objects.custom[i].ys = .1
+                    if big then objects.custom[i].ys = 1 end
+                    objects.custom[i].falling = true
                 end
                 
-                if o.custom[i].falling then
+                if objects.custom[i].falling then
                     if big then
-                        o.custom[i].ys = math.min(3, o.custom[i].ys * 1.2)
+                        objects.custom[i].ys = math.min(3, objects.custom[i].ys * 1.2)
                     else
-                        o.custom[i].ys = math.min(.7, o.custom[i].ys * 1.05)
-                        o.custom[i].x = o.custom[i].x+math.sin(o.custom[i].alivetime *.09)*1
+                        objects.custom[i].ys = math.min(.7, objects.custom[i].ys * 1.05)
+                        objects.custom[i].x = objects.custom[i].x+math.sin(objects.custom[i].alivetime *.09)*1
                     end
                 end
                 
 
 
-                if o.custom[i].floor then
-                    if o.custom[i].y>o.custom[i].floor then
-                        o.custom[i].y=o.custom[i].floor
-                        o.custom[i].ys = 0
-                        o.custom[i].falling=false
+                if objects.custom[i].floor then
+                    if objects.custom[i].y>objects.custom[i].floor then
+                        objects.custom[i].y=objects.custom[i].floor
+                        objects.custom[i].ys = 0
+                        objects.custom[i].falling=false
                     end
-                elseif o.custom[i].y>o.custom[i].originY+0x10*3+12 then
-                    o.custom[i].y=o.custom[i].originY+0x10*3+12
-                    o.custom[i].ys = 0
-                    o.custom[i].falling=false
+                elseif objects.custom[i].y>objects.custom[i].originY+0x10*3+12 then
+                    objects.custom[i].y=objects.custom[i].originY+0x10*3+12
+                    objects.custom[i].ys = 0
+                    objects.custom[i].falling=false
                 end
-                if o.custom[i].xdist<11 and o.custom[i].ydist<18 then
-                    o.custom[i].active=0
+                if objects.custom[i].xdist<11 and objects.custom[i].ydist<18 then
+                    objects.custom[i].active=0
                     if config.candlesRealHearts then
                         getheart()
                     else
-                        if o.custom[i].type=="bigheart" then
+                        if objects.custom[i].type=="bigheart" then
                             addHearts(5)
                         else
                             addHearts(1)
@@ -6999,28 +7033,28 @@ function spidey.update(inp,joy)
                         playSound(0x1f)
                     end
                 end
-                if o.custom[i].alivetime > 1000 then
-                    o.custom[i].destroy = true
+                if objects.custom[i].alivetime > 1000 then
+                    objects.custom[i].destroy = true
                 end
-            elseif o.custom[i].type=="diamondtrail" then
-                if o.custom[i].alivetime == 1 then o.custom[i].fade = 0xff end
-                if o.custom[i].alivetime %1==0 then
-                    if o.custom[i].alivetime>30 then
-                        o.custom[i].fade = (o.custom[i].fade or 0xff) - 5
-                        if o.custom[i].fade<0 then o.custom[i].fade = 0 end
+            elseif objects.custom[i].type=="diamondtrail" then
+                if objects.custom[i].alivetime == 1 then objects.custom[i].fade = 0xff end
+                if objects.custom[i].alivetime %1==0 then
+                    if objects.custom[i].alivetime>30 then
+                        objects.custom[i].fade = (objects.custom[i].fade or 0xff) - 5
+                        if objects.custom[i].fade<0 then objects.custom[i].fade = 0 end
                     end
-                    gui.pixel(o.custom[i].x+5-scrollx, o.custom[i].y+5-scrolly,"#ffffff"..string.format("%02x",o.custom[i].fade or 255))
-                    --drawfont(o.custom[i].x+5-scrollx, o.custom[i].y+5-scrolly,font[4], ".")
-                    --gui.drawtext(o.custom[i].x+2-scrollx, o.custom[i].y-2-scrolly, ".", "white", "clear")
+                    gui.pixel(objects.custom[i].x+5-scrollx, objects.custom[i].y+5-scrolly,"#ffffff"..string.format("%02x",objects.custom[i].fade or 255))
+                    --drawfont(objects.custom[i].x+5-scrollx, objects.custom[i].y+5-scrolly,font[4], ".")
+                    --gui.drawtext(objects.custom[i].x+2-scrollx, objects.custom[i].y-2-scrolly, ".", "white", "clear")
                     
                 end
-                if o.custom[i].alivetime>=100 then
-                    o.custom[i].active = 0
+                if objects.custom[i].alivetime>=100 then
+                    objects.custom[i].active = 0
                 end
-            elseif o.custom[i].type=="itemPopUp" then
+            elseif objects.custom[i].type=="itemPopUp" then
                 local x = 8*15
                 local y = 8*26+4
-                local text = o.custom[i].text or ""
+                local text = objects.custom[i].text or ""
                 local borderColor = "#0070ec"
                 if night then borderColor = "#24188c" end
                 gui.drawbox(x-2, y-3, x+8*16+2, y+8*2+3, "black", "#10101040")
@@ -7028,19 +7062,19 @@ function spidey.update(inp,joy)
                 gui.drawbox(x+1, y-1, x+8*16-1, y+8*2+1, "clear", borderColor)
                 
                 drawfont(x+13,y+5,font[current_font], text)
-                if o.custom[i].alivetime>=80 then
-                    o.custom[i].active = 0
+                if objects.custom[i].alivetime>=80 then
+                    objects.custom[i].active = 0
                 end
 
-            elseif o.custom[i].type=="levelup" then
+            elseif objects.custom[i].type=="levelup" then
                 local x = 70
                 local y = 100
                 local text = "- Level up! -"
                 local borderColor = "#0070ec"
                 if night then borderColor = "#24188c" end
-                o.custom[i].textIndex = o.custom[i].textIndex or 1
-                if o.custom[i].alivetime % 2 == 0 then
-                    o.custom[i].textIndex = math.min(o.custom[i].textIndex + 1, #text)
+                objects.custom[i].textIndex = objects.custom[i].textIndex or 1
+                if objects.custom[i].alivetime % 2 == 0 then
+                    objects.custom[i].textIndex = math.min(objects.custom[i].textIndex + 1, #text)
                 end
                 
                 
@@ -7048,10 +7082,10 @@ function spidey.update(inp,joy)
                 gui.drawbox(x, y, x+8*16, y+8*2, "#000", borderColor)
                 gui.drawbox(x+1, y-1, x+8*16-1, y+8*2+1, "clear", borderColor)
                 
-                drawfont(x+13,y+5,font[current_font], text:sub(1,o.custom[i].textIndex))
+                drawfont(x+13,y+5,font[current_font], text:sub(1,objects.custom[i].textIndex))
                 
 
-                if o.custom[i].alivetime==1 then
+                if objects.custom[i].alivetime==1 then
                     memory.writebyte(0x04f8,0x40) -- make invincible
                 end
                 
@@ -7060,293 +7094,292 @@ function spidey.update(inp,joy)
                 memory.writebyte(0x0197, math.max(l, 1))
                 
                 -- heal
-                if o.player.hp < o.player.maxHp and o.custom[i].alivetime % 1 ==0 then
-                    o.player.hp = o.player.hp + 1
-                    memory.writebyte(0x0080, o.player.hp)
+                if objects.player.hp < objects.player.maxHp and objects.custom[i].alivetime % 1 ==0 then
+                    objects.player.hp = objects.player.hp + 1
+                    memory.writebyte(0x0080, objects.player.hp)
                 end
 
-                if o.custom[i].alivetime>=80 then
-                    o.custom[i].active = 0
+                if objects.custom[i].alivetime>=80 then
+                    objects.custom[i].active = 0
                 end
-                o.custom[i].deSpawn = function()
-                    o.player.hp = o.player.maxHp
-                    memory.writebyte(0x0080, o.player.hp)
+                objects.custom[i].deSpawn = function()
+                    objects.player.hp = objects.player.maxHp
+                    memory.writebyte(0x0080, objects.player.hp)
                 end
-            elseif o.custom[i].type=="poisonDrip" then
-                local target = o.custom[i].target
+            elseif objects.custom[i].type=="poisonDrip" then
+                local target = objects.custom[i].target
                 
-                if o.custom[i].alivetime == 1 then
-                    o.custom[i].x = o[target].x-4
-                    o.custom[i].y = o[target].y-14
-                    o.custom[i].x=o.custom[i].x+math.random(-7,7)
+                if objects.custom[i].alivetime == 1 then
+                    objects.custom[i].x = objects[target].x-4
+                    objects.custom[i].y = objects[target].y-14
+                    objects.custom[i].x=objects.custom[i].x+math.random(-7,7)
                 else
-                    o.custom[i].y=o.custom[i].y+1
+                    objects.custom[i].y=objects.custom[i].y+1
                 end
-                gui.drawpixel(o.custom[i].x, o.custom[i].y, "green")
-                if o.custom[i].alivetime>30 then
-                    o.custom[i].active=0
+                gui.drawpixel(objects.custom[i].x, objects.custom[i].y, "green")
+                if objects.custom[i].alivetime>30 then
+                    objects.custom[i].active=0
                 end
-            elseif o.custom[i].type=="poison" then
-                local target = o.custom[i].target
-                if o.custom[i].alivetime==1 then
-                    o.custom[i].targetType = o[target].type
-                    o.custom[i].poisonTicks = 0
+            elseif objects.custom[i].type=="poison" then
+                local target = objects.custom[i].target
+                if objects.custom[i].alivetime==1 then
+                    objects.custom[i].targetType = objects[target].type
+                    objects.custom[i].poisonTicks = 0
                 end
 
-                if o.custom[i].alivetime % 3 ==0 then
+                if objects.custom[i].alivetime % 3 ==0 then
                     createPoisonDrip(target)
-                    --local obj = createObject("poof",o[o.custom[i].target].x+scrollx-8, o[o.custom[i].target].y+scrolly-8)
+                    --local obj = createObject("poof",objects[objects.custom[i].target].x+scrollx-8, objects[objects.custom[i].target].y+scrolly-8)
                 end
                 
-                if o.custom[i].alivetime % 90 == 0 and o[target].hp>0 then
-                    o[target].hp = o[target].hp - 1
-                    o.custom[i].poisonTicks = o.custom[i].poisonTicks +1
-                    memory.writebyte(0x04c8+target, o[target].hp)
-                    if o[target].hp <= 0 then
-                        o[target].stun = 0 -- make sure it isn't stunned so we can kill it
-                        memory.readbyte(0x04fe+target, o[target].stun)
-                        o[target].hp = 1 -- have to give it hp again so we can damage it
-                        memory.writebyte(0x04c8+target, o[target].hp)
+                if objects.custom[i].alivetime % 90 == 0 and objects[target].hp>0 then
+                    objects[target].hp = objects[target].hp - 1
+                    objects.custom[i].poisonTicks = objects.custom[i].poisonTicks +1
+                    memory.writebyte(0x04c8+target, objects[target].hp)
+                    if objects[target].hp <= 0 then
+                        objects[target].stun = 0 -- make sure it isn't stunned so we can kill it
+                        memory.readbyte(0x04fe+target, objects[target].stun)
+                        objects[target].hp = 1 -- have to give it hp again so we can damage it
+                        memory.writebyte(0x04c8+target, objects[target].hp)
                         hurtenemy(target)
                     end
                 end
                 
-                if o[target].type==0 or o[target].hp<=0 or o[target].type~= o.custom[i].targetType then
-                    o.custom[i].active = 0
+                if objects[target].type==0 or objects[target].hp<=0 or objects[target].type~= objects.custom[i].targetType then
+                    objects.custom[i].active = 0
                 end
                 
-                if o.custom[i].poisonTicks >= 3 then
-                    o.custom[i].active=0
+                if objects.custom[i].poisonTicks >= 3 then
+                    objects.custom[i].active=0
                 end
             
-            elseif o.custom[i].type=="bone" then
-                o.custom[i].rnd=o.custom[i].rnd or math.random(0,90000)
-                f=math.floor((o.custom[i].alivetime+o.custom[i].rnd)/06) % 3
-                if o.custom[i].facing==0 then f=2-f end
-                gfx.draw(o.custom[i].x-2-scrollx-bone.xo[f], o.custom[i].y-2-scrolly-8-bone.yo[f], gfx.bone[f])
-                o.custom[i].ys=o.custom[i].ys+.09
-                --if o.custom[i].xdist<26 and o.custom[i].ydist<17 then
-                if o.custom[i].xdist<15 and o.custom[i].ydist<17 then
-                    --o.custom[i].destroy=true
+            elseif objects.custom[i].type=="bone" then
+                objects.custom[i].rnd=objects.custom[i].rnd or math.random(0,90000)
+                f=math.floor((objects.custom[i].alivetime+objects.custom[i].rnd)/06) % 3
+                if objects.custom[i].facing==0 then f=2-f end
+                gfx.draw(objects.custom[i].x-2-scrollx-bone.xo[f], objects.custom[i].y-2-scrolly-8-bone.yo[f], gfx.bone[f])
+                objects.custom[i].ys=objects.custom[i].ys+.09
+                if objects.custom[i].xdist<15 and objects.custom[i].ydist<17 then
+                    --objects.custom[i].destroy=true
                     hurtplayer()
                 end
 
-                local x=o.custom[i].x-scrollx
-                local y=o.custom[i].y-scrolly
+                local x=objects.custom[i].x-scrollx
+                local y=objects.custom[i].y-scrolly
                 local rect = {x-5,y-4-8,x+7,y+7-8}
                 if config.hitboxes or spidey.debug.enabled then
                     gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80")
                 end
                 if collision(rect, hitboxes.whip.rect) then
-                    o.custom[i].destroy = true
+                    objects.custom[i].destroy = true
                     if config.boneJuggle then
                         -- bone juggle
-                        createBone(o.custom[i].x-scrollx, o.custom[i].y-scrolly-8)
+                        createBone(objects.custom[i].x-scrollx, objects.custom[i].y-scrolly-8)
                     else
-                        local obj = createObject("poof",o.custom[i].x-4, o.custom[i].y-8)
+                        local obj = createObject("poof",objects.custom[i].x-4, objects.custom[i].y-8)
                         obj.aliveTime = 3
                     end
                 end
 
-            elseif o.custom[i].type=="axe" then
-                o.custom[i].rnd=o.custom[i].rnd or math.random(0,90000)
-                f=math.floor((o.custom[i].alivetime+o.custom[i].rnd)/06) % 4
-                if o.custom[i].facing==0 then f=3-f end
-                gfx.draw(o.custom[i].x-2-scrollx-bone.xo[f], o.custom[i].y-2-scrolly-8-bone.yo[f], gfx.axe[f])
-                o.custom[i].ys=o.custom[i].ys+.09
-                for ii=0,o.count-1 do
-                    if o[ii].type~=0 and o[ii].team==1 and (not o.custom[i].hasHift) then
-                        xdist=math.abs(o[ii].x-o.custom[i].x+scrollx)
-                        ydist=math.abs(o[ii].y-o.custom[i].y+scrolly)
+            elseif objects.custom[i].type=="axe" then
+                objects.custom[i].rnd=objects.custom[i].rnd or math.random(0,90000)
+                f=math.floor((objects.custom[i].alivetime+objects.custom[i].rnd)/06) % 4
+                if objects.custom[i].facing==0 then f=3-f end
+                gfx.draw(objects.custom[i].x-2-scrollx-bone.xo[f], objects.custom[i].y-2-scrolly-8-bone.yo[f], gfx.axe[f])
+                objects.custom[i].ys=objects.custom[i].ys+.09
+                for ii=0,objects.count-1 do
+                    if objects[ii].type~=0 and objects[ii].team==1 and (not objects.custom[i].hasHift) then
+                        xdist=math.abs(objects[ii].x-objects.custom[i].x+scrollx)
+                        ydist=math.abs(objects[ii].y-objects.custom[i].y+scrolly)
                         if xdist<10 and ydist<10 then
-                            --o.custom[i].active=0
-                            o.custom[i].hasHit=true
+                            --objects.custom[i].active=0
+                            objects.custom[i].hasHit=true
                             hurtenemy(ii)
                             break
                         end
                     end
                 end
                 
-                local x=o.custom[i].x-scrollx
-                local y=o.custom[i].y-scrolly
+                local x=objects.custom[i].x-scrollx
+                local y=objects.custom[i].y-scrolly
                 local rect = {x-8,y-20,x+9,y+0}
-                o.custom[i].attackbox = rect
+                objects.custom[i].attackbox = rect
                 
                 if config.hitboxes or spidey.debug.enabled then gui.box(rect[1],rect[2],rect[3],rect[4],"#ff400060", "#ff400080") end
                 
-            elseif o.custom[i].type=="bigbat" then
-                o.custom[i].outscreen=true
-                f=math.floor(o.custom[i].alivetime/10) % 2+1
-                --if o.custom[i].facing==0 then f=2-f end
-                gfx.draw(o.custom[i].x-2-scrollx-bigbat.xo[f], o.custom[i].y-2-scrolly-8-bigbat.yo[f], gfx.bigbat[f])
+            elseif objects.custom[i].type=="bigbat" then
+                objects.custom[i].outscreen=true
+                f=math.floor(objects.custom[i].alivetime/10) % 2+1
+                --if objects.custom[i].facing==0 then f=2-f end
+                gfx.draw(objects.custom[i].x-2-scrollx-bigbat.xo[f], objects.custom[i].y-2-scrolly-8-bigbat.yo[f], gfx.bigbat[f])
 
-                --o.custom[i].y=o.custom[i].y+math.cos(o.custom[i].alivetime *.03)*2
-                --o.custom[i].x=o.custom[i].x+math.sin(o.custom[i].alivetime *.01)*1
-                if o.player.x+scrollx>o.custom[i].x then dx=1 else dx=-1 end
-                if o.player.y+scrolly>o.custom[i].y then dy=1 else dy=-1 end
-                o.custom[i].ys=o.custom[i].ys+math.cos(o.custom[i].alivetime *.03)*.004*dy
-                o.custom[i].xs=o.custom[i].xs+math.sin(o.custom[i].alivetime *.01)*.004*dx
-                o.custom[i].ys=o.custom[i].ys+.006*dy
-                o.custom[i].xs=o.custom[i].xs+.006*dx
-                o.custom[i].ys=o.custom[i].ys-math.cos(o.custom[i].alivetime *.03)*.022
-                if o.custom[i].alivetime % 30==0 then
-                    o.custom[i].xs=o.custom[i].xs+dx*.5
+                --objects.custom[i].y=objects.custom[i].y+math.cos(objects.custom[i].alivetime *.03)*2
+                --objects.custom[i].x=objects.custom[i].x+math.sin(objects.custom[i].alivetime *.01)*1
+                if objects.player.x+scrollx>objects.custom[i].x then dx=1 else dx=-1 end
+                if objects.player.y+scrolly>objects.custom[i].y then dy=1 else dy=-1 end
+                objects.custom[i].ys=objects.custom[i].ys+math.cos(objects.custom[i].alivetime *.03)*.004*dy
+                objects.custom[i].xs=objects.custom[i].xs+math.sin(objects.custom[i].alivetime *.01)*.004*dx
+                objects.custom[i].ys=objects.custom[i].ys+.006*dy
+                objects.custom[i].xs=objects.custom[i].xs+.006*dx
+                objects.custom[i].ys=objects.custom[i].ys-math.cos(objects.custom[i].alivetime *.03)*.022
+                if objects.custom[i].alivetime % 30==0 then
+                    objects.custom[i].xs=objects.custom[i].xs+dx*.5
                 end
-                if o.custom[i].alivetime % 200==0 then
-                    --o.custom[i].xs=0
-                    --o.custom[i].ys=0
-                    o.custom[i].ys=.07*dy
-                    o.custom[i].xs=.17*dx
+                if objects.custom[i].alivetime % 200==0 then
+                    --objects.custom[i].xs=0
+                    --objects.custom[i].ys=0
+                    objects.custom[i].ys=.07*dy
+                    objects.custom[i].xs=.17*dx
                     
                 end
-                --o[i].y=o[i].y+math.cos(emu.framecount()*.09)*1
-                --o[i].x=o[i].x+math.sin(emu.framecount()*.09)*1
+                --objects[i].y=objects[i].y+math.cos(emu.framecount()*.09)*1
+                --objects[i].x=objects[i].x+math.sin(emu.framecount()*.09)*1
                 --n=40
 
-                if o.custom[i].xdist<26 and o.custom[i].ydist<17 then
-                    --o.custom[i].active=0
+                if objects.custom[i].xdist<26 and objects.custom[i].ydist<17 then
+                    --objects.custom[i].active=0
                     hurtplayer()
                 end
             
-            elseif o.custom[i].type=="medusahead" then
-                if o.custom[i].onScreen then o.custom[i].outscreen=false end
---                if o.custom[i].alivetime == 2 then
---                    o.custom[i].y=o.player.y+16
+            elseif objects.custom[i].type=="medusahead" then
+                if objects.custom[i].onScreen then objects.custom[i].outscreen=false end
+--                if objects.custom[i].alivetime == 2 then
+--                    objects.custom[i].y=objects.player.y+16
 --                end
                 
-                o.custom[i].y=o.custom[i].y+math.cos((o.custom[i].alivetime+80) *.056)*2
+                objects.custom[i].y=objects.custom[i].y+math.cos((objects.custom[i].alivetime+80) *.056)*2
                 
-                local frame = math.floor(o.custom[i].aliveTime /10) % 2+1
-                gfx.draw(o.custom[i].x-scrollx-6, o.custom[i].y-scrolly-12, gfx.medusa[o.custom[i].facing+1][frame])
+                local frame = math.floor(objects.custom[i].aliveTime /10) % 2+1
+                gfx.draw(objects.custom[i].x-scrollx-6, objects.custom[i].y-scrolly-12, gfx.medusa[objects.custom[i].facing+1][frame])
                 
-                if (o.custom[i].hurtTimer or 0) > 0 then
-                    o.custom[i].hurtTimer=(o.custom[i].hurtTimer or 0)-1
-                elseif o.custom[i].xdist<10 and o.custom[i].ydist<10 then
-                    --o.custom[i].active=0
-                    o.custom[i].hurtTimer=15
+                if (objects.custom[i].hurtTimer or 0) > 0 then
+                    objects.custom[i].hurtTimer=(objects.custom[i].hurtTimer or 0)-1
+                elseif objects.custom[i].xdist<10 and objects.custom[i].ydist<10 then
+                    --objects.custom[i].active=0
+                    objects.custom[i].hurtTimer=15
                     hurtplayer(0x0a)
                 end
                 
                 
-                local x=o.custom[i].x-scrollx
-                local y=o.custom[i].y-scrolly
+                local x=objects.custom[i].x-scrollx
+                local y=objects.custom[i].y-scrolly
                 local rect = {x-5,y-4-8,x+9,y+7-4}
-                o.custom[i].hitbox = rect
+                objects.custom[i].hitbox = rect
                 
                 if config.hitboxes or spidey.debug.enabled then gui.box(rect[1],rect[2],rect[3],rect[4],"#0040ff60", "#0040ff80") end
                 
-                o.custom[i].getHit = function()
-                    o.custom[i].die = true
-                    o.custom[i].deathSound = 0x1a
-                    o.custom[i].item = {type="poof", x=o.custom[i].x-4, y=o.custom[i].y-10}
+                objects.custom[i].getHit = function()
+                    objects.custom[i].die = true
+                    objects.custom[i].deathSound = 0x1a
+                    objects.custom[i].item = {type="poof", x=objects.custom[i].x-4, y=objects.custom[i].y-10}
                 end
                 
-            elseif o.custom[i].type=="bansheeboomerang" then
+            elseif objects.custom[i].type=="bansheeboomerang" then
                 
-                f=math.floor(o.custom[i].alivetime/5) % 3
-                if o.custom[i].facing==0 then f=2-f end
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly-8, gfx.boomerang[f])
-                --o.custom[i].xs=o.custom[i].xs+.1
-                if o.custom[i].rebound == false then
-                    if o.custom[i].xs>0 then
-                        if o.custom[i].x-scrollx>240 then o.custom[i].xs=-o.custom[i].xs; o.custom[i].x = 255+scrollx-10; o.custom[i].rebound=true end
-                    elseif o.custom[i].xs<0 then
-                        if o.custom[i].x-scrollx<0 then o.custom[i].xs=-o.custom[i].xs; o.custom[i].x = 0+scrollx+0; o.custom[i].rebound=true end
+                f=math.floor(objects.custom[i].alivetime/5) % 3
+                if objects.custom[i].facing==0 then f=2-f end
+                gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly-8, gfx.boomerang[f])
+                --objects.custom[i].xs=objects.custom[i].xs+.1
+                if objects.custom[i].rebound == false then
+                    if objects.custom[i].xs>0 then
+                        if objects.custom[i].x-scrollx>240 then objects.custom[i].xs=-objects.custom[i].xs; objects.custom[i].x = 255+scrollx-10; objects.custom[i].rebound=true end
+                    elseif objects.custom[i].xs<0 then
+                        if objects.custom[i].x-scrollx<0 then objects.custom[i].xs=-objects.custom[i].xs; objects.custom[i].x = 0+scrollx+0; objects.custom[i].rebound=true end
                     end
                 end
-                for ii=0,o.count-1 do
-                    if o[ii].type~=0 and o[ii].team==1 then
-                        xdist=math.abs(o[ii].x-o.custom[i].x+scrollx)
-                        ydist=math.abs(o[ii].y-o.custom[i].y+scrolly)
+                for ii=0,objects.count-1 do
+                    if objects[ii].type~=0 and objects[ii].team==1 then
+                        xdist=math.abs(objects[ii].x-objects.custom[i].x+scrollx)
+                        ydist=math.abs(objects[ii].y-objects.custom[i].y+scrolly)
                         if xdist<10 and ydist<10 then
-                            --o.custom[i].active=0
+                            --objects.custom[i].active=0
                             hurtenemy(ii)
                             break
                         end
                     end
                 end
-                xdist=math.abs(o.player.x-o.custom[i].x+scrollx)
-                ydist=math.abs(o.player.y-o.custom[i].y+scrolly)
-                if o.custom[i].alivetime>20 and xdist<10 and ydist<10 then
+                xdist=math.abs(objects.player.x-objects.custom[i].x+scrollx)
+                ydist=math.abs(objects.player.y-objects.custom[i].y+scrolly)
+                if objects.custom[i].alivetime>20 and xdist<10 and ydist<10 then
                     --catch
-                    o.custom[i].active=0
+                    objects.custom[i].active=0
                     break
                 end
-            elseif o.custom[i].type=="dracfire" then
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
-                o.custom[i].ys=o.custom[i].ys*.99
-                if o.custom[i].facing==1 then 
-                    o.custom[i].xs=o.custom[i].xs+.13
+            elseif objects.custom[i].type=="dracfire" then
+                gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly, cv2fire)
+                objects.custom[i].ys=objects.custom[i].ys*.99
+                if objects.custom[i].facing==1 then 
+                    objects.custom[i].xs=objects.custom[i].xs+.13
                 else
-                    o.custom[i].xs=o.custom[i].xs+-.13
+                    objects.custom[i].xs=objects.custom[i].xs+-.13
                     
                 end
-                if o.custom[i].xdist<10 and o.custom[i].ydist<10 then
-                    o.custom[i].active=0
+                if objects.custom[i].xdist<10 and objects.custom[i].ydist<10 then
+                    objects.custom[i].active=0
                     hurtplayer()
                 end
             else
-                gfx.draw(o.custom[i].x-2-scrollx, o.custom[i].y-2-scrolly, cv2fire)
+                gfx.draw(objects.custom[i].x-2-scrollx, objects.custom[i].y-2-scrolly, cv2fire)
             end
             
             --if collision(rect, hitboxes.whip.rect) then
-            if o.custom[i].hitbox and o.custom[i].getHit then
+            if objects.custom[i].hitbox and objects.custom[i].getHit then
                 local getHit=false
-                if collision(o.custom[i].hitbox, hitboxes.whip.rect) then getHit=true end
+                if collision(objects.custom[i].hitbox, hitboxes.whip.rect) then getHit=true end
                 
                 for ii = 2,19 do
                     local hb=hitboxes.object[ii] or {}
-                    if hb.subType=="SimonProjectile" and collision(o.custom[i].hitbox, hb.rect) then getHit=true end
+                    if hb.subType=="SimonProjectile" and collision(objects.custom[i].hitbox, hb.rect) then getHit=true end
                 end
                 
-                for k,v in ipairs(o.custom) do
-                    if v.attackbox and collision(o.custom[i].hitbox, v.attackbox) then getHit=true end
+                for k,v in ipairs(objects.custom) do
+                    if v.attackbox and collision(objects.custom[i].hitbox, v.attackbox) then getHit=true end
                 end
                 
-                if getHit then o.custom[i].getHit() end
+                if getHit then objects.custom[i].getHit() end
             end
             
-            if o.custom[i].destroy then
-                o.custom[i].active = 0
+            if objects.custom[i].destroy then
+                objects.custom[i].active = 0
             end
-            if o.custom[i].die then
-                if o.custom[i].deathSound then
-                    queueSound(o.custom[i].deathSound)
+            if objects.custom[i].die then
+                if objects.custom[i].deathSound then
+                    queueSound(objects.custom[i].deathSound)
                 end
-                if o.custom[i].item then
-                    local obj = createObject(o.custom[i].item.type,o.custom[i].item.x, o.custom[i].item.y)
-                    for k,v in pairs(o.custom[i].item) do
+                if objects.custom[i].item then
+                    local obj = createObject(objects.custom[i].item.type,objects.custom[i].item.x, objects.custom[i].item.y)
+                    for k,v in pairs(objects.custom[i].item) do
                         obj[k]=v
                     end
                 end
-                o.custom[i].active = 0
+                objects.custom[i].active = 0
             end
             
-            if o.custom[i].x-scrollx<0 or o.custom[i].y-scrolly<0 or o.custom[i].x-scrollx>255 or o.custom[i].y-scrolly>255  then
-                if o.custom[i].outscreen then
-                    o.custom[i].onScreen = false
+            if objects.custom[i].x-scrollx<0 or objects.custom[i].y-scrolly<0 or objects.custom[i].x-scrollx>255 or objects.custom[i].y-scrolly>255  then
+                if objects.custom[i].outscreen then
+                    objects.custom[i].onScreen = false
                 else
-                    o.custom[i].active=0
+                    objects.custom[i].active=0
                 end
             else
-                o.custom[i].onScreen = true
+                objects.custom[i].onScreen = true
             end
             
         end
     end
     
-    if o[0].type==0x03 and false then
+    if objects[0].type==0x03 and false then
         if (emu.framecount() % 48)==0 then
             local i=getunused()
             if i~=-1 then
                 gui.text(20,20, string.format("%3u",i))
-                o[i].type=0x30
-                o[i].x=o[0].x
-                o[i].y=o[0].y
-                memory.writebyte(0x03ba+i,o[i].type)
-                --memory.writebyte(0x0306+i,o[i].frame)
-                memory.writebyte(0x0348+6+i,o[i].x)
-                memory.writebyte(0x0324+6+i,o[i].y)
+                objects[i].type=0x30
+                objects[i].x=objects[0].x
+                objects[i].y=objects[0].y
+                memory.writebyte(0x03ba+i,objects[i].type)
+                --memory.writebyte(0x0306+i,objects[i].frame)
+                memory.writebyte(0x0348+6+i,objects[i].x)
+                memory.writebyte(0x0324+6+i,objects[i].y)
             end
         end
     end
@@ -7405,16 +7438,16 @@ function spidey.update(inp,joy)
         end
         if joy[1].cancel_press then
             -- Still refill hp if not saving.
-            o.player.hp = o.player.maxHp
-            memory.writebyte(0x0080, o.player.hp)
+            objects.player.hp = objects.player.maxHp
+            memory.writebyte(0x0080, objects.player.hp)
 
             memory.writebyte(0x7000+3, 1)
             msgstatus=0x06
             memory.writebyte(0x007a, msgstatus)
         end
         if msgMode==0x00 and joy[1].confirm_press then
-            o.player.hp = o.player.maxHp
-            memory.writebyte(0x0080, o.player.hp)
+            objects.player.hp = objects.player.maxHp
+            memory.writebyte(0x0080, objects.player.hp)
             
             memory.writebyte(0x7000+3, 1)
             msgstatus=0x05
@@ -7542,8 +7575,8 @@ function spidey.update(inp,joy)
         
         --Make Simon dance if he's idle for a while in the woods and it's not night
         if joy[1].idle_time>500 and (area1>=2 and area1<=4) and not night then
-            o.player.dance=o.player.dance or {stepCount=0, headBangCount=0}
-            o.player.dance.headBangCount = o.player.dance.headBangCount or 0
+            objects.player.dance=objects.player.dance or {stepCount=0, headBangCount=0}
+            objects.player.dance.headBangCount = objects.player.dance.headBangCount or 0
             music1=memory.readbyte(0x00a3)
             if music1==0x3d then
                 if memory.readbyte(0x00b5)==0x02 then
@@ -7551,32 +7584,32 @@ function spidey.update(inp,joy)
                 else
                     memory.writebyte(0x300,0x0d)
                 end
-                o.player.dance = {stepCount=0, headBangCount=0}
+                objects.player.dance = {stepCount=0, headBangCount=0}
             elseif music1==0x40 then
-                if o.player.dance.headBangCount<=16 then
+                if objects.player.dance.headBangCount<=16 then
                     if memory.readbyte(0x00b5)==0x03 then
-                        o.player.dance.lastHeadBang = true
+                        objects.player.dance.lastHeadBang = true
                         memory.writebyte(0x239,0x3d) -- head banger
                     else
-                        if o.player.dance.lastHeadBang == true then
-                            o.player.dance.lastHeadBang = false
-                            o.player.dance.headBangCount=o.player.dance.headBangCount+1
+                        if objects.player.dance.lastHeadBang == true then
+                            objects.player.dance.lastHeadBang = false
+                            objects.player.dance.headBangCount=objects.player.dance.headBangCount+1
                         end
                     end
                 else
                     -- turn step dance
                     if memory.readbyte(0x00b5)==0x03 then
-                        o.player.dance.lastStep = true
+                        objects.player.dance.lastStep = true
                         memory.writebyte(0x300,0x08)
                     else
-                        if o.player.dance.lastStep then
-                            o.player.dance.lastStep = false
-                            o.player.dance.stepCount=o.player.dance.stepCount+1
+                        if objects.player.dance.lastStep then
+                            objects.player.dance.lastStep = false
+                            objects.player.dance.stepCount=objects.player.dance.stepCount+1
                         end
                         memory.writebyte(0x300,0x04)
                     end
                     
-                    if (o.player.dance.stepCount %4 > 2) or o.player.dance.stepCount > 20 then
+                    if (objects.player.dance.stepCount %4 > 2) or objects.player.dance.stepCount > 20 then
                         if memory.readbyte(0x00c7)==0x01 then
                             memory.writebyte(0x420,0x00)
                         else
@@ -7615,9 +7648,9 @@ function spidey.update(inp,joy)
         memory.writebyte(0x0445,whipframe)
         
         --if hp<0x30 and os.time() % 10==0 then
-        if o.player.hp < o.player.maxHp and os.time() % 10==0 then
-            o.player.hp = o.player.hp + 1
-            memory.writebyte(0x0080, o.player.hp)
+        if objects.player.hp < objects.player.maxHp and os.time() % 10==0 then
+            objects.player.hp = objects.player.hp + 1
+            memory.writebyte(0x0080, objects.player.hp)
         end
         if cheats.maxlevel then
             memory.writebyte(0x08b,0x05) --level
@@ -7651,8 +7684,8 @@ function spidey.update(inp,joy)
         memory.writebyte(0x0086,0x06) --hours = 06
         memory.writebyte(0x0085,0x01) --minutes = 00
         
-        o.player.gold = math.max(o.player.gold, 5000)
-        memory.writeword(0x7000+1, o.player.gold)
+        objects.player.gold = math.max(objects.player.gold, 5000)
+        memory.writeword(0x7000+1, objects.player.gold)
         
         if cheats.refightbosses then refight_bosses=true end
         
@@ -7741,7 +7774,7 @@ function spidey.draw()
         drawSubScreen()
     end
     
-    if (action or pausemenu) and o.player.inBossRoom==true then
+    if (action or pausemenu) and objects.player.inBossRoom==true then
         if displayarea=="Castlevania" then
             -- Don't bother with blocks for final Dracula fight
         else
@@ -7760,7 +7793,7 @@ function spidey.draw()
     
     if action and config.testStats then
         local stats= getStats()
-        gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d\nexp %d, next %d",o.player.level+1,o.player.hp,o.player.maxHp, stats.str, stats.atk, stats.con, stats.def, getCurrentExp(), o.player.expNext),"white","#00002080")
+        gui.text(10,50,string.format("level %d, hp %d/%d\nstr %d, atk %d, con %d, def %d\nexp %d, next %d",objects.player.level+1,objects.player.hp,objects.player.maxHp, stats.str, stats.atk, stats.con, stats.def, getCurrentExp(), objects.player.expNext),"white","#00002080")
     end
     
     if game.credits.show then

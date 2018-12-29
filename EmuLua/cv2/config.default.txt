@@ -6,6 +6,9 @@
 // Setting to false disables music
 music=true
 
+// Setting to false disables sound played using external methods.
+externalSound=true
+
 // Allow debugging stuff.  Setting this to false removes the select menu.
 debug = false
 
