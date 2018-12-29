@@ -742,13 +742,13 @@ cv2.credits = [[
 
 
 
-
 Coding..............SpiderDave
 Candle Edits......krunkcleanup
-Graphics................Konami
 Graphics/edit.......THiN CRUST
 Play Testing......krunkcleanup
 Play Testing.........Snorenado
+NirCmd.........www.nirsoft.net
+
 
 
 

@@ -218,11 +218,9 @@ end
 -- Called when a heart cost is deducted (for buying or using sub weapon).
 -- There are two of these, for both bytes of the heart value.
 function onDeductHeartCost1(oldHeartValue, newHeartValue)
-    -- don't deduct hearts
     return oldHeartValue
 end
 function onDeductHeartCost2(oldHeartValue, newHeartValue)
-    -- don't deduct hearts
     return oldHeartValue
 end
 
