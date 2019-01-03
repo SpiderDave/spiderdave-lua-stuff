@@ -153,7 +153,6 @@ spidey.joyAliases.cancel = config.button_cancel or spidey.joyAliases.cancel
 local graphics = require("Spidey.graphics")
 graphics:init(config.graphics_mode or "")
 
-
 local sound = require("spidey.sound")
 sound:init(util, util.getScriptFolder())
 
@@ -162,7 +161,6 @@ for k,v in pairs(cv2data.sounds) do
 end
 
 if not config.externalSound then sound.enabled=false end
-
 
 --local textMap = " ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
 local textMap = " ABCDEFGHIJKLMNOPQRSTUVWXYZ.'v,                       0123456789!     -         !            ?    ETL            :"
@@ -962,7 +960,7 @@ if gd then
 end
 
 
-refight_bosses=false
+refight_bosses=config.refightBosses
 relics={}
 relics.names = cv2data.relics.names
 relics.list = {}
@@ -1594,6 +1592,7 @@ function getExtraData()
     --0x7400 = save slot
     --0x7401 to 0x740e = clues
     --0x7500 sfx thing
+    --0x7600 enemy alivetime counters (two bytes each, 12 of them)
     
     for i,v in ipairs(cv2data.relics) do
         if memory.readbyte(0x7000+20+i-1)==1 then
@@ -2925,6 +2924,17 @@ function onWhipDamage(damage, target)
     
     damage = stats.damage
     
+    local enemyDef = cv2data.enemies[objects[target].type].def or 0
+    
+    if objects.player.whipItem == items.index["Thorn Whip"] then
+        enemyDef = enemyDef - math.floor(enemyDef*.5)
+        enemyDef = 0
+    end
+    
+    if damage>1 then
+        damage=math.max(1, damage-enemyDef)
+    end
+    
     if objects.player.whipItem == items.index["Poison Whip"] then
         createPoison(target)
     end
@@ -3306,7 +3316,7 @@ end
 -- Note: changing an enemy type to 0 will make a phantom enemy if
 -- hp isn't set to 0.  You can't fix it here, have to clean it up
 -- in onEnemyCreated().
-function onCreateEnemy(i,enemyType)
+function onCreateEnemy(enemyIndex,enemyType)
     --if t==0x43 then t=0x3a end
     --if t==0x03 then t=0x13 end
     
@@ -3317,6 +3327,10 @@ function onCreateEnemy(i,enemyType)
         enemyType = 0
     end
     
+--    if enemyType~=0x19 and enemyType~=0x1a and enemyType~=0x4a then
+--        enemyType = 0
+--    end
+    
     if config.noEnemies then
         if cv2data.enemies[enemyType] and cv2data.enemies[enemyType].exp>0 then
             enemyType = 0
@@ -3324,7 +3338,9 @@ function onCreateEnemy(i,enemyType)
     end
     
     
-    if enemyType==0x26 and hasInventoryItem("Sacred Flame") then enemyType=0 end
+    if enemyType==0x26 and hasInventoryItem("Sacred Flame") then
+        enemyType=0
+    end
     
     -- grace period to despawn zombies when it turns to night in town
     if inTown and enemyType==0x17 and hour==18 and minute <=15 then 
@@ -3354,6 +3370,7 @@ function onCreateEnemy(i,enemyType)
     
     --t=0
     --emu.message(string.format("Create enemy %02X",t))
+    memory.writeword(0x7600+2*enemyIndex, 0)
     return enemyType
 end
 
@@ -3440,7 +3457,6 @@ function onEnemyCreated(enemyIndex, enemyType, enemyX, enemyY)
     --memory.writebyte(0x0324+6+x,e.y)
     
     --emu.message(x)
-
 end
 
 function onCreateEnemyProjectile(i,t,x,y)
@@ -5746,6 +5762,7 @@ function spidey.update(inp,joy)
         objects.player.platformIndex = nil
         for i=0,objects.count-1 do
             objects[i] = {}
+            objects[i].aliveTime = memory.readword(0x7600+i*2)
             objects[i].type=memory.readbyte(0x03ba+i)
             objects[i].name = cv2data.enemies[objects[i].type].name
             objects[i].frame=memory.readbyte(0x0306+i)
@@ -5756,6 +5773,7 @@ function spidey.update(inp,joy)
             --objects[i].show=(memory.readbyte(0x03cc+i) <0x80)
             objects[i].show=(memory.readbyte(0x03cc+i) ==0)
             objects[i].team=memory.readbyte(0x03de+i) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
+            objects[i].anim = memory.readbyte(0x0414+i)
             objects[i].facing=memory.readbyte(0x0420+6+i)
             objects[i].carrying=memory.readbyte(0x0480+i) --platforms: 00 = not carrying simon, ff = carrying simon
             objects[i].stun=memory.readbyte(0x04fe+i)
@@ -5793,7 +5811,6 @@ function spidey.update(inp,joy)
                 objects[i].hp=1 --give fireballs hp so they can be killed
                 memory.writebyte(0x04c8+i,objects[i].hp)
             end
-            
             
             -- ferryman doesn't bounce off docks (needs work)
             if objects[i].type == 0x3c then
@@ -5838,6 +5855,7 @@ function spidey.update(inp,joy)
     
     --do extra enemy stuff
     for i=0,objects.count-1 do
+        local this = objects[i]
         if objects[i].name=="Merchant" then
             if config.stationaryMerchant then
                 objects[i].stun=1
@@ -5927,6 +5945,105 @@ function spidey.update(inp,joy)
 
             
             --gfx.draw(objects[i].x, objects[i].y, gfx.fleaman[1])
+        
+        elseif this.name == "Death" then
+--            objects[i].y=objects[i].y+math.cos((spidey.counter+80*i) *.046)*.6
+--            objects[i].x=objects[i].x+math.sin((spidey.counter+80*i) *.036)*.6
+--            memory.writebyte(0x0348+6+i,objects[i].x)
+--            memory.writebyte(0x0324+6+i,objects[i].y)
+--            objects[i].anim = 8
+--            memory.writebyte(0x0414+i, objects[i].anim)
+
+
+--            if this.hp>1 then
+--                objects[i].hp=1
+--                memory.writebyte(0x04c8+i, objects[i].hp)
+--            end
+            
+            objects.boss.maxHp = cv2data.enemies[this.type].hp
+            
+            if hasInventoryItem("Golden Knife") and not refight_bosses then
+                --Only fight boss once
+                this.destroy=true
+            end
+            
+            if config.deathAI then
+                if this.aliveTime <= 0x30 then
+                    if this.aliveTime<0x30 then this.stun=1 end
+                    memory.writebyte(0x04fe+i,this.stun)
+                    this.palette=0
+                    memory.writebyte(0x0318+i, this.palette)
+                    
+                    if this.aliveTime %2==0 then
+                        this.y=this.y-1
+                        memory.writebyte(0x0324+6+i,objects[i].y)
+                    end
+                else
+                    if this.stun>0 then
+                        local x,y = this.x-6,this.y-2
+                        spidey.drawCircle(x+7,y+4,math.max(1,this.stun*3), "#00000060")
+                    else
+                        this.y=this.y+math.cos((this.aliveTime+80) *.046)*.8-.18
+                        this.x=this.x+math.sin((this.aliveTime+80) *.036)*.7
+
+                        this.y=this.y+math.cos((this.aliveTime) *.02)*1
+                        this.x=this.x+math.sin((this.aliveTime) *.02)*1
+                        
+                        this.confine={0x20,0x48, 0xe5,0xb2}
+                        memory.writebyte(0x0348+6+i,objects[i].x)
+                        memory.writebyte(0x0324+6+i,objects[i].y)
+                    end
+                end
+            end
+            
+            
+--            this.frame=0x45
+--            memory.writebyte(0x0306+i, this.frame)
+            
+            
+            
+            --spidey.drawCircle(x+7,y+4,math.max(1,this.aliveTime % 0x20*2), "#00000030")
+
+                        
+--            this.y=this.y+math.sin((this.aliveTime) *.16)*1.7
+--            this.x=this.x+math.cos((this.aliveTime) *.16)*1.7
+--            memory.writebyte(0x0348+6+i,objects[i].x)
+--            memory.writebyte(0x0324+6+i,objects[i].y)
+
+            
+            objects.player.bossdoor()
+        elseif this.name == "Death hatchet" then
+            objects[i].hp=0
+            memory.writebyte(0x04c8+i,objects[i].hp)
+        elseif objects[i].type == 0x19 then
+            --objects[i].destroy=true
+--            local o=objects[1]
+--            local o2=objects[3]
+--            objects[1].unknown = memory.readbyte(0x0414+1)
+--            objects[3].unknown = memory.readbyte(0x0414+3)
+--            objects[i].unknown = memory.readbyte(0x0414+i)
+            --spidey.message("02x",memory.readbyte(0x0414+i))
+            --memory.writebyte(0x0414+i,0x3e)
+--            if i==3 then
+--                objects[i].state = 0x0b
+--                memory.writebyte(0x044a+i,objects[i].state)
+                
+--                objects[i].team=0x80
+--                memory.writebyte(0x03de+i, objects[i].team) --00=uninitialized 01=enemy 40=friendly+talks 80=friendly 08=move with player
+--            end
+            
+--            spidey.message("%02x %02x",o.unknown,o2.unknown)
+            
+--            if i==3 then
+--            else
+--                spidey.message("%02x",objects[i].frame)
+--            end
+            -- skeledrag segment
+
+            --objects[i].frame=0x81
+            --memory.writebyte(0x0306+i, objects[i].frame)
+
+
         elseif objects[i].name == "Werewolf" then
             -- The werewolf's senses are better at night; greater rush distance and they can turn to rush at night.
             local rushDistance = 0x32
@@ -6221,32 +6338,6 @@ function spidey.update(inp,joy)
             memory.writebyte(0x0306+i,objects[i].frame)
         end
         
-        if objects[i].type==0x44 then --Death
-            objects.boss.maxHp = 128
-            if hasInventoryItem("Golden Knife") and not refight_bosses then
-                --Only fight boss once
-                objects[i].destroy=true
-            end
-                if config.deathAI then
-                    objects[i].skullc = ((objects[i].skullc or 0) +1) % 1000
-                    objects[i].y=objects[i].y+math.cos(objects[i].skullc *.03)*2
-                    objects[i].x=objects[i].x+math.sin(objects[i].skullc *.01)*1
-                    objects[i].y=objects[i].y+math.cos(emu.framecount()*.09)*1
-                    objects[i].x=objects[i].x+math.sin(emu.framecount()*.09)*1
-                    n=40
-                    if objects[i].x<0+n then objects[i].x=0+n end
-                    if objects[i].x>255-n then objects[i].x=255-n end
-                    if objects[i].y<0+n then objects[i].y=0+n end
-                    if objects[i].y>255-n then objects[i].y=255-n end
-                    memory.writebyte(0x0348+6+i,objects[i].x)
-                    memory.writebyte(0x0324+6+i,objects[i].y)
-                    memory.writebyte(0x03ba+i,objects[i].type)
-                    memory.writebyte(0x0306+i,objects[i].frame)
-                end
-                
-                objects.player.bossdoor()
-        end
-        
         if objects[i].type==0x48 then
             if objects[i].frame >=0x7a and objects[i].frame<=0x7d then
             else
@@ -6536,6 +6627,16 @@ function spidey.update(inp,joy)
                 drawfont(0,50,font[current_font], string.format("move=%s movec=%02x draccount=%02x",objects.dracula.move or "", objects.dracula.movec or 0, objects[i].draccount or 0))
                 drawfont(0,50+8,font[current_font], string.format("moveindex=%02x",objects.dracula.moveindex or 0))
             end
+        end
+        
+        objects[i].aliveTime = (objects[i].aliveTime+1) % 0x10000
+        memory.writeword(0x7600+i*2, objects[i].aliveTime)
+        
+        if this.confine then
+            this.x = math.min(math.max(this.x,this.confine[1]), this.confine[3])
+            this.y = math.min(math.max(this.y,this.confine[2]), this.confine[4])
+            memory.writebyte(0x0348+6+i,objects[i].x)
+            memory.writebyte(0x0324+6+i,objects[i].y)
         end
         
         if objects[i].destroy then
@@ -7834,6 +7935,19 @@ function spidey.draw()
             gui.text(20,40,string.format("Unknown rom. \nchecksum=%s", game.md5Data.md5), "white", "clear")
         end
     end
+
+--    if emu.framecount() % 100 >=50 then
+--        gui.drawbox(50,50,150,150,"#80808080", "#60606080")
+--        gui.drawtext(50,50-8-2,"Current", "white","clear")
+--    else
+--        gui.drawbox(50,50,150,150,"#80808080", "clear")
+--        gui.line(50,50,150-1,50,"#60606080")
+--        gui.line(150,50,150,150-1,"#60606080")
+--        gui.line(150,150,50+1,150,"#60606080")
+--        gui.line(50,150,50,50+1,"#60606080")
+--        gui.drawtext(50,50-8-2,"Expected", "white","clear")
+--    end
+
 end
 
 spidey.run()

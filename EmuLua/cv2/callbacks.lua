@@ -249,7 +249,8 @@ function _onCreateEnemy(address,len,t)
         if a then
             memory.setregister("a", a)
             if a==0 then
-                memory.writebyte(0x04c8+t.x-6, 0) -- hp
+                -- causes issues; wrong objects
+                --memory.writebyte(0x04c8+t.x-6, 0) -- hp
             end
         end
     end

@@ -139,6 +139,7 @@ local items = {
         type = "whip",
         whipBase = 1,
         attack = 11,
+        pierce = 7,
     },
     {
         name = "Chain Whip",
@@ -163,6 +164,7 @@ local items = {
         type = "whip",
         whipBase = 1,
         attack = 8,
+        pierce = 5,
     },
     {
         name = "Wall Chicken",
@@ -259,6 +261,7 @@ local items = {
         type = "whip",
         whipBase = 0,
         attack = 4,
+        pierce = 100,
         desc = "A small dagger that once \nbelonged to a noble thief.",
     },
 }

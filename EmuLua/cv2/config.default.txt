@@ -128,3 +128,5 @@ md5=false
 button_confirm = B
 button_cancel = A
 
+// re-fight bosses if true
+//refightBosses=true

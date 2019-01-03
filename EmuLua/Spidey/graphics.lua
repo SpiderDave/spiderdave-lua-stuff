@@ -342,6 +342,20 @@ function graphics:draw(x,y,img)
     gui.gdoverlay(x,y,img)
 end
 
+-- https://sourceforge.net/p/fceultra/bugs/838/
+function graphics:drawbox(x,y,x2,y2,c1,c2)
+    if c1~="clear" then gui.drawbox(x,y,x2,y2,c1,"clear") end
+    if c2~="clear" then
+        gui.line(x,y,x2-1,y,c2)
+        gui.line(x2,y,x2,y2-1,c2)
+        gui.line(x2,y2,x+1,y2,c2)
+        gui.line(x,y2,x,y+1,c2)
+    end
+end
+
+function graphics:line(x,y,x2,y2,c)
+    gui.line(x,y,x2,y2,c)
+end
 
 -- expose these for direct usage
 graphics.cairo = cairo
