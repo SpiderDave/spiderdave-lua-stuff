@@ -3370,8 +3370,23 @@ function onCreateEnemy(enemyIndex,enemyType)
     
     --t=0
     --emu.message(string.format("Create enemy %02X",t))
-    memory.writeword(0x7600+2*enemyIndex, 0)
+    memory.writeword(0x7600+2*enemyIndex, 0) -- enemy aliveTime
     return enemyType
+end
+
+function onCreateHeart(enemyIndex,enemyType)
+--    local x = objects[enemyIndex].x + scrollx
+--    local y = objects[enemyIndex].y + scrolly
+    
+--    local obj = createObject("item", x, y)
+--    obj.floor = y
+--    obj.itemName = "Gold"
+    --return enemyType
+end
+
+function onCreateHeartChance(createHeart)
+    createHeart = false
+    return createHeart
 end
 
 function jomaMarsh()
@@ -5930,7 +5945,7 @@ function spidey.update(inp,joy)
 --                memory.writebyte(0x04c8+i, objects[i].hp)
 --                objects[i].frame=0x8b
 --                memory.writebyte(0x0306+i, objects[i].frame)
-                objects[i].destroy = true
+                --objects[i].destroy = true
             end
         elseif objects[i].name == "High Jump Blob" and not inMansion then
             objects[i].hp=1

@@ -167,6 +167,9 @@ registerExec(0xea52+2,7,1,"onLoadTileSquareoid")
 
 registerExec(0xc559+2,7,1,"onSetStartingHearts")
 
+registerExec(0x828f+2,1,1,"onCreateHeart")
+registerExec(0x82a5+2,1,1,"onCreateHeartChance")
+
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
 function _onWalkSpeedRight(address,len,t)
@@ -842,5 +845,32 @@ function _onSetStartingHearts(address,len,t)
     if type(onSetStartingHearts)=="function" then
         local a = onSetStartingHearts(tonumber(string.format("%02x",t.a)))
         if a then memory.setregister("a", tonumber(string.format("%02d",a),16)) end
+    end
+end
+
+function _onCreateHeart(address,len,t)
+    if type(onCreateHeart)=="function" then
+        local a = onCreateHeart(t.x-6,t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onCreateHeartChance(address,len,t)
+    if type(onCreateHeartChance)=="function" then
+        local ret
+        if t.a %2==1 then
+            ret = onCreateHeartChance(true)
+        else
+            ret = onCreateHeartChance(false)
+        end
+        if ret~=nil then
+            local a
+            if ret==true then
+                a = 1
+            else
+                a = 0
+            end
+            memory.setregister("a", a)
+        end
     end
 end
