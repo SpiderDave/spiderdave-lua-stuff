@@ -56,7 +56,7 @@ floatingEyes = true
 ghosts = false
 
 // Use new pattern for Death (currently broken)
-deathAI = false
+deathAI = true
 
 // Use new pattern for Dracula (currently broken)
 draculaAI = false
