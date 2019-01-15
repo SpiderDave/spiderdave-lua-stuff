@@ -218,7 +218,11 @@ cv2.enemies = {
         hp=4,
         attack=7,
     },
-    [0x42] = {name="Camilla", exp=50},
+    [0x42] = {
+        name="Camilla",
+        exp=50,
+        hp=0x80,
+    },
     [0x43] = {
         name="Marsh",
         exp=0,

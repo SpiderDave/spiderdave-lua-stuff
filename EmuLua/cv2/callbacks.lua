@@ -82,7 +82,7 @@ registerExec(0xd33e,7,1,"onEnterSubScreen")
 registerExec(0x80ec,1,1,"onCreateEnemy")
 registerExec(0xde7b,7,1,"onCreateEnemyProjectile")
 registerExec(0xc5a1,7,1,"onStartGame")
-registerExec(0xc521,7,1,"onRestartGame")
+registerExec(0xc521+2,7,1,"onRestartGame")
 registerExec(0xcc77,7,1,"onPrintLives")
 registerExec(0xd4f7,7,1,"onExpGain")
 registerExec(0xdc31,7,1,"onSetWhipFrameDelay")
@@ -261,10 +261,10 @@ function _onStartGame(address,len,t)
     if type(onStartGame)=="function" then onStartGame() end
 end
 
+-- just after area is set
 function _onRestartGame(address,len,t)
     if type(onRestartGame)=="function" then
-        local a = onRestartGame()
-        if a then memory.setregister("a", a) end
+        onRestartGame()
     end
 end
 

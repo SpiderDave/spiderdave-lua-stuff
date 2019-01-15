@@ -2382,8 +2382,8 @@ function drawHUD()
             drawfont(8*14,8*10+5,spidey.debug.font, string.format("Mouse: %02x %02x ",spidey.inp.xmouse,spidey.inp.ymouse))
         end
         
-        name = "^aH^ai"
-        string.gsub(name, "^a", "")
+        --name = "^aH^ai"
+        --string.gsub(name, "^a", "")
         
         gui.drawbox(0, 0, 256, 20+8*3, "black", "black")
         drawfont(0+1,8+4,font[current_font], displayarea)
@@ -3857,8 +3857,7 @@ function onRestartGame()
             w.scrollY=0x2a0
             w.facing = 1
             warpPlayer(w)
-            return w.area3
-
+            return
         elseif area1==0x01 and area2==0x09 and area3==0x02 then
             -- Death
             local w={}
@@ -3869,7 +3868,7 @@ function onRestartGame()
             w.scrollY=0x2a0
             w.facing = 1
             warpPlayer(w)
-            return w.area3
+            return
         else
             -- Dracula
             return
@@ -6559,7 +6558,7 @@ function spidey.update(inp,joy)
         end
         
         if objects[i].type==0x42 then --Carmilla (mask boss)
-            objects.boss.maxHp=240
+            objects.boss.maxHp = cv2data.enemies[this.type].hp
             if hasInventoryItem("Cross") and not refight_bosses then
                 --Only fight boss once
                 objects[i].destroy = true
@@ -6602,7 +6601,7 @@ function spidey.update(inp,joy)
             objects.dracula = objects.dracula or {}
             
             objects.player.inBossRoom=true
-            objects.boss.maxHp=240
+            objects.boss.maxHp = cv2data.enemies[this.type].hp
             --gui.text(objects[i].x,objects[i].y, string.format("%u %02X %2u\n(%3u,%3u) %2i %2i",i,objects[i].type,objects[i].hp,objects[i].x,objects[i].y,signed8bit(objects[i].xs),signed8bit(objects[i].ys)))
             
             objects.dracula.move = objects.dracula.move or ""
