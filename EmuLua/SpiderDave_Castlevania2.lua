@@ -1903,19 +1903,26 @@ end
 
 function warpPlayer(w)
     if not w then return end
-    area1=w.area1
-    area2=w.area2
-    area3=w.area3
+    area1=w.area1 or area1
+    area2=w.area2 or area2
+    area3=w.area3 or area3
     areaFlags=w.areaFlags or areaFlags
-    returnArea=w.returnArea
-    returnScroll1=w.returnScroll1
-    returnScroll2=w.returnScroll2
-    returnX=w.returnX
-    returnY=w.returnY
-    objects.player.x=w.playerX
-    objects.player.y=w.playerY
-    scrollx=w.scrollX
-    scrolly=w.scrollY
+    returnArea=w.returnArea or returnArea
+    returnScroll1=w.returnScroll1 or returnScroll1
+    returnScroll2=w.returnScroll2 or returnScroll2
+    returnX=w.returnX or returnX
+    returnY=w.returnY or returnY
+    objects.player.x=w.playerX or objects.player.x
+    objects.player.y=w.playerY or objects.player.x
+    scrollx=w.scrollX or scrollx
+    scrolly=w.scrollY or scrollx
+    
+    if w.facing then
+        objects.player.facing = w.facing
+        memory.writebyte(0x0420, objects.player.facing)
+    end
+    
+    
     
     memory.writebyte(0x0030, area1)
     memory.writebyte(0x0050, area2)
@@ -2613,6 +2620,10 @@ end
 --function onSetHitboxCollision(n)
 --    return false
 --end
+
+function onCreateEnemyFireball(enemyIndex, enemyType)
+    memory.writeword(0x7600+2*enemyIndex, 0) -- set enemy aliveTime
+end
 
 function onTalk(t)
     -- Can only talk to NPCs when standing or walking.
@@ -3838,28 +3849,31 @@ function onRestartGame()
     if objects.player.inBossRoom == true then
         if area1==0x01 and area2==0x06 and area3==0x02 then
             -- Camille
-            area3=0x01
-            scrollx=0x200
-            scrolly=0x66c
-            objects.player.x=0xd8
-            objects.player.y=0xbd
+            local w={}
+            w.area3=0x01
+            w.playerX=0xd2
+            w.playerY=0xbd
+            w.scrollX=0x200
+            w.scrollY=0x2a0
+            w.facing = 1
+            warpPlayer(w)
+            return w.area3
+
         elseif area1==0x01 and area2==0x09 and area3==0x02 then
             -- Death
-            area3=0x01
-            scrollx=0
-            scrolly=0x66c
-            objects.player.x=0x1a
-            objects.player.y=0xbd
+            local w={}
+            w.area3=0x01
+            w.playerX=0x27
+            w.playerY=0xbd
+            w.scrollX=0
+            w.scrollY=0x2a0
+            w.facing = 1
+            warpPlayer(w)
+            return w.area3
         else
+            -- Dracula
             return
         end
-        
-        a=area3
-        memory.setregister("a",a)
-        setScroll()
-        memory.writebyte(0x0348, objects.player.x)
-        memory.writebyte(0x0324, objects.player.y)
-        return area3
     end
 end
 
@@ -6163,6 +6177,24 @@ function spidey.update(inp,joy)
         elseif this.name == "Death hatchet" then
             objects[i].hp=0
             memory.writebyte(0x04c8+i,objects[i].hp)
+
+            objects.player.loop = 2
+            -- faster starting at loop==2
+            if this.aliveTime==1 and objects.player.loop >= 2 then
+                if this.xs>=0x80 then
+                    this.xs=this.xs - 1
+                else
+                    this.xs=this.xs + 1
+                end
+                if this.ys>=0x80 then
+                    this.ys=this.ys - 1
+                else
+                    this.ys=this.ys + 1
+                end
+                memory.writebyte(0x0396+i,this.xs) --xs
+                memory.writebyte(0x0372+i,this.ys) --ys
+            end
+            
         elseif objects[i].type == 0x19 then
             --objects[i].destroy=true
 --            local o=objects[1]
@@ -6296,6 +6328,20 @@ function spidey.update(inp,joy)
             else
                 if objects[i].facing==1 then objects[i].facing=0; memory.writebyte(0x0420+6+i, objects[i].facing) end
             end
+            
+            
+            -- fireballs get faster each game loop
+            if this.aliveTime==1 then
+                if this.facing==1 then
+                    this.xs=this.xs + math.min(7, objects.player.loop)
+                else
+                    this.xs=this.xs - math.min(7, objects.player.loop)
+                end
+            end
+            
+            memory.writebyte(0x0396+i,this.xs) --xs
+            memory.writebyte(0x0372+i,this.ys) --ys
+
         end
         if objects[i].type==0x32 then --Fire guy fireballs: 
             -- Fix it so they face the proper direction

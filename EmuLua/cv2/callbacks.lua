@@ -154,8 +154,9 @@ registerExec(0x82a5+2,1,1,"onCreateHeartChance")
 registerExec(0x8c71,1,1,"onSetHitbox")
 registerExec(0xd354,7,1,"onSetSpikeDamage")
 registerExec(0xc3ad+2,7,1,"onSetGameStartDelay")
-
 registerExec(0xce28+2,7,1,"onTalk")
+
+registerExec(0x8e40+2,1,1,"onCreateEnemyFireball")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -911,3 +912,9 @@ function _onTalk(address,len,t)
     end
 end
 
+function _onCreateEnemyFireball(address,len,t)
+    if type(onCreateEnemyFireball)=="function" then
+        local a = onCreateEnemyFireball(t.x-6, t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
