@@ -48,11 +48,17 @@ end
 local function buildbox(i)
     local offset1 = memory.readbyte(0x3B4 + i) * 2
     local pointer1 = rom.readbyte(0x4AD0 + offset1) + (rom.readbyte(0x4AD1 + offset1) * 0x100)
+    
     local offset2 = memory.readbyte(0x3FC + i)
     
     if offset2 > 0 then
         offset2 = offset2 - 1
     end
+    
+--    if i==2+5 then
+--    emu.message(string.format("%02x %02x %02x %04x",i, offset1, offset2, pointer1))
+--    end
+    
     
     local offset3 = rom.readbyte(pointer1 + offset2 - 0x3FF0)
     local offset3 = ((offset3 * 2) + offset3) % 0x100

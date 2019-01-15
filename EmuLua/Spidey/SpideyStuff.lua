@@ -290,6 +290,21 @@ if not memory.writeword then
     end
 end
 
+if not memory.readbytesigned then
+    function memory.readbytesigned(a)
+        local b = memory.readbyte(a) % 0x100
+        if b>=0x80 then return -(0x100-b) else return b end
+    end
+end
+
+if not memory.writebytesigned then
+    function memory.writebytesigned(a, b)
+        if b<0 then b=b+0x100 end
+        memory.writebyte(a, b % 0x100)
+    end
+end
+
+
 function spidey.getregisters()
     return memory.getregister("a"),memory.getregister("x"),memory.getregister("y"),memory.getregister("s"),memory.getregister("p"),memory.getregister("pc")
 end
@@ -2170,6 +2185,18 @@ spidey.run=function()
 --        if #spidey.menus>0 then
 --            for i=1,#spidey.menus do spidey.menus[i]:update() end
 --        end
+        
+        if emu.framecount()==0 then
+            if type(spidey.reset)=="function" then
+                spidey.reset()
+            end
+        end
+        if emu.framecount()==100 then
+            if type(spidey.reset2)=="function" then
+                spidey.reset2()
+            end
+        end
+        
         emu.frameadvance()
     end
     if spidey.unload then spidey.unload() end

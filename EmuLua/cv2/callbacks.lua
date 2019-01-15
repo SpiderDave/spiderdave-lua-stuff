@@ -55,20 +55,8 @@ local registerExec = function(address, bank, len, fName)
             t.pc=pc
             t.bank=bank
             
-            --local e=string.format('Error in callback "%s"', fName)
-            if not xpcall(function()
-                --emu.message(string.format('Executing callback "%s"', fName))
-                
-                --spidey.appendToFile("cv2/log.txt", string.format('Executing callback "%s"\n', fName))
-                
-                local t2 = f2(address, len, t)
-                
-            end, msgh) then
-                emu.message(string.format('Error in callback "%s"', fName))
-            end
+            local status, err = xpcall(function() f2(address, len, t) end, msgh)
         end
-        
-        
     end
     memory.registerexec(address, len or 1, f)
 end
@@ -155,20 +143,19 @@ registerExec(0xa8fe+2, 1,1,"onRelicCheckAll")
 registerExec(0xf5e2, 7,1,"onWindowPrintChar")
 registerExec(0x87c9,1,1,"onGetGoldenKnife")
 registerExec(0x87cf,1,1,"onGetSacredFlame")
-
 registerExec(0x88b5+3,1,1,"onSetWhipHitbox1")
 registerExec(0x88ba+3,1,1,"onSetWhipHitbox2")
-
 registerExec(0x88fc,1,1,"onSetHitboxCollision1")
 registerExec(0x8916,1,1,"onSetHitboxCollision2")
-
 registerExec(0xea52+2,7,1,"onLoadTileSquareoid")
-
-
 registerExec(0xc559+2,7,1,"onSetStartingHearts")
-
 registerExec(0x828f+2,1,1,"onCreateHeart")
 registerExec(0x82a5+2,1,1,"onCreateHeartChance")
+registerExec(0x8c71,1,1,"onSetHitbox")
+registerExec(0xd354,7,1,"onSetSpikeDamage")
+registerExec(0xc3ad+2,7,1,"onSetGameStartDelay")
+
+registerExec(0xce28+2,7,1,"onTalk")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -874,3 +861,53 @@ function _onCreateHeartChance(address,len,t)
         end
     end
 end
+
+
+function _onSetHitbox(address,len,t)
+    if type(onSetHitbox)=="function" then
+        local yOffset,xRad,yRad = onSetHitbox(memory.readbyte(0x03ba+t.x-6), t.x-6, memory.readbytesigned(0x08), memory.readbyte(0x0a), memory.readbyte(0x09))
+        if yOffset then memory.writebytesigned(0x08, yOffset) end
+        if xRad then memory.writebyte(0x0a, xRad) end
+        if yRad then memory.writebyte(0x09, yRad) end
+    end
+end
+
+
+function _onSetSpikeDamage(address,len,t)
+    if type(onSetSpikeDamage)=="function" then
+        local a = onSetSpikeDamage(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSetGameStartDelay(address,len,t)
+    if type(onSetGameStartDelay)=="function" then
+        local a = onSetGameStartDelay(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onTalk(address,len,t)
+    if type(onTalk)=="function" then
+        local ret
+        if t.p == bit.bor(t.p, 0x02) then
+            ret = onTalk(false)
+        else
+            ret = onTalk(true)
+        end
+        
+
+        -- need to check for nil specifically here
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x02)-2
+            else
+                t.p = bit.bor(t.p, 0x02)
+            end
+            memory.setregister("p", t.p)
+        end
+
+
+    end
+end
+

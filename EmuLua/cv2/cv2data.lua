@@ -458,6 +458,14 @@ cv2.map = {
         {x=0xfc, y=0x8f, text="Denis\n Marsh"},
         {x=0xf3, y=0x7d, text="East Bridge"},
         {x=0x57, y=0x9e, text="Vrad Mountain"},
+        {x=0x0f, y=0x34, text="Sadam\n Woods"},
+        {x=0x3f, y=0x1f, text="Ondal"},
+        {x=0x44, y=0x35, text="Jam\n Wasteland"},
+        {x=0x63, y=0x16, text="Deborah\n Cliff"},
+        {x=0x94, y=0x2c, text="Doina"},
+        {x=0x8d, y=0x15, text="Wicked\n Ditch"},
+        {x=0xb7, y=0x1f, text="Bodley\n Mansion"},
+        {x=0xb7, y=0x3b, text="North Bridge"},
     }
 }
 

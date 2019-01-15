@@ -264,6 +264,11 @@ local items = {
         pierce = 100,
         desc = "A small dagger that once \nbelonged to a noble thief.",
     },
+    {
+        name = "Dummy Armor",
+        desc = "This is just here to help set the palette back when the game resets.",
+        palette = {0x0f, 0x15, 0x26, 0x16},
+    },
 }
 
 

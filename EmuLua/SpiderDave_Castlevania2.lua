@@ -51,6 +51,7 @@
 --  * Cheats
 --  * Frame tester
 --  * Bat mode
+--
 -- ToDo/Issues/Bugs:
 --  * Snakes should turn before jumping
 --  * Ferryman shouldn't bounce off the dock and leave
@@ -81,15 +82,13 @@
 --  * finish map labels
 --  * make spikes kill you completely
 --  * allow different configs for different save slots
---  * starting a new game sometimes shows the wrong tunic color
 --  * skeletons sometimes throw bones from below you when they are above -- wrong bone placement
---  * skeletons throw bones while stunned.
 --  * make it so when you get hit on stairs, you don't get knocked off.
 --     - started work on it, buggy.
 --  * create a town warp for debugging
 --  * audit/test getting all items
 --  * rework all memory.registerexec functions to use custom callbacks.  safer, better.
---     - did some of them
+--     - did most of them
 --  * add confirmation of equipping an item (sound, flash, etc)
 --  * make it so when hands hit you you don't get knocked back.
 --  * prevent talking to npcs in the air
@@ -101,18 +100,11 @@
 --  * restore hp after boss (or getting dracula relic?)
 --  * fix it so jumping into sideways spikes doesn't just make you stand on them.
 --  * animate water
---  * remove water in towns.
 --  * add ability to stand up during early part of ducking whip
 --  * level up toast should go on top of everything else
 --  * fix bug where you can whip through edge of screen and break blocks on the other side.
---  * add candles
---    - added some of them
 --  * adjust spawn point at top of screen so enemies don't appear behind the hud.
 --  * bug: getting hit by custom hit object affects block velocity
---  * bug: some hidden books in berkely mansion give game over
---  * bug: incorrect next amount
---  * bug: (real) hearts are collectable still if you're fast enough.  This can trigger level ups.
---  * bug: can cancel day by holding up as it happens
 
 require ".Spidey.TSerial"
 
@@ -182,6 +174,9 @@ game.map.height = 237
 game.map.visible=false
 game.saveSlot = 1
 game.romUndo = game.romUndo or {index={}}
+
+game.showSaveMenu = false
+game.saveCursor = 0
 
 game.film = {
     scroll = 0,
@@ -257,11 +252,30 @@ game.debugMenuItems = {
     {tab="-cheats", text=function() return "Save Game - slot "..game.saveSlot end, action=function()
         saveGame(game.saveSlot)
     end},
-    {tab="debug", text="sfxtest", action=function()
-        sound:play("getMoneyBag")
-    end},
     {tab="debug", text="Warp", action=function()
         game.setDebugMenuTab("warp")
+    end},
+    {tab="debug", text="left click action", action=function()
+        game.setDebugMenuTab("leftclick")
+    end},
+    {tab="leftclick", text="Falling Blocks", action=function()
+        config.leftClick = "fallingBlocks"
+    end},
+    {tab="leftclick", text="Item Pop-up", action=function()
+        config.leftClick = "itemPopUp"
+    end},
+    {tab="leftclick", text="Level up", action=function()
+        config.leftClick = "levelup"
+    end},
+    {tab="debug", text="time", action=function()
+        game.setDebugMenuTab("time")
+    end},
+    {tab="debug", text="day/night test", action=function()
+        memory.writebyte(0x002c, 0x06) -- day/night toggle thing
+        memory.writebyte(0x0088, 0x01) -- day/night toggle counter
+    end},
+    {tab="debug", text="sfxtest", action=function()
+        sound:play("getMoneyBag")
     end},
     {tab="debug", text=function() return "Candle Edit Mode "..(config.editCandles and "on" or "off") end, action=function()
         config.editCandles = not config.editCandles
@@ -317,8 +331,13 @@ for i,w in ipairs(game.data.warps or {}) do
     end}
 end
 
-
-
+--6:00 day 18:00 night
+for i=0,23 do
+    game.debugMenuItems[#game.debugMenuItems+1]={tab="time", text = string.format("%02d:00",i), action = function()
+        memory.writebyte(0x0086, tonumber(string.format("%02d",i),16)) -- time1
+        memory.writebyte(0x0085, 0x00) -- time2
+    end}
+end
 
 for i=1,#game.debugMenuItems do
     game.debugMenuItems[i].index = i
@@ -979,6 +998,7 @@ objects.boss={}
 objects.player.gold = 0
 objects.player.maxHearts = config.maxHearts or 99
 objects.player.clues = {}
+objects.player.loop = 0
 
 for i=0,objects.count-1 do
     objects[i]={}
@@ -1154,6 +1174,50 @@ function setenemydata(objnum,edata)
     end
 end
 
+function newGamePlus()
+    itemList = {}
+    objects.player.hearts = config.hearts or 5
+    objects.player.maxHearts = config.maxHearts or 99
+    objects.player.lives = config.lives
+    objects.player.hp = objects.player.maxHp
+    objects.player.level = 0
+    memory.writebyte(0x0086, 0x12) -- time1
+    memory.writebyte(0x0085, 0x00) -- time2
+    relics.main = 0
+    relics.list = {}
+    relics.on = {}
+    subScreen.relic = 0
+    relics.current = 0
+    weapons.current = 0
+    objects.player.gold = 0
+    objects.player.items = 0
+    objects.player.exp = 0
+    objects.player.laurels = 0
+    objects.player.garlic = 0
+    area1 = 0
+    area2 = 0
+    area3 = 0
+    areaFlags = 0
+    returnArea = 0
+    returnScroll1 = 0
+    returnScroll2 = 0
+    returnX = 0
+    returnY = 0
+    
+    getItem("Red Plate", false)
+    getItem("Leather Whip", false)
+    
+    getItem("Charm", false)
+    
+    setArmor(items.index["Red Plate"])
+    setWhip(items.index["Leather Whip"])
+    setWeapon(0)
+    setAccessory(items.index["Charm"])
+    objects.player.clues = {}
+    objects.player.loop = objects.player.loop + 1
+    memory.writebyte(0x7619, objects.player.loop)
+end
+
 function saveGame(slot)
     slot = slot or 1
     
@@ -1201,6 +1265,7 @@ function saveGame(slot)
         accessory=objects.player.accessory,
         itemList = itemList2,
         clues = objects.player.clues,
+        loop = objects.player.loop
     }
     
     local t= TSerial.pack(saveData)
@@ -1208,7 +1273,7 @@ function saveGame(slot)
     if game.saveCache then
         game.saveCache[game.saveSlot] = nil
     end
-    emu.message("saved. "..game.saveSlot)
+    emu.message("saved. "..slot)
 end
 
 function getGameSaveData(slot)
@@ -1268,6 +1333,7 @@ function loadGame(slot, setArea)
     returnY = saveData.returnY
     
     objects.player.clues = saveData.clues or {}
+    objects.player.loop = saveData.loop or 0
     
     --subScreen.relic = relics.current
     
@@ -1557,7 +1623,7 @@ function getExtraData()
 --        setRelicState("whiteCrystal", true)
 --        setRelicState("blueCrystal", true)
         itemList = {
-            {name = "Red Tunic"},
+            {name = "Red Plate"},
         }
         
         for i = 0, objects.player.whip do
@@ -1573,26 +1639,32 @@ function getExtraData()
         objects.player.gold = 50
         memory.writeword(0x7000+1, objects.player.gold)
         
+        if game.saveSlot <0 then game.saveSlot = 0 end
         memory.writebyte(0x7400, game.saveSlot)
         --if game.saveSlot == 0 then emu.pause() end
         --emu.message(string.format("%02x %02x",game.saveSlot,memory.readbyte(0x7400)))
         --emu.message(game.saveSlot)
+
+        objects.player.loop = 0
+        memory.writebyte(0x7619, objects.player.loop)
     end
     objects.player.gold = memory.readword(0x7000+1)
-    --0x7000+3 = msgMode
-    --0x7000+4 = msgChoice
-    --0x7000+10 = armor
-    --0x7000+11 = whip
-    --0x7000+12 = weapon
-    --0x7000+13 = accessory
-    --0x7000+14 = (reserved / accessory2)
-    --0x7000+20 to 0x7000+27 = relics list
-    --0x7000+30 to 0x7000+37 = relics on/off state
+    --0x7003 = msgMode
+    --0x7004 = msgChoice
+    --0x700a = armor
+    --0x700b = whip
+    --0x700c = weapon
+    --0x700d = accessory
+    --0x700e = (reserved / accessory2)
+    --0x7014 to 0x701b = relics list
+    --0x701e to 0x7025 = relics on/off state
     --0x7200 to 0x73ff items
     --0x7400 = save slot
     --0x7401 to 0x740e = clues
+    --0x7410 reset counter
     --0x7500 sfx thing
-    --0x7600 enemy alivetime counters (two bytes each, 12 of them)
+    --0x7600 to 0x7618 enemy alivetime counters (two bytes each, 12 of them)
+    --0x7619 game loop
     
     for i,v in ipairs(cv2data.relics) do
         if memory.readbyte(0x7000+20+i-1)==1 then
@@ -1667,13 +1739,13 @@ function getExtraData()
         objects.player.clues[i] = (memory.readbyte(0x7400+i)~=0)
     end
     
+    objects.player.loop = memory.readbyte(0x7619)
 end
 
 function setArmor(n)
     objects.player.armor = n or objects.player.armor
     if (objects.player.armor or 0) == 0 then
         objects.player.armor = items.index["Red Plate"]
-        if not items.index["Red Plate"] then emu.pause() end
     end
     
     memory.writebyte(0x7000+10, objects.player.armor or 0)
@@ -2542,6 +2614,39 @@ end
 --    return false
 --end
 
+function onTalk(t)
+    -- Can only talk to NPCs when standing or walking.
+    if objects.player.state > 1 then return false end
+end
+
+function onSetSpikeDamage(d)
+    -- change spike damage from 0x10 to maxhp/6
+    return math.floor(objects.player.maxHp/6)
+end
+
+function onSetHitbox(enemyType, enemyIndex, yOffset, xRadius, yRadius)
+    -- set hitbox for flea men
+    if cv2data.enemies[enemyType].name == "High Jump Blob" and not inMansion then
+        --spidey.message("%02x %02x %02x",yOffset, xRadius, yRadius)
+        yOffset = 0
+        xRadius = 6
+        yRadius = 9
+    end
+    
+--    if not objects[enemyIndex] then return end
+--    local o = objects[enemyIndex]
+--    gui.drawbox(o.x-xRadius,o.y-yRadius+yOffset,o.x+xRadius,o.y+yRadius+yOffset, "#807070c0", "#807070ff")
+    
+--    if enemyType==0x35 then
+--        spidey.message(yOffset)
+--        yOffset=yOffset+13
+--        yRadius = 0
+--    end
+    
+    return yOffset, xRadius, yRadius
+end
+
+
 function onLoadTileSquareoid(t,x,y)
     --spidey.message("%s %s",inTown and "yes" or "no",inDoor and "yes" or "no")
     
@@ -2680,8 +2785,9 @@ end
 -- set mode to 0 on continue screen which freezes it.
 function onContinueScreen()
     memory.writebyte(0x19,0x00)
-    if memory.readword(0x7401)==0 then
-        memory.writeword(0x7401,0x190)
+    -- reset counter
+    if memory.readword(0x7410)==0 then
+        memory.writeword(0x7410,0x190)
     end
 end
 
@@ -3774,7 +3880,6 @@ function onSetJumpSpeedX(v)
 end
 
 function onSetJumpSpeedY(v, onPlatform)
-    -- This should be 0xfc but it doesn't look right, but 0xfb does.
     if config.platformVelocityFix then
         if objects.player.platformIndex then
             -- Cancel x velocity of jumping straight up on a platform.
@@ -3878,14 +3983,6 @@ function onExpForLevel2(e)
     return tonumber(string.format("%02d",(e - e % 100) / 100),16)
 end
 
--- Fix level in sub screen so it displays decimal, not hex
---memory.registerexec(0xf13f+2,1, function(address)
---        local a,x,y,s,p,pc=memory.getregisters()
---        a = tonumber(string.format("%02d",a),16)
---        memory.setregister("a",a)
---end)
-
-
 -- intercept getting pointer to level data stuff
 --local f = function(address)
 --    local a,x,y,s,p,pc=memory.getregisters()
@@ -3915,12 +4012,12 @@ function onSetPlayerLevelDataPointer(low, high)
 end
 
 -- change solid blocks (not visually)
--- *disabled* (second parameter is 0)
---memory.registerexec(0xe8a2,0, function()
+--memory.registerexec(0xe8a2,1, function()
 --    local a,x,y,s,p,pc=memory.getregisters()
 --    local address = memory.readbyte(0x0a)+y
     --aa = block, ac=swamp ad=some are breakable
---    if a==0xaa then a=0xae end
+    --if a==0xaa then a=0xae end
+    
 --    a=0
     
 --    memory.setregister("a",a)
@@ -3975,9 +4072,6 @@ function onPlaceStageTile(tile)
 
 --    if tile==0xe1 then tile=0xe7 end
 --    if tile==0xe2 then tile=0xe7 end
-
-
-    
 end
 
 
@@ -4236,7 +4330,6 @@ memory.registerexec(0xd7ad,1, function()
     if a==0x06 then
         memory.writebyte(0x002c, 0x06) -- day/night toggle thing
         memory.writebyte(0x0088, 0x01) -- day/night toggle counter
-
 --        a=0
 --        emu.message("day")
 --        day = math.min(99, day+1)
@@ -4320,6 +4413,7 @@ function onVBlank()
             memory.writebyteppu(0x3f10, objects.player.palette[1])
             memory.writebyteppu(0x3f11, objects.player.palette[2])
             memory.writebyteppu(0x3f12, objects.player.palette[3])
+            memory.writebyteppu(0x3f13, objects.player.palette[4])
             game.applyPlayerPalette = false
         end
     end
@@ -4387,11 +4481,10 @@ end)
 
 
 -- Modify time to start game after pressing start on mode select
-memory.registerexec(0xc3ad+2,1, function()
-    local a,x,y,s,p,pc=memory.getregisters()
-    a=0x30
-    memory.setregister("a",a)
-end)
+function onSetGameStartDelay(delay)
+    delay=0x30
+    return delay
+end
 
 -- title tm text
 memory.registerexec(0xc6f5+2,1, function()
@@ -4442,8 +4535,9 @@ memory.registerexec(0xc127,1, function()
     
     if a == 0x0e and objects.player.whipItem == items.index["Thief's Dagger"] then a=0x11 end
     
+    
     -- Remove blob sfx if in camilla cemetary
-    if a == 0x0b and displayarea=="Camilla Cemetery" then a=0x62 end
+    if a == 0x0b and not inMansion then a=0x62 end
     
     -- Change Golden Knife sound effect
     if a == 0x13 then a=0x11 end
@@ -4618,7 +4712,7 @@ function romPatch()
     end
     
     -- This adds a little patch that makes it so when you poke a value
-    -- to 0x7500 it plays a sound effect.  Currently it only works in game.
+    -- to 0x7500 it plays a sound effect.
     --put 1ce0e 20edfe
     --put 1feed 203a86  48 ad0075 f008  2018c1 a900 8d0075  68 60
     rom_writebytes(0x1c08a+0x10, spidey.hex2bin("20edfe"))
@@ -4696,6 +4790,13 @@ emu.registerexit(function(x)
 
 end)
 
+function spidey.reset()
+    setArmor(items.index["Dummy Armor"])
+    --setArmor(items.index["Night Armor"])
+    --objects.player.armor=false
+end
+spidey.reset2=spidey.reset
+
 function spidey.update(inp,joy)
     hitboxes.update()
     lastinp=inp
@@ -4755,7 +4856,7 @@ function spidey.update(inp,joy)
     game.mode2=memory.readbyte(0x00aa)
     game.modeCursor=memory.readbyte(0x23) -- start or continue
     game.modeCounter =memory.readbyte(0x002a)
-    game.resetCounter = memory.readword(0x7401)
+    game.resetCounter = memory.readword(0x7410)
     
     game.paused=(memory.readbyte(0x0026)==02)
     pausemenu=(memory.readbyte(0x0026)==01)
@@ -4807,7 +4908,7 @@ function spidey.update(inp,joy)
     if cv2data.weapons[weapons.current] then
         weapons.currentname=cv2data.weapons[weapons.current].name
     end
-    night=(memory.readbyte(0x0082)==0x01)
+    night = (memory.readbyte(0x0082)==0x01)
     borderColor = "#0070ec"
     if night then borderColor = "#24188c" end
     
@@ -4868,9 +4969,13 @@ function spidey.update(inp,joy)
         if game.credits.show then
             endingCountDown = 2
         elseif game.credits.done then
-            endingCountDown = 1
-            -- Need to draw over this one frame so we don't see a flash of ending before reset
-            gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
+            if game.showSaveMenu then
+                endingCountDown = 2
+            else
+                endingCountDown = 1
+                -- Need to draw over this one frame so we don't see a flash of ending before reset
+                gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
+            end
         elseif endingCountDown == 1 then
             game.credits.show = true
             game.credits.y = 0
@@ -4884,16 +4989,37 @@ function spidey.update(inp,joy)
         queueSound(0x3d)
     end
     
+    if game.showSaveMenu then
+        gui.drawbox(0, 0, spidey.screenWidth-1, spidey.screenHeight-1, "black", "black")
+        --gui.drawbox(8*5,8*10,8*20,8*15,"black","black")
+        drawfont(8*6,5+8*10,font[current_font], "Save?")
+        drawfont(8*9,5+8*12,font[current_font], "Yes   No")
+        if ((spidey.counter %4<3) or config.noBlinkCursor) then
+            gfx.draw(8*9-8-4 +(8*6)*game.saveCursor,5+8*12,gfx.arrowcursorRight)
+            --gui.drawbox(x+28+(subScreen.cursorX*16-16)-2,y+28+8*8-2+16*subScreen.cursorY,x+28+(subScreen.cursorX*16-16)+8+1,y+28+8*8+8+1+16*subScreen.cursorY,"clear","blue")
+        end
+        if joy[1].right_press_repeat or joy[1].left_press_repeat then
+            game.saveCursor = (game.saveCursor +1) % 2
+            queueSound(0x05)
+        end
+        if joy[1].confirm_press then
+            if game.saveCursor == 0 then
+                newGamePlus()
+                saveGame(game.saveSlot)
+            end
+            game.showSaveMenu = false
+        end
+    end
     
     if game.mode==0x00 and game.resetCounter > 0 then
         game.resetCounter = game.resetCounter - 1
-        memory.writeword(0x7401, game.resetCounter)
+        memory.writeword(0x7410, game.resetCounter)
         gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"black","black")
         drawfont(8*11,8*13,font[current_font], "GAME OVER" )
         --drawfont(8*11,8*15,font[current_font], string.format("%d",game.resetCounter))
         if game.resetCounter == 0 or (game.resetCounter < 70 and joy[1].start_press)then
             game.resetCounter = 0
-            memory.writeword(0x7401, game.resetCounter)
+            memory.writeword(0x7410, game.resetCounter)
             emu.softreset()
             --emu.poweron()
             emu.message("") -- suppress the "reset" message
@@ -4931,10 +5057,12 @@ function spidey.update(inp,joy)
                 end
                 
                 --gui.text(20,50,string.format("Simon Level %d %s",s.level+1, displayarea))
-
+                
+                local loopText = ""
+                if (s.loop or 0) > 0 then loopText = " loop "..s.loop end
                 gui.drawbox(x,y,x+8*30,y+8*4,"black",borderColor)
                 gui.drawbox(x-1,y+1,x+8*30+1,y+8*4-1,"clear",borderColor)
-                drawfont(x+8*1,y+8,font[current_font], string.format("%d. Simon Level %d\n   Day %d %s",game.saveSlot, s.level+1,s.day+1, displayarea) )
+                drawfont(x+8*1,y+8,font[current_font], string.format("%d. Simon Level %d\n   Day %d %s %s",game.saveSlot, s.level+1,s.day+1, displayarea, loopText) )
 
                 -- draw relics
                 for i=1,8 do
@@ -5231,6 +5359,12 @@ function spidey.update(inp,joy)
         end
         if joy[1].left_press_repeat and game.saveSlot>1 then
             game.saveSlot = math.max(1,game.saveSlot-1)
+            queueSound(0x05)
+        end
+
+        if joy[1].up_press or joy[1].down_press then
+            -- Allow menu selection with up/down
+            memory.writebyte(0x0023, (memory.readbyte(0x0023)+1) % 2)
             queueSound(0x05)
         end
     end
@@ -5800,6 +5934,7 @@ function spidey.update(inp,joy)
             objects[i].ydist=math.abs(objects.player.y-objects[i].y)
             objects[i].facingplayer=((objects[i].x<objects.player.x and objects[i].facing==1) or (objects[i].x>objects.player.x and objects[i].facing==0))
             objects[i].hp=memory.readbyte(0x04c8+i) --note: if hp==0, it can't be hit
+            objects[i].message=memory.readbyte(0x04da+i) --note: merchant messages use different values.
             
             if objects[i].carrying == 0xff then
                 -- platform is carrying Simon
@@ -5956,11 +6091,9 @@ function spidey.update(inp,joy)
             
             local frame = math.floor(spidey.counter /7) % 2+1
             --gfx.draw(objects[i].x, objects[i].y-8, gfx.fleaman[objects[i].facing % 2][frame])
-            gfx.draw(objects[i].x, objects[i].y-9, gfx.fleaman[1-(objects[i].facing % 2)+1][frame])
-
-            
-            --gfx.draw(objects[i].x, objects[i].y, gfx.fleaman[1])
-        
+            if this.show then
+                gfx.draw(objects[i].x-8, objects[i].y-9, gfx.fleaman[1-(objects[i].facing % 2)+1][frame])
+            end
         elseif this.name == "Death" then
 --            objects[i].y=objects[i].y+math.cos((spidey.counter+80*i) *.046)*.6
 --            objects[i].x=objects[i].x+math.sin((spidey.counter+80*i) *.036)*.6
@@ -6415,6 +6548,10 @@ function spidey.update(inp,joy)
             memory.writebyte(0x03de+i,objects[i].team)
         end
         
+        if objects[i].type==0x47 then -- Dracula
+            objects.player.inBossRoom=true
+            objects.boss.maxHp=cv2data.enemies[this.type].hp
+        end
         if objects[i].type==0x47 and config.draculaAI then -- Dracula
             objects.dracula = objects.dracula or {}
             
@@ -6685,6 +6822,24 @@ function spidey.update(inp,joy)
         end
     end
     
+    
+    if config.leftClick =="fallingBlocks" and inp.leftbutton_press then
+        local x,y
+        y=0x2d
+        local blocks={}
+        for i=1,8 do
+            x=math.random(0,15)*16
+            y=0x32-math.random(0,10)
+            if not blocks[x] then
+                local obj = createObject("fallingblock",x+scrollx, y+scrolly)
+                obj.delaySpawn = i*10
+                blocks[x] = true
+            end
+        end
+        queueSound(0x6) --rumble
+        --local obj = createObject("fallingblock",inp.xmouse+scrollx, inp.ymouse+scrolly)
+    end
+    
     if cheats.active and (cheats.battest or cheats.leftClick == "battest") and inp.leftbutton_press then
         local i=getunusedcustom()
         if (i) then
@@ -6746,11 +6901,11 @@ function spidey.update(inp,joy)
     --if inp.leftbutton_press then game.applyNight=true end
     
     --cheats.leftClick="itemPopUp"
-    if cheats.active and inp.leftbutton_press and cheats.leftClick=="itemPopUp" then
+    if inp.leftbutton_press and config.leftClick=="itemPopUp" then
         createItemPopUp()
     end
     
-    if cheats.active and inp.leftbutton_press and cheats.leftClick=="levelup" then
+    if inp.leftbutton_press and config.leftClick=="levelup" then
     --if inp.leftbutton_press then
         createLevelUpText()
         playSound(0x27)
@@ -7006,6 +7161,35 @@ function spidey.update(inp,joy)
 --                            memory.writebyte(0x7100+i*2+1, itemAmount)
 --                        end
                 end
+            elseif this.type == "fallingblock" then
+                if this.aliveTime - this.delaySpawn == 1 then
+                    this.ys = .05
+                end
+                this.ys=math.min(5,this.ys*1.12)
+                gfx.draw(this.x-scrollx-8, this.y-scrolly-8, gfx.block)
+                
+                if this.xdist<12 and this.ydist<10 then
+                    this.hurtTimer=15
+                    hurtplayer(0x0a)
+                end
+
+                
+                local x=objects.custom[i].x-scrollx
+                local y=objects.custom[i].y-scrolly
+                local rect = {x-5,y-4-8,x+9,y+7-4}
+                objects.custom[i].hitbox = rect
+                
+                if this.y-scrolly>0xc6 then
+                    this.y=0xc6+scrolly
+                    this.ys=0
+                    this.destroy=true
+                    local obj = createObject("poof",this.x-8, this.y-4)
+                    queueSound(0xc)
+                end
+                
+--                memory.writebyte(0x0056,spidey.counter % 3)
+--                memory.writebyte(0x0057,1)
+                
             elseif objects.custom[i].type=="poof" then
                 local x,y=objects.custom[i].x-scrollx+1, objects.custom[i].y-scrolly
                 if objects.custom[i].alivetime<0x0e then 
@@ -7878,6 +8062,15 @@ function spidey.draw()
                 end
             end
         end
+    
+    
+        -- fixes issue where you can use a door to cancel day.
+        if time == "06:00" and inDoor and night then
+            memory.writebyte(0x0082, 0)
+            night = false
+--            memory.writebyte(0x002c, 0x06) -- day/night toggle thing
+--            memory.writebyte(0x0088, 0x01) -- day/night toggle counter
+        end
     end
     
     if action and (config.hitboxes or spidey.debug.enabled) then
@@ -7937,6 +8130,7 @@ function spidey.draw()
         if game.credits.y>=0x2d0 then
             game.credits.show=false
             game.credits.done=true
+            game.showSaveMenu=true
         end
         
     end
