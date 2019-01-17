@@ -269,6 +269,10 @@ local items = {
         desc = "This is just here to help set the palette back when the game resets.",
         palette = {0x0f, 0x15, 0x26, 0x16},
     },
+    {
+        name = "1up",
+        type = "1up",
+    },
 }
 
 

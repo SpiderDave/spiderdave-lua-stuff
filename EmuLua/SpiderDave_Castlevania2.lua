@@ -249,6 +249,9 @@ game.debugMenuItems = {
     {tab="cheats", text=function() return "No Enemies "..(config.noEnemies and "on" or "off") end, action=function()
         config.noEnemies = not config.noEnemies
     end},
+    {tab="cheats", text=function() return string.format("Level %d", objects.player.level) end, action=function()
+        game.setDebugMenuTab("level")
+    end},
 
     {tab="-cheats", text=function() return "Save Slot "..game.saveSlot end, action=function()
     end},
@@ -345,6 +348,19 @@ for i=0,23 do
         memory.writebyte(0x0085, 0x00) -- time2
     end}
 end
+
+for i = 1, 99 do
+    game.debugMenuItems[#game.debugMenuItems+1]={tab="level", text = string.format("%d",i), action = function()
+        objects.player.level = i
+        memory.writebyte(0x008b, objects.player.level)
+        -- reset exp for this level
+        objects.player.exp = 0
+        memory.writebyte(0x47, 0)
+        memory.writebyte(0x46, 0)
+        game.setDebugMenuTab("cheats")
+    end}
+end
+
 
 for i=1,#game.debugMenuItems do
     game.debugMenuItems[i].index = i
@@ -1474,13 +1490,19 @@ function getItem(n, showMessage, delay)
         end
         return
     end
-    
+    --spidey.message(item.type or "")
     if item.type =="gold" then
         sound:play("getMoneyBag")
         objects.player.gold = objects.player.gold+item.gold
         memory.writeword(0x7000+1, objects.player.gold)
         --if showMessage then emu.message(string.format("you got %d gold.", item.gold or 0)) end
         if showMessage then createItemPopUp(string.format("%d gold",item.gold or 0)) end
+        return
+    elseif item.type == "1up" then
+        sound:play("1up")
+        objects.player.lives = objects.player.lives+1
+        memory.writebyte(0x0031, objects.player.lives)
+        if showMessage then createItemPopUp("1up") end
         return
     elseif item.type =="food" then
         objects.player.hp=math.min(objects.player.maxHp, objects.player.hp+(item.hp or 1))
@@ -2688,6 +2710,16 @@ function onLoadTileSquareoid(t,x,y)
         if y==6 then t=0x17 end
     end
     
+    --if y==6 and x==0x0a then t=0x34 end
+    --if y==6 and x==0x03 then t=0x34 end
+    
+    --if y==4 and x==0x03 then t=0x30 end
+    
+--    if y==5 and x==0x0d then spidey.message("%02x",t) end
+    
+--    if y==4 and x==0x0c then t=0x30 end
+    --if x == 0x0a and y==6 then t=0x34 end
+    
     -- drac room edits
 --    if y<5 and x==0 then t=0 end
 --    if y<=5 and x==7 then t=0 end
@@ -3499,17 +3531,21 @@ function onCreateEnemy(enemyIndex,enemyType)
 end
 
 function onCreateHeart(enemyIndex,enemyType)
---    local x = objects[enemyIndex].x + scrollx
---    local y = objects[enemyIndex].y + scrolly
+    --local x = objects[enemyIndex].x + scrollx
+    --local y = objects[enemyIndex].y + scrolly
     
---    local obj = createObject("item", x, y)
---    obj.floor = y
---    obj.itemName = "Gold"
     --return enemyType
 end
 
 function onCreateHeartChance(createHeart)
     createHeart = false
+    
+    if math.random(1,config['1upChance'] or 10000)==1 then
+--        local obj = createObject("item", x, y)
+--        obj.floor = y
+--        obj.itemName = "1up"
+    end
+    
     return createHeart
 end
 
@@ -3767,6 +3803,7 @@ function createBoomerang(x,y)
 end
 
 function createMedusaHead()
+    if config.noEnemies then return end
     local x,y
     
     y=scrolly+objects.player.y-0x20
@@ -4092,6 +4129,7 @@ function onPlaceStageTile(tile)
 
 --    if tile==0xe1 then tile=0xe7 end
 --    if tile==0xe2 then tile=0xe7 end
+
 end
 
 
@@ -7185,13 +7223,34 @@ function spidey.update(inp,joy)
                 --gfx.draw(objects.custom[i].x-scrollx-4, objects.custom[i].y-scrolly+8, objects.custom[i].gfx or gfx.items.bag)
                 
                 local xo,yo = -2,-6
-                if item.type=="gold" then 
+                if item.type=="gold" then
                     objects.custom[i].gfx = gfx.moneybag
                     xo=-2
                     yo=-10
                 end
+                if item.type=="1up" then
+                    objects.custom[i].gfx = gfx.moneybag
+                    xo=-2
+                    yo=0
+                end
                 
-                gfx.draw(objects.custom[i].x-scrollx+xo, objects.custom[i].y-scrolly+yo, objects.custom[i].gfx or gfx.items.bag)
+                if item.type=="1up" then
+                    local c = 0x16+ math.floor(spidey.counter / 2) % 3
+                    gui.drawtext(objects.custom[i].x-scrollx+xo+1, objects.custom[i].y-scrolly+yo, " up", spidey.nes.palette[c], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo-1, objects.custom[i].y-scrolly+yo, " up", spidey.nes.palette[c], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo, objects.custom[i].y-scrolly+yo-1, " up", spidey.nes.palette[c], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo, objects.custom[i].y-scrolly+yo+1, " up", spidey.nes.palette[c], "clear")
+
+                    gui.drawtext(objects.custom[i].x-scrollx+xo+1+1, objects.custom[i].y-scrolly+yo, "1", spidey.nes.palette[c], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo-1+1, objects.custom[i].y-scrolly+yo, "1", spidey.nes.palette[c], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo+1, objects.custom[i].y-scrolly+yo-1, "1", spidey.nes.palette[c], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo+1, objects.custom[i].y-scrolly+yo+1, "1", spidey.nes.palette[c], "clear")
+
+                    gui.drawtext(objects.custom[i].x-scrollx+xo, objects.custom[i].y-scrolly+yo, " up", spidey.nes.palette[0x20], "clear")
+                    gui.drawtext(objects.custom[i].x-scrollx+xo+1, objects.custom[i].y-scrolly+yo, "1", spidey.nes.palette[0x20], "clear")
+                else
+                    gfx.draw(objects.custom[i].x-scrollx+xo, objects.custom[i].y-scrolly+yo, objects.custom[i].gfx or gfx.items.bag)
+                end
                 
                 if objects.custom[i].xdist <= 12 and objects.custom[i].ydist <= 12 then
                     objects.custom[i].destroy = 1
@@ -8018,7 +8077,7 @@ function spidey.update(inp,joy)
             memory.writebyte(0x0091,0xff) --stuff (relics row)
             memory.writebyte(0x0092,0xff) --stuff
             for k,item in ipairs(items) do
-                if item.type =="food" or item.type=="gold" or item.type=="bag" then
+                if item.type =="food" or item.type=="gold" or item.type=="bag" or item.type=="1up" then
                     -- don't get non-carry items
                 elseif not hasInventoryItem(item.name) then
                     getItem(item.name)

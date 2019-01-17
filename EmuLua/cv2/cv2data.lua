@@ -784,7 +784,8 @@ cv2.medusaHeads = {
 }
 
 cv2.sounds = {
-    getMoneyBag = "cv1/23.wav"
+    getMoneyBag = "cv1/23.wav",
+    ['1up'] = "cv1/36.wav",
 }
 
 

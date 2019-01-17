@@ -130,3 +130,5 @@ button_cancel = A
 
 // re-fight bosses if true
 //refightBosses=true
+
+1upChance = 10000
