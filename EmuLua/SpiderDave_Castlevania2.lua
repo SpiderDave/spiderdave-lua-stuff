@@ -249,7 +249,7 @@ game.debugMenuItems = {
     {tab="cheats", text=function() return "No Enemies "..(config.noEnemies and "on" or "off") end, action=function()
         config.noEnemies = not config.noEnemies
     end},
-    {tab="cheats", text=function() return string.format("Level %d", objects.player.level) end, action=function()
+    {tab="cheats", text=function() return string.format("Level %d", objects.player.level+1) end, action=function()
         game.setDebugMenuTab("level")
     end},
 
@@ -352,7 +352,7 @@ end
 for i = 1, 99 do
     game.debugMenuItems[#game.debugMenuItems+1]={tab="level", text = string.format("%d",i), action = function()
         objects.player.level = i
-        memory.writebyte(0x008b, objects.player.level)
+        memory.writebyte(0x008b, objects.player.level-1)
         -- reset exp for this level
         objects.player.exp = 0
         memory.writebyte(0x47, 0)
@@ -2650,8 +2650,45 @@ end
 --    return false
 --end
 
+-- this works when objects are erased completely, not
+-- when they're turned into a fire poof.
+function onDestroyObject(enemyType, enemyIndex)
+    if screenload then return end
+    local e = cv2data.enemies[enemyType] or {}
+    if e.name=="Death" then
+        local x = objects[enemyIndex].x+scrollx
+        local y = objects[enemyIndex].y+scrolly
+        for i=1,100 do
+            local obj = createObject("poof",x+math.random(-40,40), y+math.random(-40,40))
+            if obj then
+                obj.delay = math.random(0,math.floor(i/2))
+                obj.colorBase = "#200000"
+                if i<30 then
+                    obj.colorBase = "#ff0000"
+                end
+            end
+        end
+    end
+end
+
 function onCreateEnemyFireball(enemyIndex, enemyType)
     memory.writeword(0x7600+2*enemyIndex, 0) -- set enemy aliveTime
+end
+
+function onCreateDeathWeaponCheck(create, counter)
+    --spidey.message(create and "yes" or "no")
+    if objects.player.hp==0 then return false end
+    
+    if objects.boss.obj.throwWeapon then
+        objects.boss.obj.throwWeapon = false
+        return true
+    else
+        return false
+    end
+    
+    
+    if counter % 16==0 and counter > 30 then return true else return false end
+
 end
 
 function onTalk(t)
@@ -3274,7 +3311,10 @@ end
 --)
 
 function onEnemyDamage(i,t,damage)
-
+    if cv2data.enemies[t].name=="Camilla" then
+        setHearts(objects.player.hearts - (1+objects.player.loop*2))
+    end
+    
     if cv2data.enemies[t].name=="Heart" then
         -- Heart's x speed is 1 to indicate it's a reference to a normal 
         -- enemy.  Later we'll add more flags to indicate custom stuff.
@@ -6153,6 +6193,12 @@ function spidey.update(inp,joy)
                 gfx.draw(objects[i].x-8, objects[i].y-9, gfx.fleaman[1-(objects[i].facing % 2)+1][frame])
             end
         elseif this.name == "Death" then
+            objects.boss.obj = this
+            
+--            if this.aliveTime % 0x80 == 0 or this.aliveTime % 0x80 == 0x0e then
+--                this.throwWeapon = true
+--            end
+            
 --            objects[i].y=objects[i].y+math.cos((spidey.counter+80*i) *.046)*.6
 --            objects[i].x=objects[i].x+math.sin((spidey.counter+80*i) *.036)*.6
 --            memory.writebyte(0x0348+6+i,objects[i].x)
@@ -6166,6 +6212,8 @@ function spidey.update(inp,joy)
 --                memory.writebyte(0x04c8+i, objects[i].hp)
 --            end
             
+            --spidey.message("%02x %02x %02x",this.state,this.state2,this.statecounter)
+            
             objects.boss.maxHp = cv2data.enemies[this.type].hp
             
             if hasInventoryItem("Golden Knife") and not refight_bosses then
@@ -6174,8 +6222,14 @@ function spidey.update(inp,joy)
             end
             
             if config.deathAI then
-                if this.aliveTime <= 0x30 then
-                    if this.aliveTime<0x30 then this.stun=1 end
+                this.confine={0x20,0x48, 0xe5,0xa4}
+                
+                if this.aliveTime % 0xa0 < 0x40 and this.aliveTime % 0x12 == 0 and this.y<0x95 then
+                    this.throwWeapon = true
+                end
+
+                if this.aliveTime <= 0x50 then
+                    if this.aliveTime<0x50 then this.stun=1 end
                     memory.writebyte(0x04fe+i,this.stun)
                     this.palette=0
                     memory.writebyte(0x0318+i, this.palette)
@@ -6184,18 +6238,21 @@ function spidey.update(inp,joy)
                         this.y=this.y-1
                         memory.writebyte(0x0324+6+i,objects[i].y)
                     end
+                        --local x,y = this.x-6,this.y-2
+                        --spidey.drawCircle(x+7,y+4,200-this.aliveTime*4, "#ff000060")
+                        --spidey.drawCircle(x+7,y+4,this.aliveTime*2, "#00000030")
+
                 else
                     if this.stun>0 then
                         local x,y = this.x-6,this.y-2
-                        spidey.drawCircle(x+7,y+4,math.max(1,this.stun*3), "#00000060")
+                        spidey.drawCircle(x+7,y+4,math.max(1,this.stun*2-10), "#ff000050")
                     else
                         this.y=this.y+math.cos((this.aliveTime+80) *.046)*.8-.18
                         this.x=this.x+math.sin((this.aliveTime+80) *.036)*.7
 
-                        this.y=this.y+math.cos((this.aliveTime) *.02)*1
-                        this.x=this.x+math.sin((this.aliveTime) *.02)*1
-                        
-                        this.confine={0x20,0x48, 0xe5,0xb2}
+                        this.y=this.y+math.cos((this.aliveTime) *.02)*1*.7
+                        this.x=this.x+math.sin((this.aliveTime) *.02)*1*.6
+
                         memory.writebyte(0x0348+6+i,objects[i].x)
                         memory.writebyte(0x0324+6+i,objects[i].y)
                     end
@@ -6219,10 +6276,10 @@ function spidey.update(inp,joy)
             
             objects.player.bossdoor()
         elseif this.name == "Death hatchet" then
+            --this.destroy = 1
             objects[i].hp=0
             memory.writebyte(0x04c8+i,objects[i].hp)
-
-            objects.player.loop = 2
+            
             -- faster starting at loop==2
             if this.aliveTime==1 and objects.player.loop >= 2 then
                 if this.xs>=0x80 then
@@ -7302,12 +7359,18 @@ function spidey.update(inp,joy)
 --                memory.writebyte(0x0057,1)
                 
             elseif objects.custom[i].type=="poof" then
-                local x,y=objects.custom[i].x-scrollx+1, objects.custom[i].y-scrolly
-                if objects.custom[i].alivetime<0x0e then 
-                    spidey.drawCircle(x+7,y+4,math.max(1,20-objects.custom[i].alivetime*2), string.format("#ffff80%02x",math.max(0,0x3d+spidey.counter % 0x04 - objects.custom[i].alivetime*2) ))
-                end
-                if objects.custom[i].alivetime>0x10 then 
-                    objects.custom[i].die = true
+                this.colorBase = this.colorBase or "#ffff80"
+                if (this.delay or 0) >0 then
+                    this.aliveTime=1
+                    this.delay=this.delay-1
+                else
+                    local x,y=objects.custom[i].x-scrollx+1, objects.custom[i].y-scrolly
+                    if objects.custom[i].alivetime<0x0e then 
+                        spidey.drawCircle(x+7,y+4,math.max(1,20-objects.custom[i].alivetime*2), string.format(this.colorBase.."%02x",math.max(0,0x3d+spidey.counter % 0x04 - objects.custom[i].alivetime*2) ))
+                    end
+                    if objects.custom[i].alivetime>0x10 then 
+                        objects.custom[i].die = true
+                    end
                 end
             elseif this.type=="candle" then
                 --if this.isOnScreen(i) or true then
@@ -7360,7 +7423,7 @@ function spidey.update(inp,joy)
                             else
                                 obj.item = {type="item", x=this.x+4, y=this.y+2, floor=this.floor, itemName=this.item}
                             end
-                        else
+                        elseif obj then
                             obj.item = {type="heart", x=this.x+4, y=this.y+2, floor=this.floor}
                         end
                         --obj.item = {type="item", x=objects.custom[i].x+4, y=objects.custom[i].y+2, floor=objects.custom[i].floor, itemName="Gold"}

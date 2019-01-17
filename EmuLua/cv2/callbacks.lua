@@ -155,8 +155,10 @@ registerExec(0x8c71,1,1,"onSetHitbox")
 registerExec(0xd354,7,1,"onSetSpikeDamage")
 registerExec(0xc3ad+2,7,1,"onSetGameStartDelay")
 registerExec(0xce28+2,7,1,"onTalk")
-
 registerExec(0x8e40+2,1,1,"onCreateEnemyFireball")
+registerExec(0x9e43,1,1,"onCreateDeathWeaponCheck")
+
+registerExec(0xdf4d,7,1,"onDestroyObject")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -916,5 +918,32 @@ function _onCreateEnemyFireball(address,len,t)
     if type(onCreateEnemyFireball)=="function" then
         local a = onCreateEnemyFireball(t.x-6, t.a)
         if a then memory.setregister("a", a) end
+    end
+end
+
+function _onCreateDeathWeaponCheck(address,len,t)
+    if type(onCreateDeathWeaponCheck)=="function" then
+        local ret
+        if t.p == bit.bor(t.p, 0x02) then
+            ret = onCreateDeathWeaponCheck(true, t.a)
+        else
+            ret = onCreateDeathWeaponCheck(false, t.a)
+        end
+
+        -- need to check for nil specifically here
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x02)
+            else
+                t.p = bit.bor(t.p, 0x02)-2
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onDestroyObject(address,len,t)
+    if t.x>=6 and t.a>0 and type(onDestroyObject)=="function" then
+        onDestroyObject(t.a, t.x-6)
     end
 end
