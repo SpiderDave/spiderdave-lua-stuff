@@ -116,6 +116,7 @@ local items=require("cv2.items")
 local util = require("spidey.util")
 require("cv2.callbacks")
 local hitboxes = require("cv2.hitboxes")
+require("cv2.version")
 local config={}
 
 function config.load(filename)
@@ -224,6 +225,12 @@ game.debugMenuItems = {
     end},
     {tab="main", text="Debug", action=function()
         game.setDebugMenuTab("debug")
+    end},
+    {tab="main", text="Version", action=function()
+        game.setDebugMenuTab("version")
+    end},
+    {tab="version", text=string.format("%s %s\n%s",version.date, version.stage, util.trim(version.time)), action=function()
+        game.setDebugMenuTab("main")
     end},
     {tab="cheats", text="Fill HP", action=function()
         objects.player.hp = objects.player.maxHp
