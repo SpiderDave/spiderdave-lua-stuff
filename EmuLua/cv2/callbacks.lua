@@ -3,6 +3,9 @@
 --    return true
 --end
 
+-- This is just a dummy function so we can sort of comment it out easier
+memory._registerexec = function() end
+
 local callable=function(f)
     if type(f)~="function" then return true end
 end
@@ -94,6 +97,12 @@ registerExec(0x875c,1,1,"onHeartPickup")
 registerExec(0xd7ea,7,1,"onThrowWeapon")
 registerExec(0xf24c+2,7,1,"onSetWeaponLeft")
 registerExec(0xf295+2,7,1,"onSetWeaponRight")
+
+-- These trigger on the increment and decrement itself (better for making sure cursor doesn't move)
+registerExec(0xf247,7,1,"onSetWeaponLeft2")
+registerExec(0xf28e,7,1,"onSetWeaponRight2")
+
+
 registerExec(0x9096,1,1,"onGetRedCrystal")
 registerExec(0x87c3,1,1,"onGetCross")
 registerExec(0xaa3e,1,1,"onGetDiamond")
@@ -341,6 +350,20 @@ function _onThrowWeapon(address,len,t)
         if weaponType then
             memory.writebyte(0x03ba+t.y-6, weaponType)
         end
+    end
+end
+
+function _onSetWeaponLeft2(address,len,t)
+    if type(onSetWeaponCursor)=="function" then
+        local y = onSetWeaponCursor(t.y, "left")
+        if y then memory.setregister("y", y) end
+    end
+end
+
+function _onSetWeaponRight2(address,len,t)
+    if type(onSetWeaponCursor)=="function" then
+        local y = onSetWeaponCursor(t.y, "right")
+        if y then memory.setregister("y", y) end
     end
 end
 

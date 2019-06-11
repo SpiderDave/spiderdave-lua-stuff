@@ -100,9 +100,20 @@ function onThrowWeapon(weaponType, abort)
     return weaponType, abort
 end
 
--- Called when setting special weapon on the sub menu
-function onSetWeapon(weapon)
+-- Called when setting special weapon on the sub menu.
+-- side is either "left" or "right".
+function onSetWeapon(weapon, side)
     return weapon
+end
+
+-- Called when setting special weapon on the sub menu
+-- side is either "left" or "right".
+--
+-- This is called in the increment and decrement of
+-- the cursor specifically.  It works better for cancelling
+-- cursor movement.
+function onSetWeaponCursor(w, side)
+    return w
 end
 
 -- Called when getting the RedCrystal

@@ -7,7 +7,6 @@ end
 
 util.printf = function(s,...)
     --return io.write(s:format(...))
-    --return print(s:format(...))
     return print(s:format(...))
 end
 
@@ -21,7 +20,7 @@ function util.startsWith(haystack, needle)
 end
 
 function util.endsWith(haystack, needle)
-   return needle=='' or string.sub(haystack,-string.len(needle))==needle
+   return needle=='' or string.sub(haystack,-string.len(needle)) == needle
 end
 
 function util.trim(s)
@@ -129,7 +128,6 @@ function util.isWindows()
 end
 
 function util.fixPathSlashes(p)
-    
     if util.isWindows() then
         p = string.gsub(p, "/","\\")
     else

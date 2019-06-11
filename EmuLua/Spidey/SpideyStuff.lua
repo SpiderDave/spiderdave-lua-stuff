@@ -829,6 +829,9 @@ function input_read()
         local x2 = input_data.current.xmouse
         local y2 = input_data.current.ymouse
         
+        
+        
+        
         if x>x2 then x,x2=x2,x end
         if y>y2 then y,y2=y2,y end
         
@@ -839,13 +842,18 @@ function input_read()
 --        x2=(x2+4)-((x2+4)%8)
 --        y2=(y2+4)-((y2+4)%8)
         
+        --gui.text(20,20, string.format('%02d %02d %02d %02d',x, y, x2,y2), "white", "black")
+        
         -- snap 8
         x2=(x2+4)-(x2+4) % spidey.selection.snap
         y2=(y2+4)-(y2+4) % spidey.selection.snap
-        local w = math.abs(x2-x) % spidey.selection.snap
-        local h = math.abs(y2-y) % spidey.selection.snap
+        --local w = math.abs(x2-x) % spidey.selection.snap
+        --local h = math.abs(y2-y) % spidey.selection.snap
         
+        local w = math.abs(x2-x) - (math.abs(x2-x) % spidey.selection.snap)
+        local h = math.abs(y2-y) - (math.abs(y2-y) % spidey.selection.snap)
         
+        --gui.text(20,20, string.format('%02d %02d %02d %02d',x, y, x2,y2), "white", "black")
         spidey.selection.x = x
         spidey.selection.y = y
         spidey.selection.width = w

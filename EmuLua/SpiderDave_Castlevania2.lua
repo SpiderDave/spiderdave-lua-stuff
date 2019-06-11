@@ -80,7 +80,7 @@
 --  * loading a save state doesn't reset some script things
 --  * resetting doesn't clear extra data
 --  * finish map labels
---  * make spikes kill you completely
+--  * make spikes kill you completely (on later loops?)
 --  * allow different configs for different save slots
 --  * skeletons sometimes throw bones from below you when they are above -- wrong bone placement
 --  * make it so when you get hit on stairs, you don't get knocked off.
@@ -91,7 +91,6 @@
 --     - did most of them
 --  * add confirmation of equipping an item (sound, flash, etc)
 --  * make it so when hands hit you you don't get knocked back.
---  * prevent talking to npcs in the air
 --  * bug - password text is wrong (can't get to password screen anyway but still should track it down)
 --  * issue - can keep getting non-inventory custom items (like gold) over and over again
 --  * issue - boss doors don't reflect diamond or other collisions.
@@ -105,6 +104,7 @@
 --  * fix bug where you can whip through edge of screen and break blocks on the other side.
 --  * adjust spawn point at top of screen so enemies don't appear behind the hud.
 --  * bug: getting hit by custom hit object affects block velocity
+--  * make sure the memory used for custom stuff isn't used before initialized.
 
 require ".Spidey.TSerial"
 
@@ -175,7 +175,7 @@ game.map.height = 237
 game.map.visible=false
 game.saveSlot = 1
 game.romUndo = game.romUndo or {index={}}
-
+game.resetCounter=0
 game.showSaveMenu = false
 game.saveCursor = 0
 
@@ -326,6 +326,32 @@ game.debugMenuItems = {
     {tab="ending", text="3", action=function()
         config.testEnding = 3
     end},
+    
+    {tab="debug", text="unstuck menu", action=function()
+        --spidey.message("%02x", objects.player.weaponItem)
+        --setWeapon(objects.player.weaponItem or 0)
+        --setWhip(objects.player.whipItem)
+        --setArmor(objects.player.armor)
+        --setAccessory(objects.player.accessory)
+        
+--        setWeapon(0x04)
+        
+--        updateItems()
+
+--        if not items[objects.player.weaponItem] then
+--            objects.player.weaponItem = nil
+            weapons.current=1
+            memory.writebyte(0x0090, weapons.current)
+--        else
+--            weapons.current=items[objects.player.weaponItem].weaponBase or items[objects.player.weaponItem].weaponIndex or 0
+--            memory.writebyte(0x0090, weapons.current)
+--        end
+
+
+    end},
+    
+    
+    
 }
 
 for i,v in ipairs(items) do
@@ -1769,6 +1795,7 @@ function getExtraData()
     end
     
     objects.player.loop = memory.readbyte(0x7619)
+    game.resetCounter = memory.readword(0x7410)
 end
 
 function setArmor(n)
@@ -2952,8 +2979,14 @@ end
 -- This isn't needed because the real sub menu selections 
 -- are irrelevant
 --function onSetWeapon(w, side)
+--    spidey.message("%02x",w)
 --end
 
+function onSetWeaponCursor(w, side)
+    -- This effectively cancels weapon cursor movement.
+    -- Fixes the stuck menu bug.
+    return 1
+end
 
 
 --memory.registerexec(0x87a4+3,1, function()
@@ -4522,8 +4555,10 @@ memory.registerexec(0xc85a,1, function()
     
     --if not (action or game.paused or game.pausemenu ) then return end
     --emu.message(string.format("palette %d bank %02x", spidey.counter, getBank(0xc85a)))
+    --spidey.message("palette %d bank %02x", spidey.counter, getBank(0xc85a))
     
     local a,x,y,s,p,pc=memory.getregisters()
+    --spidey.message("%04x %02x %02x", pc,a,x)
     
     objects.player.palette = objects.player.palette or cv2data.palettes.simon[1].palette 
     --objects.player.paletteIndex = objects.player.paletteIndex or 1
@@ -4537,13 +4572,17 @@ memory.registerexec(0xc85a,1, function()
 --    palette = {0x0f, 0x08, 0x27, 0x37} -- classic tan
 --    palette = {0x0f, 0x08, 0x17, 0x37} -- darker version of classic tan; slightly more redish
     
+    -- This fixes the bug where it removes "GAME START" text when loading.
+    if game.modeMain == 5 then return end
+    
+    --spidey.message("%02x %02x %02x", game.modeMain, game.mode, game.mode2)
+    
+
     if x>=0x13 and x<=0x16 then
         local i = x-0x13+1
         a = objects.player.palette[i]
         memory.setregister("a", a)
     end
-    
-    
 end)
 
 -- mode select: override to game start when password is selected
@@ -4585,7 +4624,7 @@ function onSetGameStartDelay(delay)
 end
 
 -- title tm text
-memory.registerexec(0xc6f5+2,1, function()
+memory._registerexec(0xc6f5+2,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
     local address = memory.readbyte(1)*0x100+memory.readbyte(0)+y
     
@@ -4597,7 +4636,7 @@ memory.registerexec(0xc6f5+2,1, function()
 end)
 
 --prologue
-memory.registerexec(0xc84b+2,1, function()
+memory._registerexec(0xc84b+2,1, function()
     local a,x,y,s,p,pc=memory.getregisters()
     local address = memory.readbyte(1)*0x100+memory.readbyte(0)+y
     if address >= 0x8358 and address<= 0x8358+0x40 then
@@ -4889,11 +4928,13 @@ emu.registerexit(function(x)
 end)
 
 function spidey.reset()
+    action=false
+    objects.custom.destroyall()
     setArmor(items.index["Dummy Armor"])
     --setArmor(items.index["Night Armor"])
     --objects.player.armor=false
 end
-spidey.reset2=spidey.reset
+--spidey.reset2=spidey.reset
 
 function spidey.update(inp,joy)
     hitboxes.update()
@@ -4954,7 +4995,7 @@ function spidey.update(inp,joy)
     game.mode2=memory.readbyte(0x00aa)
     game.modeCursor=memory.readbyte(0x23) -- start or continue
     game.modeCounter =memory.readbyte(0x002a)
-    game.resetCounter = memory.readword(0x7410)
+    --game.resetCounter = memory.readword(0x7410)
     
     game.paused=(memory.readbyte(0x0026)==02)
     pausemenu=(memory.readbyte(0x0026)==01)
@@ -4969,6 +5010,9 @@ function spidey.update(inp,joy)
     actionval2=memory.readbyte(0x001a)
     action=(actionval==0x01 or (actionval==02 and actionval2==01) or (actionval==04 and actionval2==01))
     if action and (memory.readbyte(0x002c)==0x02) then
+        action = false
+    end
+    if emu.framecount()<=0x10 then
         action = false
     end
     
@@ -5109,20 +5153,19 @@ function spidey.update(inp,joy)
         end
     end
     
-    if game.mode==0x00 and game.resetCounter > 0 then
-        game.resetCounter = game.resetCounter - 1
-        memory.writeword(0x7410, game.resetCounter)
-        gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"black","black")
-        drawfont(8*11,8*13,font[current_font], "GAME OVER" )
-        --drawfont(8*11,8*15,font[current_font], string.format("%d",game.resetCounter))
-        if game.resetCounter == 0 or (game.resetCounter < 70 and joy[1].start_press)then
-            game.resetCounter = 0
-            memory.writeword(0x7410, game.resetCounter)
-            emu.softreset()
-            --emu.poweron()
-            emu.message("") -- suppress the "reset" message
-        end
-    end
+--    if game.mode==0x00 and game.resetCounter > 0 then
+--        spidey.message("%02x",game.resetCounter or 0)
+--        game.resetCounter = game.resetCounter - 1
+--        memory.writeword(0x7410, game.resetCounter)
+--        gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"black","black")
+--        drawfont(8*11,8*13,font[current_font], "GAME OVER" )
+--        if game.resetCounter == 0 or (game.resetCounter < 70 and joy[1].start_press)then
+--            game.resetCounter = 0
+--            memory.writeword(0x7410, game.resetCounter)
+--            emu.softreset()
+--            emu.message("") -- suppress the "reset" message
+--        end
+--    end
     
     if game.mode==0x04 then
         --gui.text(20,50,"mode screen")
@@ -5380,6 +5423,20 @@ function spidey.update(inp,joy)
              --objects.player.pendant = (locations.getAreaName(area1,area2,area3) == "Joma Marsh" and objects.player.accessory == items.index["Pendant"] then
              objects.player.pendant = (objects.player.accessory == items.index["Pendant"])
          end
+    end
+    
+    if game.mode==0x00 and game.resetCounter > 0 then
+        spidey.message("%02x",game.resetCounter or 0)
+        game.resetCounter = game.resetCounter - 1
+        memory.writeword(0x7410, game.resetCounter)
+        gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"black","black")
+        drawfont(8*11,8*13,font[current_font], "GAME OVER" )
+        if game.resetCounter == 0 or (game.resetCounter < 70 and joy[1].start_press)then
+            game.resetCounter = 0
+            memory.writeword(0x7410, game.resetCounter)
+            emu.softreset()
+            emu.message("") -- suppress the "reset" message
+        end
     end
     
     if action then
@@ -6978,7 +7035,8 @@ function spidey.update(inp,joy)
             x=math.random(0,15)*16
             y=0x32-math.random(0,10)
             if not blocks[x] then
-                local obj = createObject("fallingblock",x+scrollx, y+scrolly)
+                -- if it can't create the object it just returns a useless table for a soft fail.
+                local obj = createObject("fallingblock",x+scrollx, y+scrolly) or {}
                 obj.delaySpawn = i*10
                 blocks[x] = true
             end
@@ -8140,10 +8198,13 @@ function spidey.update(inp,joy)
             memory.writebyte(0x0091,0xff) --stuff (relics row)
             memory.writebyte(0x0092,0xff) --stuff
             for k,item in ipairs(items) do
-                if item.type =="food" or item.type=="gold" or item.type=="bag" or item.type=="1up" then
+                if item.type =="food" or item.type=="gold" or item.type=="bag" or item.type=="1up" or item.nonInventory then
                     -- don't get non-carry items
                 elseif not hasInventoryItem(item.name) then
                     getItem(item.name)
+                    if not hasInventoryItem(item.name) then
+                        items[k].nonInventory = true
+                    end
                 end
             end
             updateItems()
@@ -8190,6 +8251,12 @@ function spidey.update(inp,joy)
 end
 
 function spidey.draw()
+    
+    -- This gets rid of the flash of grey when reset/power.  more noticable on power cycle.
+    if emu.framecount()<7 then
+        gui.drawbox(0,0,spidey.screenWidth-1,spidey.screenHeight-1,"black","black")
+        return
+    end
     
     --gfx.draw(100,100, testGraphics)
     
@@ -8251,12 +8318,6 @@ function spidey.draw()
         hitboxes.draw()
     end
     
-    if action or (pausemenu and frame_tester) or (game.paused and not config.debug) then
-        drawHUD()
-    elseif pausemenu then
-        drawSubScreen()
-    end
-    
     if (action or pausemenu) and objects.player.inBossRoom==true then
         if displayarea=="Castlevania" then
             -- Don't bother with blocks for final Dracula fight
@@ -8266,6 +8327,12 @@ function spidey.draw()
             gfx.draw(16*15,13+16*10,gfx.block)
             gfx.draw(16*15,13+16*11,gfx.block)
         end
+    end
+    
+    if action or (pausemenu and frame_tester) or (game.paused and not config.debug) then
+        drawHUD()
+    elseif pausemenu then
+        drawSubScreen()
     end
     
 --    for k,v in ipairs(game.boxes or {}) do

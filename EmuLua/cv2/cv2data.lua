@@ -21,7 +21,13 @@ cv2.mansions = {
 }
 
 cv2.towns = {
-    {name = "Doina"},
+    {name = 'Jova'},
+    {name = 'Veros'},
+    {name = 'Aljiba'},
+    {name = 'Alba'},
+    {name = 'Ondol'},
+    {name = 'Doina'},
+    {name = 'Yomi'},
 }
 
 for i=1,8 do
