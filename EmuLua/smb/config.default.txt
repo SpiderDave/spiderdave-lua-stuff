@@ -1,0 +1,28 @@
+// Don't modify this file; Instead make a file config.txt with just the items you want.
+
+// Disable the timer if true.
+noTimer=false
+
+// Set to false to disable music.
+music = true
+
+// Wall jump (unfinished, do not use).
+wallJump=false
+
+// Float (unfinished, needs limiting).
+float=false
+
+// Default fireball speed and downward force.
+fireballSpeedX=0x40
+fireballSpeedY=0x04
+fireballDownwardForce=0x50
+
+// Timer for lakitu spiny throwing.
+lakituTimer=0x80
+
+// Set to true to make the player invulnerable
+// (can't be hit by enemies).
+invulnerable=false
+
+// Fix the lives display to show up to 99 lives.
+fixLivesDisplay = true
