@@ -679,6 +679,9 @@ function joypad_read()
         for ii=1,#spidey.emu.button_names do
             b=spidey.emu.button_names[ii]
             joypad_data[i][b..'_press']=(joypad_data[i][b] and not joypad_data.old[i][b])
+            
+            joypad_data[i][b..'_release']=(joypad_data.old[i][b] and not joypad_data[i][b])
+            
             joypad_data[i][b..'_press_time']=joypad_data[i][b] and math.min((joypad_data.old[i][b..'_press_time'] or 0) +1,1000) or 0
             
             -- Similar to a keyboard repeat function.  it triggers faster if held down longer.
@@ -723,8 +726,10 @@ function input_read()
     input_data.current=input.get()
     if input_data.current.X then
         -- bizhawk uses X Y not xmouse ymouse
-        input_data.current.xmouse=input_data.current.X
-        input_data.current.ymouse=input_data.current.Y
+        -- disabling; triggers in FCEUX when x key is pressed.
+        --
+        --input_data.current.xmouse=input_data.current.X
+        --input_data.current.ymouse=input_data.current.Y
     end
     
     input_data.current.pageup_press=input_data.current.pageup and not input_data.old.pageup

@@ -155,8 +155,10 @@ function graphics:loadPng(fileName, w,h)
         
     elseif self.use_gd then
         image = gd.createFromPng(fileName)
-        image:saveAlpha(true)
-        --image:alphaBlending(false)
+        if image then
+            image:saveAlpha(true)
+            --image:alphaBlending(false)
+        end
     end
     return image
 end

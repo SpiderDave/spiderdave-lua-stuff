@@ -1,0 +1,13 @@
+noTimer=true
+
+//wallJump=true
+float=true
+music=false
+
+fireballSpeedX=0x1e
+fireballSpeedY=0x04
+fireballDownwardForce=0x20
+
+//lakituTimer=1
+
+invulnerable=true

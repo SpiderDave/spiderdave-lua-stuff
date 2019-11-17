@@ -1,5 +1,157 @@
 local smb = {}
 
+smb.constants = {}
+
+smb.constants.music = {
+    Ground=0x01,
+    Water=0x02,
+    Underground=0x04,
+    Castle=0x08,
+    Cloud=0x10,
+    PipeIntro=0x20,
+    Star=0x40,
+    Silence=0x80,
+}
+
+smb.constants.eventMusic = {
+    Death = 0x01,
+    GameOver = 0x02,
+    Victory = 0x04,
+    EndOfCastle = 0x08,
+    AltGameOver = 0x10,
+    EndOfLevel = 0x20,
+    TimeRunningOut = 0x40,
+    Silence=0x80,
+}
+
+smb.constants.gameRoutines = {
+    Entrance_GameTimerSetup=0,
+    Vine_AutoClimb=1,
+    SideExitPipeEntry=2,
+    VerticalPipeEntry=3,
+    FlagpoleSlide=4,
+    PlayerEndLevel=5,
+    PlayerLoseLife=6,
+    PlayerEntrance=7,
+    PlayerCtrlRoutine=8,
+    PlayerChangeSize=9,
+    PlayerInjuryBlink=0x0a,
+    PlayerDeath=0x0b,
+    PlayerFireFlower=0x0c,
+}
+
+smb.constants.metaTiles = {
+    [0]={
+        [0]="blank",
+        "black metatile",
+        "bush left",
+        "bush middle",
+        "bush right",
+        "mountain left",
+        "mountain left bottom/middle center",
+        "mountain middle top",
+        "mountain right",
+        "mountain right bottom",
+        "mountain middle bottom",
+        "bridge guardrail",
+        "chain",
+        "tall tree top, top half",
+        "short tree top",
+        "tall tree top, bottom half",
+        "warp pipe end left, points up",
+        "warp pipe end right, points up",
+        "decoration pipe end left, points up",
+        "decoration pipe end right, points up",
+        "pipe shaft left",
+        "pipe shaft right",
+        "tree ledge left edge",
+        "tree ledge middle",
+        "tree ledge right edge",
+        "mushroom left edge",
+        "mushroom middle",
+        "mushroom right edge",
+        "sideways pipe end top",
+        "sideways pipe shaft top",
+        "sideways pipe joint top",
+        "sideways pipe end bottom",
+        "sideways pipe shaft bottom",
+        "sideways pipe joint bottom",
+        "seaplant",
+        "blank, used on bricks or blocks that are hit",
+        "flagpole ball",
+        "flagpole shaft",
+        "blank, used in conjunction with vines",
+    },
+    {
+        [0]="vertical rope",
+        "horizontal rope",
+        "left pulley",
+        "right pulley",
+        "blank used for balance rope",
+        "castle top",
+        "castle window left",
+        "castle brick wall",
+        "castle window right",
+        "castle top w/ brick",
+        "entrance top",
+        "entrance bottom",
+        "green ledge stump",
+        "fence",
+        "tree trunk",
+        "mushroom stump top",
+        "mushroom stump bottom",
+        "breakable brick w/ line ",
+        "breakable brick ",
+        "breakable brick (not used)",
+        "cracked rock terrain",
+        "brick with line (power-up)",
+        "brick with line (vine)",
+        "brick with line (star)",
+        "brick with line (coins)",
+        "brick with line (1-up)",
+        "brick (power-up)",
+        "brick (vine)",
+        "brick (star)",
+        "brick (coins)",
+        "brick (1-up)",
+        "hidden block (1 coin)",
+        "hidden block (1-up)",
+        "solid block (3-d block)",
+        "solid block (white wall)",
+        "bridge",
+        "bullet bill cannon barrel",
+        "bullet bill cannon top",
+        "bullet bill cannon bottom",
+        "blank used for jumpspring",
+        "half brick used for jumpspring",
+        "solid block (water level, green rock)",
+        "half brick (???)",
+        "water pipe top",
+        "water pipe bottom",
+        "flag ball (residual object)",
+    },
+    {
+        [0]="cloud left",
+        "cloud middle",
+        "cloud right",
+        "cloud bottom left",
+        "cloud bottom middle",
+        "cloud bottom right",
+        "water/lava top",
+        "water/lava",
+        "cloud level terrain",
+        "bowser's bridge",
+    },
+    {
+        [0]="question block (coin)",
+        "question block (power-up)",
+        "coin",
+        "underwater coin",
+        "empty block",
+        "axe",
+    }
+}
+
 function smb.NESByteToInt(n)
     if n>=0x80 then
         return -(0x100-n)
@@ -16,8 +168,50 @@ function smb.intToNESByte(n)
     end
 end
 
+smb.playerHasControl = function()
+    -- game routine must be "PlayerCtrlRoutine"
+    if memory.readbyte(0x0e)~=0x08 then return end
+    
+    -- must be unpaused
+    if smb.paused() then return end
+    
+    -- OperMode must be "GameMode"
+    if memory.readbyte(0x770)~=0x01 then return end
+    
+    return true
+end
+
+smb.playerOnScreen = function()
+    -- Player_OffscreenBits will return a value just in case you want
+    -- to find out if the player is partially offscreen.  
+    local Player_OffscreenBits = memory.readbyte(0x3d0)
+    local isOnScreen = true
+    if Player_OffscreenBits == 0xf0 then isOnScreen = false end
+    
+    return isOnScreen, Player_OffscreenBits
+end
+
+smb.playerInHole = function()
+    -- check Player_Y_HighPos to see if the player is in a hole (death or cloud level exit)
+    if memory.readbyte(0xb5) >= 0x02 then return true end
+end
+
+-- returns true if the game is not during a loading or intermediate screen
 smb.action = function()
-    return (memory.readbyte(0x07c6)==0x00)
+    --return (memory.readbyte(0x07c6)==0x00)
+    return (memory.readbyte(0x0e)~=0x00)
+end
+
+function smb.frozen()
+    if smb.paused() then return true end
+    
+    -- game routine must be "PlayerCtrlRoutine"
+    if memory.readbyte(0x0e)~=0x08 then return true end
+
+    -- OperMode must be "TitleScreenMode", "GameMode", or "VictoryMode".
+    if memory.readbyte(0x770)>=0x03 then return true end
+
+    return
 end
 
 function smb.paused()
@@ -42,7 +236,6 @@ function smb.getPlayerSpeed()
     return xs,ys
 end
 
-
 function smb.setPlayerMoveForce(x,y)
     if x then memory.writebyte(0x705, smb.intToNESByte(x)) end
     if y then memory.writebyte(0x433, smb.intToNESByte(y)) end
@@ -53,6 +246,37 @@ function smb.getPlayerMoveForce()
     local y = smb.NESByteToInt(memory.readbyte(0x433))
     return x,y
 end
+
+function smb.getScroll()
+    local ScreenEdge_X_Pos = memory.readbyte(0x71c)
+    local ScreenEdge_PageLoc = memory.readbyte(0x71a)
+    local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
+    return scrollX
+end
+
+function smb.getPlayerPosition()
+--    local ScreenEdge_X_Pos = memory.readbyte(0x71c)
+--    local ScreenEdge_PageLoc = memory.readbyte(0x71a)
+--    local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
+
+    local playerX = memory.readbyte(0x86)
+    local playerY = memory.readbyte(0xce)
+    local Player_PageLoc = memory.readbyte(0x6d)
+    local Player_X_Scroll = memory.readbyte(0x6ff)
+    
+    local Player_Y_HighPos = memory.readbyte(0xb5)
+    
+    --local px = Player_PageLoc*0x100+playerX-scrollX
+    local px = Player_PageLoc*0x100+playerX
+    local py = playerY + Player_Y_HighPos*0x100 - 0x100
+    --gui.text(px,py, "*", "red","clear" )
+    --spidey.message("%02x %02x",px,py)
+    
+    
+    return px,py
+end
+
+
 
 function smb.getUnusedEnemyIndex()
     for i=0,4 do
@@ -94,6 +318,15 @@ function smb.setEnemyPositionAndSpeed(i, x, y, ax, ay)
     memory.writebyte(0x0401 + i, 0xfc) -- Enemy_X_MoveForce
     memory.writebyte(0x0434 + i, 0) -- Enemy_Y_MoveForce
 end
+
+function smb.setEnemySpeed(i, xs, ys)
+    memory.writebyte(0x0057 + i, xs)
+    memory.writebyte(0x009f + i, ys)
+    
+    memory.writebyte(0x0400 + i, 0xfc) -- Enemy_X_MoveForce
+    memory.writebyte(0x0433 + i, 0) -- Enemy_Y_MoveForce
+end
+
 
 function smb.createEnemy(eType, x, y, xs, ys)
     eType = eType or 0x06 -- goomba
@@ -155,7 +388,7 @@ function smb.getLocation()
     local level = memory.readbyte(0x75c)
     local area = memory.readbyte(0x760)
     local areaPointer = memory.readbyte(0x750)
-    return world, level, area
+    return world, level, area, areaPointer
 end
 
 -- uses 0 based world and level
@@ -181,6 +414,7 @@ function smb.warp(world, level, area, areaPointer)
     memory.writebyte(0x769,1) -- DisableIntermediate
     
     local l = smb.getAreaAddrOffsets()
+    
     smb.setLocation(world-1, level-1, l[world-1][level-1])
     
     -- disable some (most likely) residual code that prevents 
@@ -205,6 +439,62 @@ function smb.getAreaAddrOffsets()
     end
     return l
 end
+
+function smb.getHitBoxes()
+    local hb = {}
+    for i = 0, 17 do
+        hb[i]={}
+        local state
+        local show = false
+        local c = "purple"
+        if i==0 then
+            c = "blue"
+            show = (memory.readbyte(0xb5) <= 1) -- Player_Y_HighPos
+        end
+        if i>=1 and i<=5 then
+            c = "green"
+            show = (memory.readbyte(0x0e+i) > 0)
+        end
+        if i==6 then
+            c = "orange"
+            state = memory.readbyte(0x23)
+            if state>6 then show=true end
+        end
+        if i>=7 and i<=8 then
+            c = "red"
+            show = (memory.readbyte(0x1d+i) > 0)
+        end
+        if i>=9 then
+            state = memory.readbyte(0x2a+i-9)
+            if state>=0x80 then
+                c="grey"
+            else
+                c="yellow"
+            end
+            show = (memory.readbyte(0x2a+i-9) > 0)
+        end
+        
+        hb[i].pageLoc = memory.readbyte(0x6d+i)
+        
+        if show then
+            local x1 = memory.readbyte(0x4ac+i*4)
+            local y1 = memory.readbyte(0x4ac+i*4+1)
+            local x2 = memory.readbyte(0x4ac+i*4+2)
+            local y2 = memory.readbyte(0x4ac+i*4+3)
+            --if (x1 > 0 and x1 < 255 and x2 > 0 and x2 < 255 and y1 > 0 and y1 < 224 and y2 > 0 and y2 < 224) then
+            --if (x1 > 0 and x1 < 255 and x2 > 0 and x2 < 255 and y1 > 0 and y1 < 224 and y2 > 0 and y2 < 255) then
+                --gui.drawbox(x1,y1,x2,y2,"clear", c)
+                --spidey.outlineText(x1,y1, string.format("%02x",i), c,"white")
+                hb[i].active = true
+                hb[i].rect = {x1,y1,x2,y2}
+                hb[i].color = c
+            --end
+        end
+    end
+    smb.hitBoxes = hb
+    return hb
+end
+
 
 
 return smb

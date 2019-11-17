@@ -1,3 +1,5 @@
+local util = require("Spidey.util")
+
 --local xpcall = function(f)
 --    f()
 --    return true
@@ -99,20 +101,20 @@ end)
 -- If the bank is set to nil, it will display the function name and
 -- bank in a message.
 
---registerExec(0xdf4d,7,1,"onDestroyObject")
-
---registerExec(0x85fd,1 ,1,"onCheckForFireStatus")
 registerExec(0xb627,1 ,1,"onCheckIfFiery")
-
--- needs work
-registerExec(0xf41b+2,1 ,1,"onSquare1SfxHandler")
+registerExec(0xf41b+2,1 ,1,"onSquare1SfxHandler") -- needs work
 registerExec(0xd92c+3,1 ,1,"onPlayerInjury")
 registerExec(0xc319,1 ,1,"onSetEnemySpeed")
 registerExec(0x860a+3,1 ,1,"onSetPlayerPalette")
+
 registerExec(0x9448,1 ,1,"onLoadBackgroundMetatile")
 registerExec(0x94b3,1 ,1,"onLoadForegroundMetatile")
-registerExec(0x9113,1 ,1,"onMusic")
-registerExec(0xd81d,1 ,1,"onStarMusic")
+registerExec(0xf6c8,1 ,1,"onMusic")
+
+registerExec(0xf6a4,1 ,1,"onEventMusic")
+
+registerExec(0xb04c,1 ,1,"onGameRoutine")
+
 registerExec(0xd9f3,1 ,1,"onStomp")
 registerExec(0xb6b1,1 ,1,"onSetFireballSpeedX")
 registerExec(0xb6b5,1 ,1,"onSetFireballSpeedY")
@@ -121,6 +123,7 @@ registerExec(0xb6c5,1 ,1,"onSetFireballDownwardForce")
 
 registerExec(0xb752,1 ,1,"onGameTimer")
 registerExec(0xc3af,1 ,1,"onSetLakituTimer")
+registerExec(0xc4b9,1 ,1,"onSetCheepCheepTimer")
 registerExec(0xdf68,1 ,1,"onHitWall")
 
 registerExec(0x8823,1 ,1,"onPrintText")
@@ -143,6 +146,17 @@ registerExec(0x94f7,1 ,1,"onLoadBlockSolidity")
 registerExec(0x884a,1 ,1,"onLivesDisplayCrown")
 registerExec(0x884d,1 ,1,"onLivesDisplay")
 
+--registerExec(0x90dc-2,1 ,1,"onTileTest")
+--registerExec(0x94f7,1 ,1,"onTileTest")
+--registerExec(0x94e0,1 ,1,"onTileTest")
+--registerExec(0x88f8+1,1 ,1,"onTileTest")
+registerExec(0x88fd,1 ,1,"onTileTest1")
+registerExec(0x8903,1 ,1,"onTileTest2")
+
+
+
+--registerExec(0xb561,1 ,1,"onSetPlayerMaximumSpeedLeft")
+--registerExec(0xb566,1 ,1,"onSetPlayerMaximumSpeedRight")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -225,13 +239,12 @@ function _onMusic(address,len,t)
     end
 end
 
-function _onStarMusic(address,len,t)
+function _onEventMusic(address,len,t)
     if type(onMusic)=="function" then
-        local a = onMusic(t.a)
+        local a = onMusic(t.a, true) -- event = true
         if a then memory.setregister("a", a) end
     end
 end
-
 
 function _onSilenceTitleMusic(address,len,t)
     if type(onSilenceTitleMusic)=="function" then
@@ -276,6 +289,13 @@ end
 function _onSetLakituTimer(address,len,t)
     if type(onSetLakituTimer)=="function" then
         local a = onSetLakituTimer(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSetCheepCheepTimer(address,len,t)
+    if type(onSetCheepCheepTimer)=="function" then
+        local a = onSetCheepCheepTimer(t.a)
         if a then memory.setregister("a", a) end
     end
 end
@@ -397,7 +417,7 @@ end
 
 function _onLivesDisplayCrown(address,len,t)
     if type(onLivesDisplay)=="function" then
-        local nLives = memory.readbyte(0x75a)
+        local nLives = memory.readbyte(0x75a)+1
         local y = onLivesDisplay(0, t.y, nLives)
         if y then memory.setregister("y", y) end
     end
@@ -405,8 +425,75 @@ end
 
 function _onLivesDisplay(address,len,t)
     if type(onLivesDisplay)=="function" then
-        local nLives = memory.readbyte(0x75a)
+        local nLives = memory.readbyte(0x75a)+1
         local a = onLivesDisplay(1, t.a, nLives)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onTileTest1(address,len,t)
+    if type(onTileTest)=="function" then
+        local index = t.y % 4
+        local a = onTileTest(t.a, index)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onTileTest2(address,len,t)
+    if type(onTileTest)=="function" then
+        local index = t.y % 4
+        local a = onTileTest(t.a, index)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+
+function _onSetPlayerMaximumSpeedLeft(address,len,t)
+    if type(onSetPlayerMaximumSpeed)=="function" then
+        local a = onSetPlayerMaximumSpeed("left", t.a)
+        if a then memory.setregister("a", a) end
+        --local a = onSetPlayerMaximumSpeed("left", NESByteToInt(t.a), spidey.sign(NESByteToInt(t.a)))
+        --if a then memory.setregister("a", intToNESByte(a)) end
+    end
+end
+
+function _onSetPlayerMaximumSpeedRight(address,len,t)
+    if type(onSetPlayerMaximumSpeed)=="function" then
+        local a = onSetPlayerMaximumSpeed("right", t.a)
+        if a then memory.setregister("a", a) end
+--        local a = onSetPlayerMaximumSpeed("right", NESByteToInt(t.a), spidey.sign(NESByteToInt(t.a)))
+--        if a then memory.setregister("a", intToNESByte(a)) end
+    end
+end
+
+function _onGameRoutine(address,len,t)
+    if type(onGameRoutine)=="function" then
+        local a = onGameRoutine(t.a)
+        if a then 
+            memory.setregister("a", a)
+            --memory.writebyte(0x0e,a)
+        end
+    end
+    
+    local routines = {
+        [0]="Entrance_GameTimerSetup",
+        [1]="Vine_AutoClimb",
+        [2]="SideExitPipeEntry",
+        [3]="VerticalPipeEntry",
+        [4]="FlagpoleSlide",
+        [5]="PlayerEndLevel",
+        [6]="PlayerLoseLife",
+        [7]="PlayerEntrance",
+        [8]="PlayerCtrlRoutine",
+        [9]="PlayerChangeSize",
+        [0x0a]="PlayerInjuryBlink",
+        [0x0b]="PlayerDeath",
+        [0x0c]="PlayerFireFlower",
+    }
+    
+    local fName = "on" .. routines[t.a]
+    if type(_G[fName])=="function" then
+        local a = _G[fName](t.a)
         if a then memory.setregister("a", a) end
     end
 end

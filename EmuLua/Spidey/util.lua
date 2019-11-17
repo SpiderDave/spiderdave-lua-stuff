@@ -1,5 +1,25 @@
 local util={}
 
+-- Gets the width of text in characters.
+-- Accounts for line breaks, but doesn't
+-- handle other unprintable characters.
+util.textWidth = function(t)
+    if #(t or "")==0 then return 0 end
+    local lineWidth = 0
+    local maxWidth = 0
+    
+    for i=1,#t do
+        local c = t:byte(i)
+        if c == 0x0a or c==0xd then
+            lineWidth=0
+        else
+            lineWidth=lineWidth+1
+            maxWidth = math.max(maxWidth, lineWidth)
+        end
+    end
+    return maxWidth
+end
+
 -- Remove all spaces from a string
 util.stripSpaces = function(s)
     return string.gsub(s, "%s", "")
@@ -89,6 +109,15 @@ function util.copyTable(t)
   for k, v in pairs(t) do res[util.copyTable(k)] = util.copyTable(v) end
   return res
 end
+
+-- Create a new copy of a table, with keys and values swapped.
+function util.flipTable(t)
+  if type(t) ~= 'table' then return t end
+  local res = {}
+  for v, k in pairs(t) do res[util.copyTable(k)] = util.copyTable(v) end
+  return res
+end
+
 
 function util.extract(t)
     for k,v in pairs(t) do
