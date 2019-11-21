@@ -28,4 +28,8 @@ Spidey/SpideyStuff.lua
 Spidey/TSerial.lua
 Spidey/default_font.lua
 Spidey/graphics.lua
+Spidey/sound.lua
 Spidey/util.lua
+Spidey/tools/NirCmd/NirCmd.chm
+Spidey/tools/NirCmd/nircmd.exe
+Spidey/tools/NirCmd/nircmdc.exe
