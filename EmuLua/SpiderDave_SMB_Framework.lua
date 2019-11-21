@@ -332,6 +332,22 @@ function onHitWall(side, facing)
     --memory.writebyte(0x9f, 0xff)
 end
 
+
+function onProcessPlayerState(s)
+    if config.LuigiJump and s==0x01 and smb.currentPlayer() == 1 then
+        local frame = spidey.counter % 3
+        memory.writebyte(0x70d, (frame+1) % 0x03)
+        return 0
+    end
+end
+
+
+--function onSetPlayerAnimation(n)
+--    spidey.message("%02x",n)
+--    return 8
+--end
+
+
 -- if textNumber==0 it's top status bar
 -- c is used for position (nametable address), length of text and characters
 -- nametable address hi, nametable address lo, x-position, length of text, text characters, terminated by 0xff
@@ -521,6 +537,12 @@ function onImposeGravity(objectIndex, downwardForce)
         --return downwardForce/3
     end
     
+    if config.LuigiJump then
+        if objectIndex == 0 and smb.currentPlayer() == 1 then
+            return downwardForce/1.4
+        end
+    end
+    
     -- Enemies and objects
     if objectIndex > 0 then
         --return downwardForce/3
@@ -649,6 +671,8 @@ function spidey.update(inp,joy)
     
     player.control = (memory.readbyte(0x0e)==0x08)
     player.isOnScreen = smb.playerOnScreen()
+    player.state = memory.readbyte(0x1d)
+    player.inAir = (player.state == 0x01 or player.state == 0x02)
     local ScreenEdge_X_Pos = memory.readbyte(0x71c)
     local ScreenEdge_PageLoc = memory.readbyte(0x71a)
     local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
@@ -739,7 +763,7 @@ function spidey.update(inp,joy)
         smb.setPlayerMoveForce(xmf,ymf)
     end
     
-    if config.airTurn then
+    if player.control and player.inAir and config.airTurn then
         if joy[1].left then
             memory.writebyte(0x45,2) -- Player_MovingDir
             memory.writebyte(0x33,2) -- PlayerFacingDir
