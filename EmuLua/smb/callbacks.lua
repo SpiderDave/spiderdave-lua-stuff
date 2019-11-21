@@ -181,6 +181,9 @@ registerExec(0xd9bd,1 ,1,"onSetKoopaStateAfterDemote")
 
 registerExec(0xe025,1 ,1,"onStunCheck1")
 
+registerExec(0xefee,1 ,1,"onProcessPlayerState")
+registerExec(0xf030,1 ,1,"onSetPlayerAnimation")
+
 
 --registerExec(0xb561,1 ,1,"onSetPlayerMaximumSpeedLeft")
 --registerExec(0xb566,1 ,1,"onSetPlayerMaximumSpeedRight")
@@ -645,8 +648,6 @@ function _onStunCheck1(address,len,t)
     end
 end
 
-
-
 function _onSetKoopaStateAfterDemote(address,len,t)
     if type(onSetKoopaStateAfterDemote)=="function" then
         local y = onSetKoopaStateAfterDemote(t.a, t.y)
@@ -655,5 +656,19 @@ function _onSetKoopaStateAfterDemote(address,len,t)
             memory.setregister("y", y)
             memory.writebyte(0x1e + t.x, y)
         end
+    end
+end
+
+function _onProcessPlayerState(address,len,t)
+    if type(onProcessPlayerState)=="function" then
+        local a = onProcessPlayerState(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onSetPlayerAnimation(address,len,t)
+    if type(onSetPlayerAnimation)=="function" then
+        local y = onSetPlayerAnimation(t.y)
+        if y then memory.setregister("y", y) end
     end
 end
