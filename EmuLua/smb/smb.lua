@@ -168,6 +168,10 @@ function smb.intToNESByte(n)
     end
 end
 
+function smb.currentPlayer()
+    return memory.readbyte(0x0753)
+end
+
 smb.playerHasControl = function()
     -- game routine must be "PlayerCtrlRoutine"
     if memory.readbyte(0x0e)~=0x08 then return end
@@ -493,6 +497,79 @@ function smb.getHitBoxes()
     end
     smb.hitBoxes = hb
     return hb
+end
+
+function smb.switchPlayer()
+    local nPlayers = memory.readbyte(0x77a)+1
+    if nPlayers == 1 then return end
+    
+    --player = memory.readbyte(0x753)
+    local player = memory.readbyte(0x753)
+    player = 1 - player
+    memory.writebyte(0x753, player)
+
+    memory.readbyte(0x2002)
+    memory.writebyte(0x2006, 0x3f)
+    memory.writebyte(0x2006, 0x11)
+    
+    --smb.updatePalette = true
+    
+    playerNames = {
+        [0]={0x16, 0x0a, 0x1b, 0x12, 0x18},
+        {0x15,0x1e,0x12,0x10,0x12},
+    }
+    
+    if player==0 then
+        memory.writebyte(0x2007, 0x16)
+        memory.writebyte(0x2007, 0x27)
+        memory.writebyte(0x2007, 0x18)
+    else
+        memory.writebyte(0x2007, 0x30)
+        memory.writebyte(0x2007, 0x27)
+        memory.writebyte(0x2007, 0x19)
+    end
+    
+    memory.readbyte(0x2002)
+    
+    memory.writebyte(0x2006, 0x20)
+    memory.writebyte(0x2006, 0x43)
+    
+    for _,v in ipairs(playerNames[player]) do
+        memory.writebyte(0x2007, v)
+    end
+    
+    for i=0,6 do
+        local a = memory.readbyte(0x075a+i)
+        local b = memory.readbyte(0x0761+i)
+        memory.writebyte(0x075a+i, b)
+        memory.writebyte(0x0761+i, a)
+    end
+    
+    local nCoins = memory.readbyte(0x75e)
+    memory.readbyte(0x2002)
+    
+    memory.writebyte(0x2006, 0x20)
+    memory.writebyte(0x2006, 0x6d)
+    
+    memory.writebyte(0x2007, math.floor(nCoins/10))
+    memory.writebyte(0x2007, nCoins % 10)
+    
+    
+    memory.readbyte(0x2002)
+    
+    memory.writebyte(0x2006, 0x28)
+    memory.writebyte(0x2006, 0x62)
+    
+    for i=0,5 do
+        local n = memory.readbyte(0x7dd+i+player*6)
+        if i==0 and n==0 then
+            n=0x24
+        end
+        memory.writebyte(0x2007, n)
+    end
+    
+    
+    return player
 end
 
 

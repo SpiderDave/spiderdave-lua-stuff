@@ -21,6 +21,8 @@ local smb = require("smb.smb")
 local Thing = require("smb.thing")
 local obj = Thing.holder
 
+local blocks = require("smb.blocks")
+
 local ai = require("smb.ai")
 ai.init(smb)
 obj.setAI(ai)
@@ -44,8 +46,10 @@ gfx.medusa = gfx.load("medusa1")
 gfx.bullet = gfx.load("bullet")
 gfx.bullet.xo = 8
 gfx.bullet.yo = 8
-
 gfx.brickTop = gfx.load("brickTop")
+gfx.bigBill = gfx.load("bigBill")
+gfx.customBlock = gfx.load("customBlock")
+gfx.cursor = gfx.load("cursor")
 
 if config.convert then
     local convert=function(f)
@@ -60,6 +64,10 @@ if config.convert then
     convert("medusa1")
     convert("bullet")
     convert("brickTop")
+    convert("bigBill")
+    convert("customBlock")
+    convert("cursor")
+    spidey.message("conversion finished")
 end
 
 game = {
@@ -68,8 +76,8 @@ game = {
 local player=game.player
 game.paused = false
 
---current_font=2
 current_font=1
+--current_font=6
 
 cheats={
     enabled=true,
@@ -86,6 +94,13 @@ mnu=classMenu:new()
 mnu.font=font[current_font]
 mnu.background="small"
 mnu.background_color="black"
+
+mnu.cursor_image=gfx.cursor.image
+if type(mnu.cursor_image)=="userdata" then
+    mnu.cursor_image = mnu.cursor_image:gdStr()
+end
+
+
 mnu.items={}
 mnu.items={
     {
@@ -117,15 +132,21 @@ mnu.items={
     },
     {
         text = function()
-            return string.format("tile %02x", game.tile)
+            --return string.format("tile %02x", game.tile)
+            return string.format("font %02x", current_font)
         end,
 
         left = function()
-            game.tile=math.max(0, game.tile-1)
+            --game.tile=math.max(0, game.tile-1)
+            current_font = math.max(0, current_font-1)
+            mnu.font=font[current_font]
         end,
         
         right = function()
-            game.tile=math.min(255, game.tile+1)
+            --game.tile=math.min(255, game.tile+1)
+            current_font = math.min(255, current_font+1)
+            mnu.font=font[current_font]
+
         end,
         
         action = function()
@@ -241,11 +262,30 @@ end
 
 
 function onStomp()
---    memory.writebyte(0x1d,0x01)
---    spidey.message("test")
---    local y=memory.readbyte(0x9f)
---    y=0xf4
-    --return y
+    if config.stompJump then
+        if memory.readbyte(0x1d) == 0x02 then
+            -- if Player_State is falling, set to jumping
+            memory.writebyte(0x1d, 0x01)
+         end
+        
+        local n=0
+        local xs = memory.readbyte(0x700) -- Player_XSpeedAbsolute
+        if xs >= 0x09 then n=n+1 end
+        if xs >= 0x10 then n=n+1 end
+        if xs >= 0x19 then n=n+1 end
+        if xs >= 0x1c then n=n+1 end
+        
+        memory.writebyte(0x70a,memory.readbyte(0xb42b + n)) --VerticalForceDown
+        memory.writebyte(0x433,memory.readbyte(0xb439 + n)) --Player_Y_MoveForce
+        memory.writebyte(0x9f,memory.readbyte(0xb432 + n)) --Player_Y_Speed
+        memory.writebyte(0x709,memory.readbyte(0xb424 + n)-n*2-4) --VerticalForce
+        
+        local y = memory.readbyte(0xce) -- Player_Y_Position
+        memory.writebyte(0x708, y) -- JumpOrigin_Y_Position
+        
+        -- refresh Player_Y_Speed
+        return memory.readbyte(0x9f)
+    end
 end
 
 function onSetFireballSpeed(axis, s, sign)
@@ -297,6 +337,8 @@ end
 -- nametable address hi, nametable address lo, x-position, length of text, text characters, terminated by 0xff
 -- 0x20, 0x43, 0x05, "MARIO", 0x20, 0x52, 0x0b, "WORLD  TIME", 0x20, 0x68, 0x05, "0  ", 0x2e (coin icon), "x",
 function onPrintText(textNumber, c, index)
+    if true then return end -- disable
+    
     local a,x,y,s,p,pc=spidey.getregisters()
     --if c==0xff then return c end
     
@@ -473,6 +515,124 @@ function onPlayerChangeSize(n)
     return n
 end
 
+function onImposeGravity(objectIndex, downwardForce)
+    -- Mario
+    if objectIndex == 0 then
+        --return downwardForce/3
+    end
+    
+    -- Enemies and objects
+    if objectIndex > 0 then
+        --return downwardForce/3
+    end
+end
+
+function onVblank()
+    if smb.updatePalette then
+        smb.updatePalette= false
+        
+        local player = memory.readbyte(0x753)
+        
+        memory.readbyte(0x2007)
+        
+        memory.readbyte(0x2002)
+        memory.writebyte(0x2006, 0x3f)
+        memory.writebyte(0x2006, 0x11)
+
+        if player==0 then
+            memory.writebyte(0x2007, 0x16)
+            memory.writebyte(0x2007, 0x27)
+            memory.writebyte(0x2007, 0x18)
+        else
+            memory.writebyte(0x2007, 0x30)
+            memory.writebyte(0x2007, 0x27)
+            memory.writebyte(0x2007, 0x19)
+        end
+        
+        memory.readbyte(0x2007)
+    end
+end
+
+function onSetFirebarSpeed(s)
+    --spidey.message(s)
+    --s=s*8
+    --s=0
+    s=4
+    
+--    game.firebarSpeedMultiplier = 2
+--    game.firebarAccel = game.firebarAccel or 1
+--    game.firebarAccel = math.min(255,math.sin(spidey.counter*.05)*5)
+--    game.firebarSpeed = (game.firebarSpeed or 20) + game.firebarSpeedMultiplier *game.firebarAccel
+
+--    if game.firebarSpeed >=  255 then
+--        game.firebarSpeed = 255
+--        game.firebarAccel = -1
+--    end
+--    if game.firebarSpeed <=  0 then
+--        game.firebarSpeed = 0
+--        game.firebarAccel = 1
+--    end
+    s = math.random(0,100)
+    --s=200
+    --s = game.firebarSpeed
+    
+    return s
+end
+
+-- 0 = clockwise
+-- 1 = counter-clockwise
+function onSetFirebarSpinDirection(a)
+    return a
+end
+
+function onSetFirebarLength(len)
+    --len=len-2
+    return len
+end
+
+function X_onSetFirebarPositions()
+    local index = memory.readbyte(0)
+    --n=math.floor(spidey.counter/4) % 9
+--    if index==n or index==n+1 then
+--        local n2=memory.readbyte(3)
+--        n2=n2*2
+--        memory.writebyte(0,10)
+--        memory.writebyte(3,n2)
+--    end
+    
+    local n1=memory.readbyte(1)
+    local n2=memory.readbyte(2)
+    local n3=memory.readbyte(3)
+
+    --memory.writebyte(1,n1*1.9)
+    --memory.writebyte(2,n2*.2)
+    
+    
+    if index % 2==0 then
+        memory.writebyte(1,255-n1)
+    end
+end
+
+function onSpinyStompCheck()
+    if config.stompSpiny then return false end
+end
+
+function onDemoteKoopa(oldEnemyType, newEnemyType)
+    -- Don't demote spiny when stomping.
+    if oldEnemyType == 0x12 then return oldEnemyType end
+    return
+end
+
+function onSetKoopaStateAfterDemote(enemyType, state)
+    -- kill spiny after demote
+    if enemyType == 0x12 then
+        return 0x20
+    end
+    
+    return state
+end
+
+
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
     lastinp=inp
@@ -506,8 +666,8 @@ function spidey.update(inp,joy)
     local world, level, area, areaPointer = smb.getLocation()
     game.location = {world=world, level=level, area=area, areaPointer=areaPointer, id = string.format("%x-%x %02x%02x",world+1, level+1, area, areaPointer)}
     
-    gui.text(50,50, game.location.id)
-    gui.text(50,50+8, string.format("%02x %02x",mouseTileX,mouseTileY))
+    --gui.text(50,50, game.location.id)
+    --gui.text(50,50+8, string.format("%02x %02x",mouseTileX,mouseTileY))
     
 --    if cheats.active then
 --        if cheats.hp then memory.writebyte(0x0065, 0x10) end
@@ -515,6 +675,13 @@ function spidey.update(inp,joy)
 --    end
     
     if spidey.debug.enabled then
+    end
+    
+    if game.action and config.ShowLivesInHud then
+        local n = (smb.currentPlayer()==0 and "M") or "L"
+        drawfont(8*11-1,8*2-1,font[5],string.format("%s %02d",n, math.min(99,memory.readbyte(0x075a))))
+        gui.drawline(97,18,97+4,22,"white")
+        gui.drawline(97+4,18,97,22,"white")
     end
     
     -- Float
@@ -571,6 +738,71 @@ function spidey.update(inp,joy)
         smb.setPlayerSpeed(xs, ys)
         smb.setPlayerMoveForce(xmf,ymf)
     end
+    
+    if config.airTurn then
+        if joy[1].left then
+            memory.writebyte(0x45,2) -- Player_MovingDir
+            memory.writebyte(0x33,2) -- PlayerFacingDir
+            --local xs = smb.intToNESByte
+            local xs = NESByteToInt(memory.readbyte(0x57))
+            if xs>0 then
+                xs=xs-1
+                memory.writebyte(0x57, smb.intToNESByte(xs))
+            end
+        end
+        if joy[1].right then
+            memory.writebyte(0x45,1) -- Player_MovingDir
+            memory.writebyte(0x33,1) -- PlayerFacingDir
+            local xs = NESByteToInt(memory.readbyte(0x57))
+            if xs<0 then
+                xs=xs+1
+                memory.writebyte(0x57, smb.intToNESByte(xs))
+            end
+        end
+    end
+    
+    if joy[1].B_press and config.fly then
+--        memory.writebyte(0x70a,0) --VerticalForceDown
+--        memory.writebyte(0x433,0) --Player_Y_MoveForce
+--        memory.writebyte(0x9f,0) --Player_Y_Speed
+--        memory.writebyte(0x709,0) --VerticalForce
+        
+--        memory.writebyte(0x705,0) -- Player_X_MoveForce
+--        memory.writebyte(0x57,0) -- Player_X_Speed
+        
+        player.fly = not player.fly
+    end
+    
+    if player.fly then
+        memory.writebyte(0x70a,0) --VerticalForceDown
+        memory.writebyte(0x433,0) --Player_Y_MoveForce
+        memory.writebyte(0x9f,0) --Player_Y_Speed
+        memory.writebyte(0x709,0) --VerticalForce
+        
+        memory.writebyte(0x705,0) -- Player_X_MoveForce
+        memory.writebyte(0x57,0) -- Player_X_Speed
+        
+        memory.writebyte(0x400,0)
+        --memory.writebyte(0x700,0) -- Player_XSpeedAbsolute
+
+        local s = 40
+        if joy[1].up then
+            memory.writebyte(0x9f,0xff-1) --Player_Y_Speed
+        end
+        if joy[1].down then
+            memory.writebyte(0x9f,2) --Player_Y_Speed
+        end
+        if joy[1].left then
+            memory.writebyte(0x57,0xff-s) -- Player_X_Speed
+            memory.writebyte(0x45,2) -- Player_MovingDir
+            memory.writebyte(0x33,2) -- PlayerFacingDir
+        end
+        if joy[1].right then
+            memory.writebyte(0x57,s) -- Player_X_Speed
+            memory.writebyte(0x45,1) -- Player_MovingDir
+            memory.writebyte(0x33,1) -- PlayerFacingDir
+        end
+    end
 
     if joy[1].A_press and game.wallBump and config.wallJump then
 
@@ -614,21 +846,44 @@ function spidey.update(inp,joy)
 --            o.xs = -1.3
 --            o.ai = {"medusa","movement"}
 --        end
+
+--        memory.writebyte(0xfe, 0x08) -- store #Sfx_Blast in Square2SoundQueue
+--        local o=obj.add()
+--        o.image = "bigBill"
+--        o.x = game.scrollX+255+math.random(200)
+--        o.y = math.random(200)
+--        o.xs = -1.3
+--        o.ai = {"movement"}
+        
+        smb.switchPlayer()
+        
+--        memory.readbyte(0x2002)
+--        memory.writebyte(0x2006, 0x3f)
+--        memory.writebyte(0x2006, 0x11)
+        
+--        memory.writebyte(0x2007, 0x30)
+--        memory.writebyte(0x2007, 0x27)
+--        memory.writebyte(0x2007, 0x19)
+        
+
     end
     
     
-    if inp.leftbutton_press or inp.lefbutton then
-        local o=obj.add()
+    
+    if inp.leftbutton and (mouseTileY>1) and config.leftButton == "block" then
+        
+        local b = blocks[config.blockType]
         
         game.changeBlock = {
             p = ScreenEdge_PageLoc,
             x=mouseTileX,
             y=mouseTileY,
-            tile = 0x51,
+            tile = b.tile,
         }
         
-        
-        o.image = "brickTop"
+        local o=obj.add()
+        --o.image = "brickTop"
+        o.image = b.image
         o.x = game.scrollX + mouseTileX*16
         o.x = game.ScreenEdge_X_Pos + inp.xmouse
         o.x = game.scrollX + inp.xmouse
@@ -641,7 +896,7 @@ function spidey.update(inp,joy)
     if not smb.frozen() then
         player.shootTime = math.max(0,(player.shootTime or 0) -1)
         
-        if joy[1].B_press and player.shootTime == 0 and smb.playerHasControl() and player.isOnScreen then
+        if joy[1].B_press and player.shootTime == 0 and smb.playerHasControl() and player.isOnScreen and config.weapon=="thing" then
             player.shootTime = 40
         end
         

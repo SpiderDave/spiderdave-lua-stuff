@@ -153,6 +153,33 @@ registerExec(0x884d,1 ,1,"onLivesDisplay")
 registerExec(0x88fd,1 ,1,"onTileTest1")
 registerExec(0x8903,1 ,1,"onTileTest2")
 
+registerExec(0xbfd7,1 ,1,"onImposeGravity")
+
+-- This is just after jsr UpdateScreen
+-- needs work.  not usable
+registerExec(0x8082,1 ,1,"onVblank")
+
+--registerExec(0xc469,1 ,1,"onSetFirebarSpeed")
+registerExec(0xcd4e,1 ,1,"onSetFirebarSpeed")
+registerExec(0xd414,1 ,1,"onSetFirebarSpinDirection")
+
+registerExec(0xcd96,1 ,1,"onSetFirebarLength")
+
+registerExec(0xced4,1 ,1,"onSetFirebarPositions")
+
+
+--registerExec(0xd8a9,1 ,1,"onSpinyStompCheck")
+registerExec(0xd96d,1 ,1,"onSpinyStompCheck")
+
+--registerExec(0xe025,1 ,1,"onDemoteKoopa")
+registerExec(0xe02d,1 ,1,"onDemoteKoopa") -- demote when killing with fireballs
+registerExec(0xd9b9,1 ,1,"onDemoteKoopa2") -- demote when stomping
+
+registerExec(0xd9bd,1 ,1,"onSetKoopaStateAfterDemote")
+
+--registerExec(0xe01d,1 ,1,"onStunCheck1")
+
+registerExec(0xe025,1 ,1,"onStunCheck1")
 
 
 --registerExec(0xb561,1 ,1,"onSetPlayerMaximumSpeedLeft")
@@ -495,5 +522,138 @@ function _onGameRoutine(address,len,t)
     if type(_G[fName])=="function" then
         local a = _G[fName](t.a)
         if a then memory.setregister("a", a) end
+    end
+end
+
+local coerceToByte = function(n)
+    return math.min(255, math.max(0, math.floor(n)))
+end
+
+--0BFD7                           ;$00 - used for downward force
+--0BFD7                           ;$01 - used for upward force
+--0BFD7                           ;$07 - used as adder for vertical position
+function _onImposeGravity(address,len,t)
+    if type(onImposeGravity)=="function" then
+        local downwardForce = onImposeGravity(t.x, memory.readbyte(0))
+        if downwardForce then memory.writebyte(0x00, coerceToByte(downwardForce)) end
+    end
+end
+
+
+function _onVblank(address,len,t)
+    if type(onVblank)=="function" then
+        onVblank()
+    end
+end
+
+function _onSetFirebarSpeed(address,len,t)
+    if type(onSetFirebarSpeed)=="function" then
+        local a = onSetFirebarSpeed(t.a)
+        if a then memory.setregister("a", coerceToByte(a)) end
+    end
+end
+
+function _onSetFirebarSpinDirection(address,len,t)
+    if type(onSetFirebarSpinDirection)=="function" then
+        --local spinDir = (t.a==0) and 0 or 1
+        
+        spinDir = onSetFirebarSpinDirection((t.a==0) and 0 or 1)
+        
+        if spinDir ~= nil then
+            if spinDir==0 then
+                t.p = bit.bor(t.p, 0x02)
+            elseif spinDir==1 then
+                t.p = bit.bor(t.p, 0x02)-2
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onSetFirebarLength(address,len,t)
+    if type(onSetFirebarLength)=="function" then
+        local y = onSetFirebarLength(t.y)
+        if y then memory.setregister("y", coerceToByte(y)) end
+    end
+end
+
+function _onSetFirebarPositions(address,len,t)
+    if type(onSetFirebarPositions)=="function" then
+        local y = onSetFirebarPositions(t.y)
+        if y then memory.setregister("y", coerceToByte(y)) end
+    end
+end
+
+
+function _onSpinyStompCheck(address,len,t)
+    if type(onSpinyStompCheck)=="function" then
+        
+        if t.a==0x12 then
+            local ret = onSpinyStompCheck(true)
+
+            if ret ~= nil then
+                if ret==true then
+                    t.p = bit.bor(t.p, 0x02)
+                else
+                    t.p = bit.bor(t.p, 0x02)-2
+                end
+                memory.setregister("p", t.p)
+            end
+        end
+
+    end
+end
+
+function _onDemoteKoopa(address,len,t)
+    if type(onDemoteKoopa)=="function" then
+        --local a = onDemoteKoopa(memory.readbyte(0x16 + t.x), t.a)
+        if a then
+            a = coerceToByte(a)
+            memory.setregister("a", a)
+            memory.writebyte(0x16 + t.x, a)
+        end
+    end
+end
+
+function _onDemoteKoopa2(address,len,t)
+    if type(onDemoteKoopa)=="function" then
+        local a = onDemoteKoopa(memory.readbyte(0x16 + t.x), t.a)
+        if a then
+            a = coerceToByte(a)
+            memory.setregister("a", a)
+            memory.writebyte(0x16 + t.x, a)
+        end
+    end
+end
+
+
+function _onStunCheck1(address,len,t)
+    if type(onStunCheck1)=="function" then
+        --if t.a==0x12 then
+            local ret = onStunCheck1(t.y)
+
+            if ret ~= nil then
+                if ret==true then
+                    t.p = bit.bor(t.p, 0x02)
+                else
+                    t.p = bit.bor(t.p, 0x02)-2
+                end
+                memory.setregister("p", t.p)
+            end
+        --end
+
+    end
+end
+
+
+
+function _onSetKoopaStateAfterDemote(address,len,t)
+    if type(onSetKoopaStateAfterDemote)=="function" then
+        local y = onSetKoopaStateAfterDemote(t.a, t.y)
+        if y then
+            y = coerceToByte(y)
+            memory.setregister("y", y)
+            memory.writebyte(0x1e + t.x, y)
+        end
     end
 end
