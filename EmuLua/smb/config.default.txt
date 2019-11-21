@@ -1,10 +1,19 @@
 // Don't modify this file; Instead make a file config.txt with just the items you want.
 
+// Graphics mode.  gd assumes the gd library is present, allowing .png loading.
+//graphics_mode=gd
+
 // Disable the timer if true.
 noTimer=false
 
 // Set to false to disable music.
 music = true
+
+// Allow the player to do a jump off enemies by holding B.
+stompJump = false
+
+// Allow the player to turn around and have better control in the air.
+airTurn = false
 
 // Wall jump (unfinished, do not use).
 wallJump=false
@@ -26,3 +35,15 @@ invulnerable=false
 
 // Fix the lives display to show up to 99 lives.
 fixLivesDisplay = true
+
+// Show lives in HUD at the top if true.
+ShowLivesInHud=false
+
+// Allow Spiny to be stomped.
+stompSpiny = false
+
+// Custom weapon when pressing B.
+//weapon = thing
+
+// Luigi Does a higher jump and shuffles feet.
+LuigiJump = true
