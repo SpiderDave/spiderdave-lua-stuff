@@ -1,6 +1,43 @@
 local smb = {}
 
+function smb.init(t)
+    if type(t)=="table" then
+        for k,v in pairs(t) do
+            smb[k] = v
+        end
+    end
+end
+
 smb.constants = {}
+
+-- Sfx constants, divided by sound queues
+-- Square1, Square2, Noise
+smb.constants.sfx = {
+    {
+        SmallJump         = 0x80,
+        Flagpole          = 0x40,
+        Fireball          = 0x20,
+        PipeDown_Injury   = 0x10,
+        EnemySmack        = 0x08,
+        EnemyStomp        = 0x04,
+        Bump              = 0x02,
+        BigJump           = 0x01,
+    },
+    {
+        BowserFall        = 0x80,
+        ExtraLife         = 0x40,
+        PowerUpGrab       = 0x20,
+        TimerTick         = 0x10,
+        Blast             = 0x08,
+        GrowVine          = 0x04,
+        GrowPowerUp       = 0x02,
+        CoinGrab          = 0x01,
+    },
+    {
+        BowserFlame       = 0x02,
+        BrickShatter      = 0x01,
+    }
+}
 
 smb.constants.music = {
     Ground=0x01,
@@ -181,6 +218,9 @@ smb.playerHasControl = function()
     
     -- OperMode must be "GameMode"
     if memory.readbyte(0x770)~=0x01 then return end
+    
+    -- Must not be in a hole.
+    if smb.playerInHole() then return end
     
     return true
 end
@@ -479,20 +519,29 @@ function smb.getHitBoxes()
         end
         
         hb[i].pageLoc = memory.readbyte(0x6d+i)
+        hb.active = false
         
         if show then
+            local y = memory.readbyte(0xb5+i)*0x100+memory.readbyte(0xce+i)
+            
             local x1 = memory.readbyte(0x4ac+i*4)
             local y1 = memory.readbyte(0x4ac+i*4+1)
             local x2 = memory.readbyte(0x4ac+i*4+2)
             local y2 = memory.readbyte(0x4ac+i*4+3)
-            --if (x1 > 0 and x1 < 255 and x2 > 0 and x2 < 255 and y1 > 0 and y1 < 224 and y2 > 0 and y2 < 224) then
-            --if (x1 > 0 and x1 < 255 and x2 > 0 and x2 < 255 and y1 > 0 and y1 < 224 and y2 > 0 and y2 < 255) then
-                --gui.drawbox(x1,y1,x2,y2,"clear", c)
-                --spidey.outlineText(x1,y1, string.format("%02x",i), c,"white")
-                hb[i].active = true
-                hb[i].rect = {x1,y1,x2,y2}
-                hb[i].color = c
-            --end
+            
+            
+            if y-y1<0 then y1=0 end
+            
+            --if i==0 then spidey.message("%d %d",y-0x100,y1) end
+            
+            hb[i].active = true
+            hb[i].rect = {x1,y1,x2,y2}
+            hb[i].color = c
+            
+            if y-y2<0 then hb[i].active = false end
+            
+            -- not sure if this is exactly right
+            if y>0x100+ 224 then hb[i].active = false end
         end
     end
     smb.hitBoxes = hb
@@ -502,6 +551,8 @@ end
 function smb.switchPlayer()
     local nPlayers = memory.readbyte(0x77a)+1
     if nPlayers == 1 then return end
+    
+    local playerStatus = memory.readbyte(0x756)
     
     --player = memory.readbyte(0x753)
     local player = memory.readbyte(0x753)
@@ -519,15 +570,33 @@ function smb.switchPlayer()
         {0x15,0x1e,0x12,0x10,0x12},
     }
     
-    if player==0 then
-        memory.writebyte(0x2007, 0x16)
-        memory.writebyte(0x2007, 0x27)
-        memory.writebyte(0x2007, 0x18)
-    else
-        memory.writebyte(0x2007, 0x30)
-        memory.writebyte(0x2007, 0x27)
-        memory.writebyte(0x2007, 0x19)
+    
+    local pName, configItem, p
+    
+    -- Here we access util and config through smb.util and smb.config
+    if smb.config then
+        pName = ((player==0) and "Mario") or "Luigi"
+        configItem = pName.. (((playerStatus == 0x02) and "PaletteFiery") or "Palette" )
+        if smb.config[configItem] then
+            p = smb.util.split(smb.config[configItem],",")
+            p[1] = tonumber(p[1])
+            p[2] = tonumber(p[2])
+            p[3] = tonumber(p[3])
+            memory.writebyte(0x2007, p[1])
+            memory.writebyte(0x2007, p[2])
+            memory.writebyte(0x2007, p[3])
+        end
     end
+    
+--    if player==0 then
+--        memory.writebyte(0x2007, 0x16)
+--        memory.writebyte(0x2007, 0x27)
+--        memory.writebyte(0x2007, 0x18)
+--    else
+--        memory.writebyte(0x2007, 0x30)
+--        memory.writebyte(0x2007, 0x27)
+--        memory.writebyte(0x2007, 0x19)
+--    end
     
     memory.readbyte(0x2002)
     
@@ -568,10 +637,34 @@ function smb.switchPlayer()
         memory.writebyte(0x2007, n)
     end
     
-    
     return player
 end
 
+function smb.getObjectData()
+    local o = {}
+    for i=0,17 do
+        o[i] = {}
+        o[i].y = memory.readbyte(0xb5+i)*0x100+memory.readbyte(0xce+i)
+        o[i].x = memory.readbyte(0x6e+i)*0x100+memory.readbyte(0x86+i)
+        o[i].id = memory.readbyte(0x15+i)
+        o[i].movingDir = memory.readbyte(0x45+i)
+    end
+    o.player = o[0]
+    smb.objects = o
+    return o
+end
 
+function smb.playSound(n)
+    local soundQueues = {0xff,0xfe,0xfd}
+    for q,v in pairs(smb.constants.sfx) do
+        for k,v in pairs(v) do
+            if k==n then
+                memory.writebyte(soundQueues[q], v)
+                return true
+            end
+        end
+    end
+    return false
+end
 
 return smb

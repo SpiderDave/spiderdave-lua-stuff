@@ -1,5 +1,18 @@
 -- SMB Lua script by SpiderDave
 
+-- To Do / ideas / issues:
+--
+--   * wavy effect in water
+--   * animated palette for podobo
+--   * sound effect for correct path in castles
+--   * animated water/lava
+--   * name entry screen
+--   * continue screen
+--   * Store player status and star time on player when switching.
+--   * Update font to use SMB's font.  use "?" from Kamikaze Mario DX+.
+--   * Make jumping off enemies work for all enemies
+--   * Add Kubiro's shoe.
+
 -- Load the Spidey library with all the bells and whistles.
 spidey=require "Spidey.SpideyStuff"
 
@@ -17,6 +30,7 @@ config.load("smb/config.txt")
 
 -- The smb library.
 local smb = require("smb.smb")
+smb.init{config=config, util=util} --pass a table to make some things available to smb library.
 
 local Thing = require("smb.thing")
 local obj = Thing.holder
@@ -182,6 +196,14 @@ function onCheckIfFiery(status)
     --return 2
 end
 
+function onLoadState(n)
+    --if n then emu.pause() end
+    game.continueMode = false
+    --spidey.message("State %d loaded!",n)
+end
+
+function onSaveState()
+end
 
 function onPlayerInjury(abort)
     if config.invulnerable then abort=true end
@@ -197,6 +219,22 @@ function onSetEnemySpeed(eType, speed, sign)
 end
 
 function onSetPlayerPalette(CurrentPlayer, PlayerStatus, index, c)
+    --if PlayerStatus == 2 then emu.pause() end
+    local pName = ((CurrentPlayer==0) and "Mario") or "Luigi"
+    local configItem = pName.. (((PlayerStatus == 0x02) and "PaletteFiery") or "Palette" )
+    
+    if config[configItem] then
+        local p = util.split(config[configItem],",")
+        p[1] = tonumber(p[1])
+        p[2] = tonumber(p[2])
+        p[3] = tonumber(p[3])
+        --spidey.message("%02x %02x %02x %s", p[1],p[2],p[3], configItem)
+        
+        if index>=1 and index<=3 then return p[index] end
+    else
+        --spidey.message("Not found: ".. configItem )
+    end
+
 -- dark mario
 --if index==0 then return 0x06 end
 --if index==1 then return c-0x10 end
@@ -332,15 +370,34 @@ function onHitWall(side, facing)
     --memory.writebyte(0x9f, 0xff)
 end
 
-
-function onProcessPlayerState(s)
-    if config.LuigiJump and s==0x01 and smb.currentPlayer() == 1 then
-        local frame = spidey.counter % 3
-        memory.writebyte(0x70d, (frame+1) % 0x03)
-        return 0
+function onSetPlayerGfxOffset(g)
+    if config.LuigiJump and smb.currentPlayer() == 1 then
+        if g==0x20 then
+            -- Luigi shuffles feet during jump (big)
+            g = (spidey.counter % 3) * 8
+            return g
+        elseif g==0x80 then
+            -- Luigi shuffles feet during jump (small)
+            g = (spidey.counter % 3) * 8 + 0x60
+            return g
+        end
     end
 end
 
+function onProcessPlayerState(s)
+--    if config.LuigiJump and s==0x01 and smb.currentPlayer() == 1 then
+--        local frame = spidey.counter % 3
+--        memory.writebyte(0x70d, (frame+1) % 0x03)
+--        return 0
+--    end
+end
+
+function onGetFriction(friction, index)
+    if config.LuigiFriction and smb.currentPlayer() == 1 then
+        local LuigiFriction = {0xb4, 0x68, 0x50}
+        return LuigiFriction[index]
+    end
+end
 
 --function onSetPlayerAnimation(n)
 --    spidey.message("%02x",n)
@@ -398,6 +455,23 @@ end
 --    return e
 --end
 
+
+function onCheckEnemyType(index, enemyType)
+    -- Check for flagpole flag object
+    if enemyType==0x30 then
+        local x =memory.readbyte(0x6e+index)*0x100+ memory.readbyte(0x87+index)
+        
+        -- If the flagpole object is close to the left edge and player has
+        -- control, lock the scroll.
+        if game.scrollX > x -0x20 and smb.playerHasControl() then
+            memory.writebyte(0x723, 0x01)
+        end
+    end
+    
+    return enemyType
+end
+
+
 --function onLoadEnemyData(e)
 --    spidey.message("enemy %02x", e)
 --    return e
@@ -413,7 +487,6 @@ function onCheckScrollable(canScroll)
 end
 
 function onCheckFrameForColorRotation(f)
-    
 --    local tileNum = 0x24
 --    local r = math.random(0,0x10-1)
 --    local n = math.random(0,255)
@@ -478,11 +551,12 @@ end
 --    spidey.message("boop")
 --end
 
-function _onSetIntermediateSprite(x,y)
+function onSetIntermediateSprite(x,y)
+    if true then return end
     x=0xc8
     --x=0xb0
     --y=y+3
-    y=0x20
+    --y=0x20
     return x,y
 end
 
@@ -654,6 +728,23 @@ function onSetKoopaStateAfterDemote(enemyType, state)
     return state
 end
 
+function onResetTitle()
+end
+
+function onSkipGameOverScreen(abort)
+    -- abort skipping game over screen so continue screen works
+    abort = true
+    return abort
+end
+
+function onTitleMenuChange(menuIndex)
+    --spidey.message("%02x", menuIndex)
+    if config.menuSound then smb.playSound("TimerTick") end
+end
+
+function onCheckSoundMute(soundEnabled)
+    if config.demoSound then return true end
+end
 
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
@@ -668,6 +759,10 @@ function spidey.update(inp,joy)
     game.paused = smb.paused()
     game.frozen = smb.frozen() -- Game is frozen for example when you collect a mushroom
     game.action = smb.action()
+    game.operMode = memory.readbyte(0x770)
+    
+    smb.getObjectData() -- get data for player and enemies
+    smb.getHitBoxes()   -- get hitbox data for player and enemies
     
     player.control = (memory.readbyte(0x0e)==0x08)
     player.isOnScreen = smb.playerOnScreen()
@@ -680,7 +775,7 @@ function spidey.update(inp,joy)
     game.ScreenEdge_X_Pos = ScreenEdge_X_Pos
     local mouseTileX = math.floor((inp.xmouse+ScreenEdge_X_Pos % 16)/16)
     local mouseTileY = math.floor(inp.ymouse/16)
-    smb.getHitBoxes()
+    
     
 --    if game.action then gui.text(50,50,"action") end
 --    if game.frozen then gui.text(50,50+8*1,"frozen") end
@@ -701,11 +796,45 @@ function spidey.update(inp,joy)
     if spidey.debug.enabled then
     end
     
-    if game.action and config.ShowLivesInHud then
+    if game.action and config.ShowLivesInHud and game.operMode ~= 0x03 then
         local n = (smb.currentPlayer()==0 and "M") or "L"
         drawfont(8*11-1,8*2-1,font[5],string.format("%s %02d",n, math.min(99,memory.readbyte(0x075a))))
         gui.drawline(97,18,97+4,22,"white")
         gui.drawline(97+4,18,97,22,"white")
+    end
+    
+    if config.continueScreen then
+        if game.operMode == 0x03 then
+            local screenTimer = memory.readbyte(0x7a0)
+            
+            if screenTimer==0x01 then
+                screenTimer=0x02
+                memory.writebyte(0x7a0,screenTimer)
+                game.continueModeMenuY = game.continueModeMenuY or 0
+                game.continueMode = true
+                
+            end
+            if joy[1].A_press or joy[1].start_press then
+                screenTimer=0x00
+                memory.writebyte(0x7a0,screenTimer)
+                
+                if game.continueModeMenuY == 0 then
+                    game.operMode = 0x01
+                    memory.writebyte(0x770, game.operMode)
+                    memory.writebyte(0x772, 0x03) --set OperMode_Task to GameMenuRoutine
+                    
+                    memory.writebyte(0x75a, 0x02)-- lives
+                end
+                
+            end
+            if game.continueMode and (joy[1].select_press or joy[1].up_press or joy[1].down_press) then
+                game.continueModeMenuY = ((game.continueModeMenuY or 0) + 1) % 2
+                smb.playSound("TimerTick")
+            end
+        else
+            game.continueMode = false
+            game.continueModeMenuY = nil
+        end
     end
     
     -- Float
@@ -856,6 +985,10 @@ function spidey.update(inp,joy)
         if game.wallBump==0 then game.wallBump = false end
     end
     
+    if joy[1].select_press and config.switchPlayer and game.action and smb.playerHasControl() then
+        smb.switchPlayer()
+    end
+    
     if joy[1].select_press then
         --smb.createEnemy(0x07, 0x10, 0x10, 8, 1)
         --smb.createEnemy(0x08, 240,math.random(200), -1,0)
@@ -878,8 +1011,6 @@ function spidey.update(inp,joy)
 --        o.y = math.random(200)
 --        o.xs = -1.3
 --        o.ai = {"movement"}
-        
-        smb.switchPlayer()
         
 --        memory.readbyte(0x2002)
 --        memory.writebyte(0x2006, 0x3f)
@@ -1047,47 +1178,12 @@ function spidey.update(inp,joy)
     
     if game.action and config.showHitBoxes then
         for i = 0, 17 do
-            local state
-            local show = false
-            local c = "purple"
-            if i==0 then
-                c = "blue"
-                show = (memory.readbyte(0xb5) <= 1) -- Player_Y_HighPos
-            end
-            if i>=1 and i<=5 then
-                c = "green"
-                show = (memory.readbyte(0x0e+i) > 0)
-            end
-            if i==6 then
-                c = "orange"
-                state = memory.readbyte(0x23)
-                if state>6 then show=true end
-            end
-            if i>=7 and i<=8 then
-                c = "red"
-                show = (memory.readbyte(0x1d+i) > 0)
-            end
-            if i>=9 then
-                state = memory.readbyte(0x2a+i-9)
-                if state>=0x80 then
-                    c="grey"
-                else
-                    c="yellow"
-                end
-                show = (memory.readbyte(0x2a+i-9) > 0)
-                
-            end
             
-            if show then
-                local x1 = memory.readbyte(0x4ac+i*4)
-                local y1 = memory.readbyte(0x4ac+i*4+1)
-                local x2 = memory.readbyte(0x4ac+i*4+2)
-                local y2 = memory.readbyte(0x4ac+i*4+3)
-                --if (x1 > 0 and x1 < 255 and x2 > 0 and x2 < 255 and y1 > 0 and y1 < 224 and y2 > 0 and y2 < 224) then
-                --if (x1 > 0 and x1 < 255 and x2 > 0 and x2 < 255 and y1 > 0 and y1 < 224 and y2 > 0 and y2 < 255) then
-                    gui.drawbox(x1,y1,x2,y2,"clear", c)
-                    spidey.outlineText(x1,y1, string.format("%02x",i), c,"white")
-                --end
+            local hb = smb.hitBoxes[i]
+            
+            if hb.active then
+                gui.drawbox(hb.rect[1], hb.rect[2],hb.rect[3], hb.rect[4],"clear", hb.color)
+                spidey.outlineText(hb.rect[1], hb.rect[2], string.format("%02x",i), hb.color,"white")
             end
         end
     end
@@ -1132,6 +1228,17 @@ function spidey.draw()
         
         if o.active and o.onScreen then
             gfx.draw(o.x-game.scrollX,o.y,o.image)
+        end
+    end
+    
+    if config.continueScreen then
+        if game.continueMode then
+            gui.drawbox(0,32,spidey.screenWidth-1,spidey.screenHeight-9,"black","black")
+            drawfont(8*11-1,8*13-1,font[5],"CONTINUE")
+            drawfont(8*(11+8)+1,8*13,font[6],"?")
+            drawfont(8*14-1,8*15-1,font[5],"YES")
+            drawfont(8*14-1,8*17-1,font[5],"NO")
+            gfx.draw(8*12,8*(15+(game.continueModeMenuY or 0)*2)-1,gfx.cursor.image)
         end
     end
 end

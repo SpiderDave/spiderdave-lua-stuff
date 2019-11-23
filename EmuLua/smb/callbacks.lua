@@ -89,12 +89,12 @@ end
 
 
 
-savestate.registerload(function()
-    if type(onLoadState)=="function" then onLoadState() end
+savestate.registerload(function(...)
+    if type(onLoadState)=="function" then onLoadState(...) end
 end)
 
-savestate.registersave(function()
-    if type(onSaveState)=="function" then onSaveState() end
+savestate.registersave(function(...)
+    if type(onSaveState)=="function" then onSaveState(...) end
 end)
 
 -- Here we make the basic callbacks, with a few bells and whistles.
@@ -155,9 +155,14 @@ registerExec(0x8903,1 ,1,"onTileTest2")
 
 registerExec(0xbfd7,1 ,1,"onImposeGravity")
 
--- This is just after jsr UpdateScreen
--- needs work.  not usable
-registerExec(0x8082,1 ,1,"onVblank")
+-- Attempting to find a usable spot to do safe nametable 
+-- updates.  Doesn't work.  Leads to nametable glitches :(
+--registerExec(0x8082,1 ,1,"onVblank")
+--registerExec(0x8181,1 ,1,"onVblank")
+--registerExec(0x8230,1 ,1,"onVblank")
+--registerExec(0x80b3,1 ,1,"onVblank")
+--registerExec(0x8ee6,1 ,1,"onVblank")
+registerExec(0xb033,1 ,1,"onVblank")
 
 --registerExec(0xc469,1 ,1,"onSetFirebarSpeed")
 registerExec(0xcd4e,1 ,1,"onSetFirebarSpeed")
@@ -184,9 +189,21 @@ registerExec(0xe025,1 ,1,"onStunCheck1")
 registerExec(0xefee,1 ,1,"onProcessPlayerState")
 registerExec(0xf030,1 ,1,"onSetPlayerAnimation")
 
+--registerExec(0xef45,1 ,1,"onSetPlayerGfxOffset")
+registerExec(0xef37,1 ,1,"onSetPlayerGfxOffset")
+
 
 --registerExec(0xb561,1 ,1,"onSetPlayerMaximumSpeedLeft")
 --registerExec(0xb566,1 ,1,"onSetPlayerMaximumSpeedRight")
+
+registerExec(0x82c9,1 ,1,"onResetTitle")
+
+registerExec(0x923f,1 ,1,"onSkipGameOverScreen")
+
+registerExec(0x8293,1 ,1,"onTitleMenuChange")
+
+registerExec(0xf2d3,1 ,1,"onCheckSoundMute")
+registerExec(0xb577,1 ,1,"onGetFriction")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -358,7 +375,8 @@ end
 -- needs work
 function _onCheckEnemyType(address,len,t)
     if type(onCheckEnemyType)=="function" then
-        local y = onCheckEnemyType(t.y)
+        -- index, type
+        local y = onCheckEnemyType(t.x, t.y)
         if y then
             memory.setregister("y", y)
             --memory.writebyte(0x16+t.x, y)
@@ -670,5 +688,61 @@ function _onSetPlayerAnimation(address,len,t)
     if type(onSetPlayerAnimation)=="function" then
         local y = onSetPlayerAnimation(t.y)
         if y then memory.setregister("y", y) end
+    end
+end
+
+function _onResetTitle(address,len,t)
+    if type(onResetTitle)=="function" then
+        onResetTitle()
+    end
+end
+
+function _onSkipGameOverScreen(address,len,t)
+    if type(onSkipGameOverScreen)=="function" then
+        local ret = onSkipGameOverScreen(false)
+        if ret ~= nil then
+            if ret==true and t.p == bit.bor(t.p, 0x02)-0x02 then
+                t.p = bit.bor(t.p, 0x02)
+                memory.setregister("a", 0)
+            end
+        end
+    end
+end
+
+function _onTitleMenuChange(address,len,t)
+    if type(onTitleMenuChange)=="function" then
+        local a = onTitleMenuChange(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onCheckSoundMute(address,len,t)
+    if type(onCheckSoundMute)=="function" then
+        local ret = onCheckSoundMute((t.a~=0))
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x02)-2
+            else
+                t.p = bit.bor(t.p, 0x02)
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onSetPlayerGfxOffset(address,len,t)
+    if type(onSetPlayerGfxOffset)=="function" then
+        local a = onSetPlayerGfxOffset(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onGetFriction(address,len,t)
+    if type(onGetFriction)=="function" then
+        local a = onGetFriction(t.a, t.y)
+        if a then 
+        memory.setregister("a", coerceToByte(a)) 
+        memory.writebyte(0x702,a)
+        end
     end
 end

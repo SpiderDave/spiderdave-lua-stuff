@@ -47,3 +47,25 @@ stompSpiny = false
 
 // Luigi Does a higher jump and shuffles feet.
 LuigiJump = true
+
+// Switch players by pressing select in a two player game.
+switchPlayer = false
+
+// Player palettes
+MarioPalette = 0x16,0x27,0x18
+MarioPaletteFiery = 0x37,0x27,0x16
+LuigiPalette = 0x30,0x27,0x19
+LuigiPaletteFiery = 0x37,0x27,0x16
+
+// Add a continue screen.
+continueScreen = false
+
+// Add sound to demo mode
+demoSound = false
+
+// add sound effect to the title menu
+// requires demoSound = true
+menuSound = false
+
+// add Luigi friction (sliding) values from smb2j
+LuigiFriction = false
