@@ -951,7 +951,7 @@ function onCheckSoundMute(soundEnabled)
 end
 
 function onCheckDisableIntermediate()
-    return true
+    if config.disableIntermediate then return true end
 end
 
 emu.registerexit(function(x) emu.message("") end)

@@ -78,3 +78,6 @@ explode = false
 
 // Turns Bowser's bridge into a conveyer belt.
 bridgeConveyer = false
+
+// Disable intermediate screen if true.
+disableIntermediate = false
