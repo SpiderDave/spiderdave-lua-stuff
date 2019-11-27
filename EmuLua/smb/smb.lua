@@ -298,6 +298,13 @@ function smb.getScroll()
     return scrollX
 end
 
+function smb.playerIsStanding()
+    -- check for standing frame big and small
+    local f = memory.readbyte(0x6d5)
+    if f==0xc8 or f==0xb8 then return true end
+    return false
+end
+
 function smb.getPlayerPosition()
 --    local ScreenEdge_X_Pos = memory.readbyte(0x71c)
 --    local ScreenEdge_PageLoc = memory.readbyte(0x71a)
@@ -320,7 +327,17 @@ function smb.getPlayerPosition()
     return px,py
 end
 
-
+function smb.setPlayerPosition(px,py)
+    if px then
+        memory.writebyte(0x6d, math.floor(px / 0x100)) -- Player_PageLoc
+        memory.writebyte(0x86, px % 0x100) -- playerX
+    end
+    if py then
+        memory.writebyte(0xb5, math.floor(py / 0x100)) -- Player_Y_HighPos
+        memory.writebyte(0xce, py % 0x100) -- playerY
+    end
+    
+end
 
 function smb.getUnusedEnemyIndex()
     for i=0,4 do
@@ -666,5 +683,35 @@ function smb.playSound(n)
     end
     return false
 end
+
+
+function smb.textMap(s)
+    local ret = {}
+    for i = 1, #s do
+        --local c = str:sub(i,i)
+        local c = s:byte(i)
+        if c >= 0x41 and c <=0x5a then
+            -- A-Z
+            n = c-0x41+0x0a
+        elseif c >= 0x30 and c <=0x39 then
+            -- 0-9
+            n = c-0x41
+        elseif string.char(c) == "-" then
+            n = 0x28
+        elseif string.char(c) == "x" then
+            n = 0x29
+        elseif string.char(c) == "!" then
+            n = 0x2b
+        elseif string.char(c) == "." then
+            n = 0xaf
+        else
+            -- space
+            n = 0x24
+        end
+        ret[i] = n
+    end
+    return ret
+end
+
 
 return smb

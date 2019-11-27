@@ -9,7 +9,7 @@ noTimer=false
 // Set to false to disable music.
 music = true
 
-// Allow the player to do a jump off enemies by holding B.
+// Allow the player to do a jump off enemies by holding A.
 stompJump = false
 
 // Allow the player to turn around and have better control in the air.
@@ -69,3 +69,12 @@ menuSound = false
 
 // add Luigi friction (sliding) values from smb2j
 LuigiFriction = false
+
+// demote to big instead of small when injured if > big.
+demoteToBig = false
+
+// A silly tile explode effect when you press select
+explode = false
+
+// Turns Bowser's bridge into a conveyer belt.
+bridgeConveyer = false

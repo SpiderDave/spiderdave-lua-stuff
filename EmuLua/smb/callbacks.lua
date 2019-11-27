@@ -138,6 +138,11 @@ registerExec(0x86c2,1 ,1,"onIntermediate")
 
 registerExec(0xefb2,1 ,1,"onSetIntermediateSprite")
 
+
+registerExec(0x86bb,1 ,1,"onCheckDisableIntermediateResidual")
+registerExec(0x86bd,1 ,1,"onCheckDisableIntermediate")
+
+
 registerExec(0xaf9d+3,1 ,1,"onCheckScrollable")
 
 registerExec(0x94f7,1 ,1,"onLoadBlockSolidity")
@@ -204,6 +209,12 @@ registerExec(0x8293,1 ,1,"onTitleMenuChange")
 
 registerExec(0xf2d3,1 ,1,"onCheckSoundMute")
 registerExec(0xb577,1 ,1,"onGetFriction")
+
+registerExec(0xd936,1 ,1,"onSetPlayerStatusAfterInjury")
+registerExec(0xb265,1 ,1,"onSetPlayerSize")
+
+
+registerExec(0xdd01,1 ,1,"onPlayerStandingOnMetaTile")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -744,5 +755,57 @@ function _onGetFriction(address,len,t)
         memory.setregister("a", coerceToByte(a)) 
         memory.writebyte(0x702,a)
         end
+    end
+end
+
+
+function _onSetPlayerStatusAfterInjury(address,len,t)
+    if type(onSetPlayerStatusAfterInjury)=="function" then
+        local a = onSetPlayerStatusAfterInjury(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+            memory.setregister("x", coerceToByte(a))
+        end
+    end
+end
+
+function _onSetPlayerSize(address,len,t)
+    if type(onSetPlayerSize)=="function" then
+        local a = onSetPlayerSize(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+
+
+-- This is a (probably residual) extra check that
+-- prevents disabling the intermediate screen
+-- on castle levels.  We'll just silently remove
+-- via callback since the other function is enough.
+function _onCheckDisableIntermediateResidual(address,len,t)
+    t.p = bit.bor(t.p, 0x02)-2
+    memory.setregister("p", t.p)
+end
+
+function _onCheckDisableIntermediate(address,len,t)
+    if type(onCheckDisableIntermediate)=="function" then
+        local ret = onCheckDisableIntermediate((t.a>0))
+        if ret~=nil then
+            if ret == false then
+                memory.setregister("a", 0)
+                memory.writebyte(0x769,0)
+            elseif ret == true then
+                memory.setregister("a", 1)
+                memory.writebyte(0x769, 1)
+            end
+        end
+    end
+end
+
+function _onPlayerStandingOnMetaTile(address,len,t)
+    if type(onPlayerStandingOnMetaTile)=="function" then
+        local tile = memory.readbyte(0x03)
+        onPlayerStandingOnMetaTile(tile)
     end
 end

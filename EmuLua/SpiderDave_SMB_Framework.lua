@@ -205,6 +205,28 @@ end
 function onSaveState()
 end
 
+function onSetPlayerStatusAfterInjury(s)
+    if config.demoteToBig then
+        local playerStatus = memory.readbyte(0x0756)
+        if playerStatus>1 then
+            memory.writebyte(0x0756, 1) -- playerStatus
+            return 1 -- demote to big
+        end
+    end
+end
+
+
+-- Triggered by getting hit or getting a power up only.
+function onSetPlayerSize(s)
+    local playerStatus = memory.readbyte(0x0756)
+    
+    -- Fixes for when demoteToBig is active
+    if playerStatus == 0x01 and s == 0x01 then return 0 end
+    if playerStatus == 0x02 and s == 0x01 then return 0 end
+    
+    return s
+end
+
 function onPlayerInjury(abort)
     if config.invulnerable then abort=true end
     return abort
@@ -255,6 +277,7 @@ function onLoadBackgroundMetatile(n)
     --if n==3 then n=0 end
     --if n==2 then n=85 end
     --n=0x0a
+    --n=0x61 -- 3d blocks
 --    n=game.tile
 --    n=n+1
     return n
@@ -281,6 +304,92 @@ end
 function onTileTest(a, index)
     -- attribute
     --memory.writebyte(0x03,0xff)
+    
+    local p = memory.readbyte(0x725) -- CurrentPageLoc
+    local x = memory.readbyte(0x726) -- CurrentColumnPos
+    local y = memory.readbyte(0x01)
+    
+    
+    -- 0 2
+    -- 1 3
+    local tilePos = {
+        [0] = {x=0,y=0},
+        {x=0,y=1},
+        {x=1,y=0},
+        {x=1,y=1},
+    }
+    
+    x=p*16*2+x*2+tilePos[index].x
+    y=y*2+tilePos[index].y
+    
+    local m = {
+        text = "HELLO WORLD!",
+        x = 0x05,
+        y = 0x0f,
+    }
+    m=nil -- disable
+    
+    if m and (y==m.y)then
+        local t = smb.textMap(m.text)
+        for i=1,#m.text do
+            if x == m.x +i then
+                a=t[i]
+                memory.writebyte(0x03,0x50) -- attribute
+            end
+        end
+    end
+    
+    -- add water
+--    if a==0x24 then
+--        if y==0x17 then a = 0x41 end
+--        if y==0x18 then a = 0x26 end
+--    end
+    
+    -- display page
+    --if y==0 and x % 0x20 == 0 then return p end
+    
+    --if a==0x24 then a=0xc0 end
+    
+    --game.test=nil
+--    if not game.test then
+--        game.test = true
+--        local chrPage = 1
+--        local tile = 0xd0
+        
+--        for i=0,0x10-1 do
+--            rom.writebyte(0x10+0x8000+chrPage*0x1000+tile*0x10+i,math.random(255))
+--        end
+
+    if false then
+        -- modify background on the fly (must reload rom to fix)
+        for i=0,0x10-1 do
+            local n = rom.readbyte(0x10+0x8000+1*0x1000+0x47*0x10+i)
+            
+            if (i % 0x10) >=0x08 then
+                rom.writebyte(0x10+0x8000+1*0x1000+0xd0*0x10+i,0xff)
+            else
+                rom.writebyte(0x10+0x8000+1*0x1000+0xd0*0x10+i,n)
+            end
+        end
+        
+        if a==0x24 then
+            a = 0xd0
+            --memory.writebyte(0x03,0x80) -- attribute
+        end
+    end
+    
+    --if  y==0x15 then a=0xc0 end
+    --if (a>=0xb4 and a<=0xb7) and y==0x16 then a=0xc1 end
+    --if (a>=0xb4 and a<=0xb7) and y==0x17 then a=0x24 end
+    --if (a>=0xb4 and a<=0xb7) and y==0x18 then a=0x24 end
+    
+--    if x == 0x20+0x05 and y ==0x05 then a=0x11 end
+--    if x == 0x20+0x06 and y ==0x05 then a=0x0e end
+--    if x == 0x20+0x07 and y ==0x05 then a=0x15 end
+--    if x == 0x20+0x08 and y ==0x05 then a=0x15 end
+--    if x == 0x20+0x09 and y ==0x05 then a=0x18 end
+    --a=0xce
+    --a=p
     return a
 end
 
@@ -486,6 +595,15 @@ function onCheckScrollable(canScroll)
     return canScroll
 end
 
+function onPlayerStandingOnMetaTile(tile)
+    if config.bridgeConveyer then
+        if tile==0x89 then
+            local x,y = smb.getPlayerPosition()
+            smb.setPlayerPosition(x-1)
+        end
+    end
+end
+
 function onCheckFrameForColorRotation(f)
 --    local tileNum = 0x24
 --    local r = math.random(0,0x10-1)
@@ -505,6 +623,92 @@ function onCheckFrameForColorRotation(f)
     
 --    rom.writebyte(0x10+0x8000+0x1000+tileNum*0x10+r,0x00)
 --    rom.writebyte(0x10+0x8000+0x1000+tileNum*0x20+r,0x00)
+    
+    if game.doExplode then
+        game.explode = (game.explode or .1) * 1.04
+        for i = 0,0x40-1 do
+            --if i>0  and i %2==0 then
+            if i>1 then
+                local a = 0x200+i*4-1
+                local n = memory.readbyte(a)
+                
+                n = n + math.random(-game.explode,game.explode)
+                n=math.max(n, 0)
+                n=math.min(n, 255)
+                memory.writebyte(a, n)
+
+                a=a+1
+                local n = memory.readbyte(a)
+                n = n + math.random(-game.explode,game.explode)
+                n=math.max(n, 0)
+                n=math.min(n, 255)
+                memory.writebyte(a, n)
+            end
+        end
+    end
+    
+    
+    if config.bridgeConveyer then
+        local chrPage = 1
+        for _,tileNum in ipairs({0x77,0x79}) do
+            for i=0,0x10-1 do
+                local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
+                n=n*2
+                if n>0xff then n=n-0xff end
+                rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+            end
+        end
+    end
+    
+    -- moving water/lava
+    
+    --if true then
+    while game.lavaScroll ~= math.floor(game.scrollX/5) % 0x10 do
+        local chrPage = 1
+        local tileNum = 0x41
+        for i=0,0x10-1 do
+            local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
+            
+            n=n*2
+            if n>0xff then n=n-0xff end
+            
+            rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+        end
+        game.lavaScroll = ((game.lavaScroll or 0)+1) % 0x10
+    end
+    
+    -- rotate a lot of tiles, crazy!
+    if false then
+        local chrPage = 1
+        if f % 2 ==0 then
+            for tileNum = 0x40, 0xce do
+                for i=0,0x10-1 do
+                    --local tileNum = 0x41
+                    local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
+                    
+                    n=n*2
+                    if n>0xff then n=n-0xff end
+                    
+                    rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+                end
+            end
+            
+            chrPage=0
+            for tileNum = 0x0, 0xfe do
+                for i=0,0x10-1 do
+                    local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
+                    
+                    n=n*2
+                    if n>0xff then n=n-0xff end
+                    
+                    rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+                end
+            end
+
+        end
+    end
+    
+    
     
     if false then
         -- corrupt background
@@ -744,6 +948,10 @@ end
 
 function onCheckSoundMute(soundEnabled)
     if config.demoSound then return true end
+end
+
+function onCheckDisableIntermediate()
+    return true
 end
 
 emu.registerexit(function(x) emu.message("") end)
@@ -987,6 +1195,11 @@ function spidey.update(inp,joy)
     
     if joy[1].select_press and config.switchPlayer and game.action and smb.playerHasControl() then
         smb.switchPlayer()
+    end
+    
+    if joy[1].select_press and config.explode and game.action then
+        game.doExplode = not game.doExplode
+        if not game.doExplode then game.explode = nil end
     end
     
     if joy[1].select_press then
