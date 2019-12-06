@@ -18,7 +18,7 @@ airTurn = false
 // Wall jump (unfinished, do not use).
 wallJump=false
 
-// Float (unfinished, needs limiting).
+// Float
 float=false
 
 // Default fireball speed and downward force.
@@ -81,3 +81,18 @@ bridgeConveyer = false
 
 // Disable intermediate screen if true.
 disableIntermediate = false
+
+// Can hold enemies if true (needs work)
+holdEnemies = false
+
+// Display a marquee message on the title screen
+titleMarquee = false
+
+// Background color for the pause menu
+menuBackgroundColor = #222222c0
+
+// Maximum lives limit.
+maxLives = 99
+
+// Display random silly messages after defeating a castle level.
+randomMessages = false

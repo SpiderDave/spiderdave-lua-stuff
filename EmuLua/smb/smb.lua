@@ -209,6 +209,15 @@ function smb.currentPlayer()
     return memory.readbyte(0x0753)
 end
 
+function smb.setPlayerSize()
+    -- check player status
+    if memory.readbyte(0x0756)==0x00 then
+        memory.writebyte(0x754,1) -- set PlayerSize to 0x01 (small)
+    else
+        memory.writebyte(0x754,0) -- set PlayerSize to 0x00 (big)
+    end
+end
+
 smb.playerHasControl = function()
     -- game routine must be "PlayerCtrlRoutine"
     if memory.readbyte(0x0e)~=0x08 then return end
@@ -441,6 +450,16 @@ function smb.setFacing(i, facing)
     end
     memory.writebyte(0x0046 + i, facing)
     return facing
+end
+
+
+function smb.getFacing(i, returnMultiplier)
+    local facing = memory.readbyte(0x33 + i)
+    if returnMultiplier then
+        if facing == 2 then return -1 else return 1 end
+    else
+        return facing
+    end
 end
 
 
@@ -711,6 +730,48 @@ function smb.textMap(s)
         ret[i] = n
     end
     return ret
+end
+
+function smb.getMetaTileName(t)
+    local tileP = 0
+    if t >=0x80 then
+        t= t-0x80
+        tileP = tileP + 2
+    end
+    if t >=0x40 then
+        t= t-0x40
+        tileP = tileP + 1
+    end
+    return smb.constants.metaTiles[tileP][t] or "unknown", tileP, t
+end
+
+
+function smb.makeMessage(txt)
+    local out=""
+    for i = 1, (#txt) do
+        local b = string.byte(txt:sub(i,i))
+        
+        c=0
+        if b >=0x41 and b<=0x5a then
+            c=b-0x41+0x0a
+        elseif b >=0x0 and b<=0x9 then
+            c=b+0x60
+        elseif b ==0x2d then
+            c=0x28
+        elseif b ==0x2e then
+            c=0xaf
+        elseif b ==0x20 then
+            c=0x24
+        elseif b == 0X21 then
+            c=0x2B
+        elseif b >=0x30 and b<=0x39 then
+            c=b-0x30
+        end
+        
+        out=out..string.char(c)
+    end
+    
+    return out
 end
 
 

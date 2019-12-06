@@ -101,53 +101,39 @@ end)
 -- If the bank is set to nil, it will display the function name and
 -- bank in a message.
 
+registerExec(0x8000,1 ,1,"onPowerOnReset")
+-- after initializing memory and some other stuff
+registerExec(0x8052,1 ,1,"onInitialize")
+
 registerExec(0xb627,1 ,1,"onCheckIfFiery")
 registerExec(0xf41b+2,1 ,1,"onSquare1SfxHandler") -- needs work
 registerExec(0xd92c+3,1 ,1,"onPlayerInjury")
 registerExec(0xc319,1 ,1,"onSetEnemySpeed")
 registerExec(0x860a+3,1 ,1,"onSetPlayerPalette")
-
 registerExec(0x9448,1 ,1,"onLoadBackgroundMetatile")
 registerExec(0x94b3,1 ,1,"onLoadForegroundMetatile")
 registerExec(0xf6c8,1 ,1,"onMusic")
-
 registerExec(0xf6a4,1 ,1,"onEventMusic")
-
 registerExec(0xb04c,1 ,1,"onGameRoutine")
-
 registerExec(0xd9f3,1 ,1,"onStomp")
 registerExec(0xb6b1,1 ,1,"onSetFireballSpeedX")
 registerExec(0xb6b5,1 ,1,"onSetFireballSpeedY")
-
 registerExec(0xb6c5,1 ,1,"onSetFireballDownwardForce")
-
 registerExec(0xb752,1 ,1,"onGameTimer")
 registerExec(0xc3af,1 ,1,"onSetLakituTimer")
 registerExec(0xc4b9,1 ,1,"onSetCheepCheepTimer")
 registerExec(0xdf68,1 ,1,"onHitWall")
-
 registerExec(0x8823,1 ,1,"onPrintText")
-
 registerExec(0xc888,1 ,1,"onCheckEnemyType")
 registerExec(0xc149,1 ,1,"onLoadEnemyData")
-
 registerExec(0x89e3,1 ,1,"onCheckFrameForColorRotation")
-
 registerExec(0x85aa,1 ,1,"onSetIntermediateBackgroundColor")
 registerExec(0x86c2,1 ,1,"onIntermediate")
-
 registerExec(0xefb2,1 ,1,"onSetIntermediateSprite")
-
-
 registerExec(0x86bb,1 ,1,"onCheckDisableIntermediateResidual")
 registerExec(0x86bd,1 ,1,"onCheckDisableIntermediate")
-
-
 registerExec(0xaf9d+3,1 ,1,"onCheckScrollable")
-
 registerExec(0x94f7,1 ,1,"onLoadBlockSolidity")
-
-
 registerExec(0x884a,1 ,1,"onLivesDisplayCrown")
 registerExec(0x884d,1 ,1,"onLivesDisplay")
 
@@ -215,6 +201,11 @@ registerExec(0xb265,1 ,1,"onSetPlayerSize")
 
 
 registerExec(0xdd01,1 ,1,"onPlayerStandingOnMetaTile")
+
+registerExec(0xd8d1,1 ,1,"onKick")
+
+
+registerExec(0x8ebb,1 ,1,"onVramUpdate")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -809,3 +800,37 @@ function _onPlayerStandingOnMetaTile(address,len,t)
         onPlayerStandingOnMetaTile(tile)
     end
 end
+
+function _onKick(address,len,t)
+    if type(onKick)=="function" then
+        local ret = onKick(t.x, t.a, (t.a~=0x06))
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x02)-2
+            else
+                t.p = bit.bor(t.p, 0x02)
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onVramUpdate(address,len,t)
+    if type(onVramUpdate)=="function" then
+        local address = memory.readbyte(0x01)*0x100+memory.readbyte(0x00)
+        
+        local a = onVramUpdate(t.a, t.y, address)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+
+function _onPowerOnReset(address,len,t)
+    if type(onPowerOnReset)=="function" then onPowerOnReset() end
+end
+
+function _onInitialize(address,len,t)
+    if type(onInitialize)=="function" then onInitialize() end
+end
+

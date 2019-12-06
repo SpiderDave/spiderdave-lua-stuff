@@ -28,6 +28,8 @@ local config = util.config
 config.load("smb/config.default.txt")
 config.load("smb/config.txt")
 
+--local box2d = require("smb.box2d.box2d")
+
 -- The smb library.
 local smb = require("smb.smb")
 smb.init{config=config, util=util} --pass a table to make some things available to smb library.
@@ -36,6 +38,8 @@ local Thing = require("smb.thing")
 local obj = Thing.holder
 
 local blocks = require("smb.blocks")
+
+local messages = require("smb.messages")
 
 local ai = require("smb.ai")
 ai.init(smb)
@@ -90,7 +94,7 @@ game = {
 local player=game.player
 game.paused = false
 
-current_font=1
+current_font=9
 --current_font=6
 
 cheats={
@@ -107,7 +111,7 @@ classMenu=spidey.classes.Menu
 mnu=classMenu:new()
 mnu.font=font[current_font]
 mnu.background="small"
-mnu.background_color="black"
+mnu.background_color=config.menuBackgroundColor or "black"
 
 mnu.cursor_image=gfx.cursor.image
 if type(mnu.cursor_image)=="userdata" then
@@ -339,6 +343,16 @@ function onTileTest(a, index)
         end
     end
     
+    if config.map then
+        smb.map=smb.map or {}
+        smb.map[y] = smb.map[y] or {}
+        smb.map[y][x] = {t=a}
+        local c = "black"
+        if a == 0x24 then c = "blue" end
+        smb.map[y][x].c = c
+    end
+    
+    
     -- add water
 --    if a==0x24 then
 --        if y==0x17 then a = 0x41 end
@@ -514,11 +528,39 @@ end
 --end
 
 
+function onVramUpdate(c, index, address)
+    if true then return end
+    
+    if address == 0x8d54 then return 0 end
+    if address == 0x8d7c then return 1 end
+    if address == 0x8d95 then return 2 end
+    
+    if index==0x03 then spidey.message("%04x", address) end
+    
+    
+    --local newMessage = smb.makeMessage("THANK YOU MARIO DUDE!")
+    --local newMessage = smb.makeMessage("THANK YOU MARIO!")
+    local newMessage = smb.makeMessage("THANK YOU MARIOTEST!")
+    
+    local x = memory.getregister("x")
+    if address == 0x8d54 then -- thank you mario
+        if index >=3 then
+            if x==1 and index-3<#newMessage-1 then
+                memory.setregister("x", 2)
+            end
+
+            c = newMessage:byte(index-2)
+            return c
+        end
+    end
+end
+
 -- if textNumber==0 it's top status bar
 -- c is used for position (nametable address), length of text and characters
 -- nametable address hi, nametable address lo, x-position, length of text, text characters, terminated by 0xff
 -- 0x20, 0x43, 0x05, "MARIO", 0x20, 0x52, 0x0b, "WORLD  TIME", 0x20, 0x68, 0x05, "0  ", 0x2e (coin icon), "x",
 function onPrintText(textNumber, c, index)
+    --spidey.message("%02x %02x %02x", textNumber,c, index)
     if true then return end -- disable
     
     local a,x,y,s,p,pc=spidey.getregisters()
@@ -596,6 +638,7 @@ function onCheckScrollable(canScroll)
 end
 
 function onPlayerStandingOnMetaTile(tile)
+    --spidey.message(smb.getMetaTileName(tile))
     if config.bridgeConveyer then
         if tile==0x89 then
             local x,y = smb.getPlayerPosition()
@@ -933,6 +976,13 @@ function onSetKoopaStateAfterDemote(enemyType, state)
 end
 
 function onResetTitle()
+    --spidey.message("reset")
+    memory.writeword(0x6000, 0) -- remove magic number to force re-initialize of custom memory stuff
+end
+
+-- after initializing some stuff (this is basically a power on or reset trigger)
+function onInitialize()
+    memory.writeword(0x6000, 0) -- remove magic number to force re-initialize of custom memory stuff
 end
 
 function onSkipGameOverScreen(abort)
@@ -952,6 +1002,48 @@ end
 
 function onCheckDisableIntermediate()
     if config.disableIntermediate then return true end
+end
+
+function onKick(enemyIndex, enemyType, kickable)
+    
+    --spidey.message("%02x %s", enemyType, tostring(kickable))
+    if config.holdEnemies then
+        if (not player.inAir) and kickable and (not player.holdingIndex) and spidey.joy[1].B then
+            player.holdingIndex = enemyIndex
+            return false
+        elseif player.holdingIndex == enemyIndex then
+            -- don't kick the enemy you're holding
+            return false
+        end
+    end
+    
+end
+
+function initialize()
+    -- 0x6000 0x87      initialized if magic number (0x4287) low byte
+    -- 0x6001 0x42      initialized if magic number (0x4287) high byte
+    -- 0x6002-0x600f    reserved
+    -- 0x6010           Mario status
+    -- 0x6011           Luigi status
+    -- 0x6012           Mario star timer
+    -- 0x6013           Luigi star timer
+    if memory.readword(0x6000) ~= 0x4287 then
+        memory.writeword(0x6000, 0x4287)
+        
+        for i=0x6002, 0x6fff do
+            memory.writebyte(i,0)
+        end
+        
+        if smb.action() then
+            local p = smb.currentPlayer()
+            memory.writebyte(0x6010+p, memory.readbyte(0x0756)) -- playerStatus
+            memory.writebyte(0x6012+p, memory.readbyte(0x079f)) -- StarInvincibleTimer
+        end
+    end
+    
+    
+    
+
 end
 
 emu.registerexit(function(x) emu.message("") end)
@@ -976,6 +1068,7 @@ function spidey.update(inp,joy)
     player.isOnScreen = smb.playerOnScreen()
     player.state = memory.readbyte(0x1d)
     player.inAir = (player.state == 0x01 or player.state == 0x02)
+    player.facing = smb.getFacing(0,true)
     local ScreenEdge_X_Pos = memory.readbyte(0x71c)
     local ScreenEdge_PageLoc = memory.readbyte(0x71a)
     local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
@@ -984,7 +1077,11 @@ function spidey.update(inp,joy)
     local mouseTileX = math.floor((inp.xmouse+ScreenEdge_X_Pos % 16)/16)
     local mouseTileY = math.floor(inp.ymouse/16)
     
+    initialize()
     
+    
+    game. messageCounter = (memory.readbyte(0x719)*0x100+memory.readbyte(0x749))/4
+     
 --    if game.action then gui.text(50,50,"action") end
 --    if game.frozen then gui.text(50,50+8*1,"frozen") end
 --    if game.paused then gui.text(50,50+8*2,"paused") end
@@ -1004,12 +1101,55 @@ function spidey.update(inp,joy)
     if spidey.debug.enabled then
     end
     
+    if game.action and config.maxLives then
+        local lives = memory.readbyte(0x75a)
+        -- lives are set to 0xff during a game over
+        if lives~=0xff then
+            memory.writebyte(0x75a, math.min(lives, config.maxLives))
+        end
+    end
+    
     if game.action and config.ShowLivesInHud and game.operMode ~= 0x03 then
         local n = (smb.currentPlayer()==0 and "M") or "L"
-        drawfont(8*11-1,8*2-1,font[5],string.format("%s %02d",n, math.min(99,memory.readbyte(0x075a))))
-        gui.drawline(97,18,97+4,22,"white")
-        gui.drawline(97+4,18,97,22,"white")
+        drawfont(8*11,8*2,font[current_font],string.format("%sx%02d",n, math.min(99,memory.readbyte(0x075a))))
+    
+--        gui.drawbox(8*3,15,  8*9,15+8*1,"P22","P22")
+--        drawfont(8*3,8*2,font[current_font],"NAME")
     end
+    
+    if game.action and (game.operMode == 0x00) and config.titleMarquee then
+        if memory.readbyte(0x7a2) > 2 then
+            game.scrollTitleText = game.scrollTitleText or 0
+            local txt = "SMB FRAMEWORK BY SPIDERDAVE 2019"
+            txt = "                    "..txt
+            if spidey.counter % 08 == 0 then
+                game.scrollTitleText = (game.scrollTitleText +1) % #txt
+            end
+            txt = txt .. txt
+            drawfont(8*5,8*16,font[current_font],txt:sub(game.scrollTitleText,game.scrollTitleText+21))
+        end
+    end
+    
+    if config.randomMessages and game.action and (game.messageCounter>0) then
+        if (game.messageCounter == 1) or (not game.messageR) then
+            game.messageR = math.random(1,#messages)
+        end
+        local m = messages[game.messageR]
+        gui.drawbox(8*1,7+8*8,  8*2+8*29,7+8*8+8*11+8,"black","black")
+        for k,v in pairs(m[1]) do
+            if v then
+                drawfont(8*v[1],8*v[2],font[current_font],v[3])
+            end
+        end
+        if (game.messageCounter>=0x80) and m[2] then
+            for k,v in pairs(m[2]) do
+                if v then
+                    drawfont(8*v[1],8*v[2],font[current_font],v[3])
+                end
+            end
+        end
+    end
+    
     
     if config.continueScreen then
         if game.operMode == 0x03 then
@@ -1099,6 +1239,41 @@ function spidey.update(inp,joy)
         smb.setPlayerSpeed(xs, ys)
         smb.setPlayerMoveForce(xmf,ymf)
     end
+    
+    if player.control and config.holdEnemies then
+        if player.holdingIndex then
+            if joy[1].B then
+                local x,y = smb.getPlayerPosition()
+                local xs, ys = 0,0
+                smb.setEnemyPositionAndSpeed(player.holdingIndex, x+player.facing*12, 0x100 + y+4, xs,ys)
+                smb.setFacing(player.holdingIndex)
+
+                local state = memory.readbyte(0x1e + player.holdingIndex)
+                state = 0x44
+                memory.writebyte(0x1e + player.holdingIndex, state)
+
+
+            else
+                smb.playSound("EnemySmack")
+--                local state = memory.readbyte(0x1e + player.holdingIndex)
+--                if state < 0x80 then
+--                    state = state + 0x80
+--                    memory.writebyte(0x1e + player.holdingIndex, state)
+--                end
+                state = 0x84
+                memory.writebyte(0x1e + player.holdingIndex, state)
+                
+                local x,y = smb.getPlayerPosition()
+                local xs, ys = 0,0
+                xs = 0x30*player.facing
+                --ys = 2
+                smb.setEnemyPositionAndSpeed(player.holdingIndex, x+player.facing*12, 0x100 + y+4, xs,ys)
+                smb.setFacing(player.holdingIndex)
+                player.holdingIndex = false
+            end
+        end
+    end
+    
     
     if player.control and player.inAir and config.airTurn then
         if joy[1].left then
@@ -1194,7 +1369,23 @@ function spidey.update(inp,joy)
     end
     
     if joy[1].select_press and config.switchPlayer and game.action and smb.playerHasControl() then
+        local p = smb.currentPlayer()
+        local p2 = 1-p
+        
+        -- store player status before switching
+        memory.writebyte(0x6010+p, memory.readbyte(0x0756)) -- playerStatus
+        memory.writebyte(0x6012+p, memory.readbyte(0x079f)) -- StarInvincibleTimer
+        
+        -- set player status to stored value for other player
+        --
+        -- we do this before switching so the palette will be set
+        -- properly with the switchPlayer function.
+        memory.writebyte(0x0756, memory.readbyte(0x6010 + p2)) -- playerStatus
+        memory.writebyte(0x079f, memory.readbyte(0x6012 + p2)) -- StarInvincibleTimer
+        
         smb.switchPlayer()
+        smb.setPlayerSize() -- adjust player size as needed
+        
     end
     
     if joy[1].select_press and config.explode and game.action then
@@ -1447,12 +1638,25 @@ function spidey.draw()
     if config.continueScreen then
         if game.continueMode then
             gui.drawbox(0,32,spidey.screenWidth-1,spidey.screenHeight-9,"black","black")
-            drawfont(8*11-1,8*13-1,font[5],"CONTINUE")
-            drawfont(8*(11+8)+1,8*13,font[6],"?")
-            drawfont(8*14-1,8*15-1,font[5],"YES")
-            drawfont(8*14-1,8*17-1,font[5],"NO")
+            drawfont(8*11-1,8*13-1,font[current_font],"CONTINUE?")
+            drawfont(8*14-1,8*15-1,font[current_font],"YES")
+            drawfont(8*14-1,8*17-1,font[current_font],"NO")
             gfx.draw(8*12,8*(15+(game.continueModeMenuY or 0)*2)-1,gfx.cursor.image)
         end
+    end
+    
+    
+    if config.map and game.paused and smb.map then
+        local n = 1
+        gui.drawbox(10,10,12,12,"white","white")
+        for y=0,25 do
+            for x = 0,0x100*04 do
+                if smb.map[y] and smb.map[y][x] then
+                    gui.drawbox(x*n+10,y*n+10,x*n+10+n-1,y*n+10+n-1,smb.map[y][x].c,smb.map[y][x].c)
+                end
+            end
+        end
+        
     end
 end
 
