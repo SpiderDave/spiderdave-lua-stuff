@@ -232,6 +232,13 @@ function onSetPlayerSize(s)
 end
 
 function onPlayerInjury(abort)
+    if player.hasBoot then
+        player.hasBoot = false
+        smb.playSound("EnemyStomp")
+        smb.setInjuryTimer()
+        return true
+    end
+
     if config.invulnerable then abort=true end
     return abort
 end
@@ -452,6 +459,14 @@ end
 function onSetFireballSpeed(axis, s, sign)
     if config.fireballSpeedX and (axis=="x") then s=config.fireballSpeedX*sign end
     if config.fireballSpeedY and (axis=="y") then s=config.fireballSpeedY*sign end
+    
+    if config.fireballSpeedXRelative and axis == "x" then
+        if config.fireballSpeedXRelative == true then
+            s = s + smb.getPlayerSpeed() * 1
+        else
+            s = s + smb.getPlayerSpeed() * config.fireballSpeedXRelative
+        end
+    end
     --if axis=="y" then s=-3 end
     --if axis=="x" then s=30*sign end
     
@@ -957,10 +972,11 @@ function X_onSetFirebarPositions()
 end
 
 function onSpinyStompCheck()
+    if player.hasBoot then return false end
     if config.stompSpiny then return false end
 end
 
-function onDemoteKoopa(oldEnemyType, newEnemyType)
+function onDemoteKoopa(enemyIndex, oldEnemyType, newEnemyType)
     -- Don't demote spiny when stomping.
     if oldEnemyType == 0x12 then return oldEnemyType end
     return
@@ -971,6 +987,11 @@ function onSetKoopaStateAfterDemote(enemyType, state)
     if enemyType == 0x12 then
         return 0x20
     end
+    
+    -- kill flying koopas instead of demote
+--    if enemyType == 0x00 then
+--        return 0x22
+--    end
     
     return state
 end
@@ -1040,10 +1061,19 @@ function initialize()
             memory.writebyte(0x6012+p, memory.readbyte(0x079f)) -- StarInvincibleTimer
         end
     end
-    
-    
-    
+end
 
+function onCheckFireballBlockCollision(fireballIndex, collision)
+    --spidey.message(tostring(collision))
+    if config.fireballsGoThroughBlocks then return false end
+end
+
+function onCheckEnemyShootable(enemyType)
+    return 0
+end
+
+function onSetFireballStateAfterEnemyCollision(fireballIndex, oldState, newState)
+    if config.fireballsPierce then return oldState end
 end
 
 emu.registerexit(function(x) emu.message("") end)
@@ -1099,6 +1129,39 @@ function spidey.update(inp,joy)
 --    end
     
     if spidey.debug.enabled then
+    end
+    
+    if config.boot then
+        player.hasBoot = true
+        config.boot=false
+    end
+    
+    -- boot
+    if game.action and player.hasBoot and player.control then
+        if (joy[1].left or joy[1].right) and memory.readbyte(0x1d) == 0x00 then
+        
+            local n=0
+            local boost = 0
+            local xs = memory.readbyte(0x700) -- Player_XSpeedAbsolute
+            if joy[1].A then
+                if xs >= 0x09 then n=n+1 end
+                if xs >= 0x10 then n=n+1 end
+                if xs >= 0x19 then n=n+1 end
+                if xs >= 0x1c then n=n+1 end
+                boost = 5
+            end
+            
+            memory.writebyte(0x70a,memory.readbyte(0xb42b + n)) --VerticalForceDown
+            memory.writebyte(0x433,memory.readbyte(0xb439 + n)) --Player_Y_MoveForce
+            memory.writebyte(0x9f,memory.readbyte(0xb432 + n)+1-boost) --Player_Y_Speed
+            memory.writebyte(0x709,memory.readbyte(0xb424 + n)-n*2-4) --VerticalForce
+            
+            local y = memory.readbyte(0xce) -- Player_Y_Position
+            memory.writebyte(0x708, y) -- JumpOrigin_Y_Position
+            
+            -- refresh Player_Y_Speed
+            return memory.readbyte(0x9f)
+        end
     end
     
     if game.action and config.maxLives then
@@ -1368,7 +1431,7 @@ function spidey.update(inp,joy)
         if game.wallBump==0 then game.wallBump = false end
     end
     
-    if joy[1].select_press and config.switchPlayer and game.action and smb.playerHasControl() then
+    if joy[1].select_press and config.switchPlayer and game.action and smb.playerHasControl() and smb.getNumberOfPlayers()==2 then
         local p = smb.currentPlayer()
         local p2 = 1-p
         
@@ -1625,6 +1688,16 @@ function spidey.update(inp,joy)
     end
 end
 
+function spidey.before()
+    if game.action and player.hasBoot then
+        local px,py = smb.getPlayerPosition()
+        px = px - game.scrollX
+        gui.box(px,py+16, px+15,py+16+16, "green", "black")
+        gui.box(px-2+3*player.facing,py+16+12, px-2+2*player.facing+18,py+16+16, "green", "black")
+    end
+
+end
+
 function spidey.draw()
     --for i,o in ipairs(obj) do
     for i = 1, #obj do
@@ -1635,6 +1708,16 @@ function spidey.draw()
         end
     end
     
+--    if game.action and player.hasBoot then
+--        local px,py = smb.getPlayerPosition()
+--        px = px - game.scrollX
+--        spidey.message("%02x %02x",px,py)
+
+--        gui.box(px,py+16, px+15,py+16+16, "green", "green")
+--        gui.box(px-2+3*player.facing,py+16+12, px-2+2*player.facing+18,py+16+16, "green", "green")
+--        drawfont(8*15,8*15,font[current_font], "test")
+--    end
+    
     if config.continueScreen then
         if game.continueMode then
             gui.drawbox(0,32,spidey.screenWidth-1,spidey.screenHeight-9,"black","black")
@@ -1644,7 +1727,6 @@ function spidey.draw()
             gfx.draw(8*12,8*(15+(game.continueModeMenuY or 0)*2)-1,gfx.cursor.image)
         end
     end
-    
     
     if config.map and game.paused and smb.map then
         local n = 1

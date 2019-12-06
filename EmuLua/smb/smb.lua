@@ -774,5 +774,18 @@ function smb.makeMessage(txt)
     return out
 end
 
+function smb.getNumberOfPlayers()
+    return memory.readbyte(0x77a)+1
+end
+
+function smb.setNumberOfPlayers(n)
+    if n==1 or n== 2 then
+        memory.writebyte(0x77a,n-1)
+    end
+end
+
+function smb.setInjuryTimer(n)
+    memory.writebyte(0x79e, n or 0x08)
+end
 
 return smb

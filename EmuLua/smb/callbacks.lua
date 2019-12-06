@@ -198,14 +198,15 @@ registerExec(0xb577,1 ,1,"onGetFriction")
 
 registerExec(0xd936,1 ,1,"onSetPlayerStatusAfterInjury")
 registerExec(0xb265,1 ,1,"onSetPlayerSize")
-
-
 registerExec(0xdd01,1 ,1,"onPlayerStandingOnMetaTile")
-
 registerExec(0xd8d1,1 ,1,"onKick")
-
-
 registerExec(0x8ebb,1 ,1,"onVramUpdate")
+
+registerExec(0xe1ca,1 ,1,"onCheckFireballBlockCollision")
+
+registerExec(0xd754,1 ,1,"onCheckEnemyShootable")
+
+registerExec(0xd725,1 ,1,"onSetFireballStateAfterEnemyCollision")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -629,7 +630,7 @@ end
 
 function _onDemoteKoopa(address,len,t)
     if type(onDemoteKoopa)=="function" then
-        --local a = onDemoteKoopa(memory.readbyte(0x16 + t.x), t.a)
+        --local a = onDemoteKoopa(t.x, memory.readbyte(0x16 + t.x), t.a)
         if a then
             a = coerceToByte(a)
             memory.setregister("a", a)
@@ -640,7 +641,7 @@ end
 
 function _onDemoteKoopa2(address,len,t)
     if type(onDemoteKoopa)=="function" then
-        local a = onDemoteKoopa(memory.readbyte(0x16 + t.x), t.a)
+        local a = onDemoteKoopa(t.x, memory.readbyte(0x16 + t.x), t.a)
         if a then
             a = coerceToByte(a)
             memory.setregister("a", a)
@@ -832,5 +833,38 @@ end
 
 function _onInitialize(address,len,t)
     if type(onInitialize)=="function" then onInitialize() end
+end
+
+
+-- This checks if fireball block collision will be done.
+-- It's false if near the top of the screen normally.
+-- you can override it to false, but not to true.
+function _onCheckFireballBlockCollision(address,len,t)
+    if type(onCheckFireballBlockCollision)=="function" then
+        local ret = onCheckFireballBlockCollision(t.x, (t.a>=0x18))
+        if ret ~= nil then
+            if ret==false then
+                memory.setregister("a", 0)
+            end
+        end
+    end
+end
+
+function _onCheckEnemyShootable(address,len,t)
+    if type(onCheckEnemyShootable)=="function" then
+        local a = onCheckEnemyShootable(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+
+function _onSetFireballStateAfterEnemyCollision(address,len,t)
+    if type(onSetFireballStateAfterEnemyCollision)=="function" then
+        local a = onSetFireballStateAfterEnemyCollision(t.x, memory.readbyte(0x24+t.x), t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
 end
 

@@ -1,5 +1,7 @@
 // Don't modify this file; Instead make a file config.txt with just the items you want.
 
+// Most features are incomplete.
+
 // Graphics mode.  gd assumes the gd library is present, allowing .png loading.
 //graphics_mode=gd
 
@@ -25,6 +27,10 @@ float=false
 fireballSpeedX=0x40
 fireballSpeedY=0x04
 fireballDownwardForce=0x50
+
+// If true, adds the player's horizontal speed to the fireball speed.
+// The value can also be a number, used as a multiplier.
+fireballSpeedXRelative = false
 
 // Timer for lakitu spiny throwing.
 lakituTimer=0x80
@@ -96,3 +102,6 @@ maxLives = 99
 
 // Display random silly messages after defeating a castle level.
 randomMessages = false
+
+// Give player Kubiro's shoe
+boot = false
