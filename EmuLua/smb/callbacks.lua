@@ -137,6 +137,8 @@ registerExec(0x94f7,1 ,1,"onLoadBlockSolidity")
 registerExec(0x884a,1 ,1,"onLivesDisplayCrown")
 registerExec(0x884d,1 ,1,"onLivesDisplay")
 
+registerExec(0x824d,1 ,1,"onCheckMainMenuButtons")
+
 --registerExec(0x90dc-2,1 ,1,"onTileTest")
 --registerExec(0x94f7,1 ,1,"onTileTest")
 --registerExec(0x94e0,1 ,1,"onTileTest")
@@ -207,6 +209,10 @@ registerExec(0xe1ca,1 ,1,"onCheckFireballBlockCollision")
 registerExec(0xd754,1 ,1,"onCheckEnemyShootable")
 
 registerExec(0xd725,1 ,1,"onSetFireballStateAfterEnemyCollision")
+
+registerExec(0xb492,1 ,1,"onCheckAirJump")
+registerExec(0xb506,1 ,1,"onGetWaterLevel")
+registerExec(0xb50c,1 ,1,"onSetWaterTopYSpeed")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -868,3 +874,43 @@ function _onSetFireballStateAfterEnemyCollision(address,len,t)
     end
 end
 
+function _onCheckAirJump(address,len,t)
+    if type(onCheckAirJump)=="function" then
+        local ret = onCheckAirJump((t.a~=0))
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x02)-2
+            else
+                t.p = bit.bor(t.p, 0x02)
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onGetWaterLevel(address,len,t)
+    if type(onGetWaterLevel)=="function" then
+        local a = onGetWaterLevel(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+
+function _onSetWaterTopYSpeed(address,len,t)
+    if type(onSetWaterTopYSpeed)=="function" then
+        local a = onSetWaterTopYSpeed(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+
+function _onCheckMainMenuButtons(address,len,t)
+    if type(onCheckMainMenuButtons)=="function" then
+        local a = onCheckMainMenuButtons(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end

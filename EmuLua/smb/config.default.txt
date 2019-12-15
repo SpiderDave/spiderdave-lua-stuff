@@ -105,3 +105,9 @@ randomMessages = false
 
 // Give player Kubiro's shoe
 boot = false
+
+// Moving water
+movingWater = true
+
+// add options menu to title screen
+options = false

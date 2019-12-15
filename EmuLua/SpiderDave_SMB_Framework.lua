@@ -291,6 +291,7 @@ function onLoadBackgroundMetatile(n)
     --n=0x61 -- 3d blocks
 --    n=game.tile
 --    n=n+1
+    if n==0x66 or n==0x67 then n=0 end
     return n
 end
 
@@ -718,22 +719,22 @@ function onCheckFrameForColorRotation(f)
         end
     end
     
-    -- moving water/lava
+    -- moving water/lava (with scroll)
     
     --if true then
-    while game.lavaScroll ~= math.floor(game.scrollX/5) % 0x10 do
-        local chrPage = 1
-        local tileNum = 0x41
-        for i=0,0x10-1 do
-            local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
+--    while game.lavaScroll ~= math.floor(game.scrollX/5) % 0x10 do
+--        local chrPage = 1
+--        local tileNum = 0x41
+--        for i=0,0x10-1 do
+--            local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
             
-            n=n*2
-            if n>0xff then n=n-0xff end
+--            n=n*2
+--            if n>0xff then n=n-0xff end
             
-            rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
-        end
-        game.lavaScroll = ((game.lavaScroll or 0)+1) % 0x10
-    end
+--            rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+--        end
+--        game.lavaScroll = ((game.lavaScroll or 0)+1) % 0x10
+--    end
     
     -- rotate a lot of tiles, crazy!
     if false then
@@ -1061,6 +1062,12 @@ function initialize()
             memory.writebyte(0x6012+p, memory.readbyte(0x079f)) -- StarInvincibleTimer
         end
     end
+    
+    if game.action and (game.operMode == 0x00) then
+        game.mainMenuY = game.mainMenuY or memory.readbyte(0x77a)
+    else
+        game.mainMenuY = game.mainMenuY or 0
+    end
 end
 
 function onCheckFireballBlockCollision(fireballIndex, collision)
@@ -1074,6 +1081,51 @@ end
 
 function onSetFireballStateAfterEnemyCollision(fireballIndex, oldState, newState)
     if config.fireballsPierce then return oldState end
+end
+
+function onCheckAirJump(allow)
+--    local x,y = smb.getPlayerPosition()
+--    local n=4
+--    if y>=0x20-8-n and y>=20-8+n then return true end
+
+    --return true
+end
+
+function onGetWaterLevel(h)
+--    spidey.message("%02x",h)
+--    local x,y = smb.getPlayerPosition()
+--    if y<=0x80 then return 0 end
+end
+
+function onSetWaterTopYSpeed(ys)
+--    memory.writebyte(0x704, 0)
+--    return 0xfd
+    
+end
+
+function onCheckMainMenuButtons(n)
+    if config.options then
+        if game.showOptions == true then
+            if smb.getButtons(n)["start"] then
+                game.showOptions = false
+                game.mainMenuY = 2
+                return 0
+            end
+        end
+        if smb.getButtons(n)["start"] and smb.demoRunning()==false then
+            if game.mainMenuY <2 then
+                memory.writebyte(0x77a,game.mainMenuY) -- set proper number of players
+            elseif game.mainMenuY == 2 then
+                game.showOptions = true
+                game.mainMenuY = 0
+                return 0
+            end
+        end
+    end
+    
+--    if n~=0 then
+--        spidey.message(tostring(smb.getButtons(n)["start"]))
+--    end
 end
 
 emu.registerexit(function(x) emu.message("") end)
@@ -1131,6 +1183,31 @@ function spidey.update(inp,joy)
     if spidey.debug.enabled then
     end
     
+--    if game.action then
+--        local x,y = smb.getPlayerPosition()
+--        if y<0x20 then 
+--            memory.writebyte(0x704, 0)
+--        else
+--            memory.writebyte(0x704, 1)
+--        end
+        
+--    end
+    
+    if game.action and config.movingWater then
+        local chrPage = 1
+        local tileNum = 0x41
+        for i=0,0x10-1 do
+            local n = rom.readbyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i)
+            n=n*2
+            if n>0xff then n=n-0xff end
+            if spidey.counter %3==0 and (i%8)<5 then
+                rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+            elseif spidey.counter %2==0 and (i%8)>=5 then
+                rom.writebyte(0x10+0x8000+chrPage*0x1000+tileNum*0x10+i,n)
+            end
+        end
+    end
+    
     if config.boot then
         player.hasBoot = true
         config.boot=false
@@ -1143,8 +1220,9 @@ function spidey.update(inp,joy)
             local n=0
             local boost = 0
             local xs = memory.readbyte(0x700) -- Player_XSpeedAbsolute
+            if xs >= 0x09 then n=n+1 end
             if joy[1].A then
-                if xs >= 0x09 then n=n+1 end
+                
                 if xs >= 0x10 then n=n+1 end
                 if xs >= 0x19 then n=n+1 end
                 if xs >= 0x1c then n=n+1 end
@@ -1152,15 +1230,12 @@ function spidey.update(inp,joy)
             end
             
             memory.writebyte(0x70a,memory.readbyte(0xb42b + n)) --VerticalForceDown
-            memory.writebyte(0x433,memory.readbyte(0xb439 + n)) --Player_Y_MoveForce
+            memory.writebyte(0x433,memory.readbyte(0xb439 + n-1)) --Player_Y_MoveForce
             memory.writebyte(0x9f,memory.readbyte(0xb432 + n)+1-boost) --Player_Y_Speed
             memory.writebyte(0x709,memory.readbyte(0xb424 + n)-n*2-4) --VerticalForce
             
             local y = memory.readbyte(0xce) -- Player_Y_Position
             memory.writebyte(0x708, y) -- JumpOrigin_Y_Position
-            
-            -- refresh Player_Y_Speed
-            return memory.readbyte(0x9f)
         end
     end
     
@@ -1178,6 +1253,51 @@ function spidey.update(inp,joy)
     
 --        gui.drawbox(8*3,15,  8*9,15+8*1,"P22","P22")
 --        drawfont(8*3,8*2,font[current_font],"NAME")
+    end
+    
+    
+    if config.options and game.action and (game.operMode == 0x00) and smb.demoRunning()==false then
+        local menuSize = 3
+        if game.showOptions then menuSize = 15 end
+
+        if joy[1].select_press or joy[1].down_press_repeat then
+            game.mainMenuY = (game.mainMenuY + 1) % menuSize
+            smb.playSound("TimerTick")
+        elseif joy[1].up_press_repeat then
+            game.mainMenuY = game.mainMenuY - 1
+            if game.mainMenuY < 0 then game.mainMenuY = menuSize-1 end
+            smb.playSound("TimerTick")
+        end
+        
+        if not game.showOptions then
+            -- this should be moved to draw section
+            gui.drawbox(8*9,8*17,  8*24,8*21,"P22","P22")
+            drawfont(8*11,8*17,font[current_font],"1 PLAYER GAME")
+            drawfont(8*11,8*19,font[current_font],"2 PLAYER GAME")
+            drawfont(8*11,8*21,font[current_font],"OPTIONS")
+            gfx.draw(8*9,8*17+game.mainMenuY*16,gfx.cursor.image)
+        end
+    end
+    
+    if game.action and (game.operMode == 0x00) and game.showOptions then
+        memory.writebyte(0x7a2,0x17) -- suppress demo
+        local x = 8*9
+        local y = 8*7
+        local w = 8*20
+        local h = 8*17
+        
+        smb.drawRivetedBox(x,y,w,h, {mainColor = "#B44C0CE0"})
+        
+        local my=0
+        --gfx.draw(8*10,8*8+my*16,gfx.cursor.image)
+        if math.floor(spidey.counter/8) %2==0 then
+            drawfont(x+8*1,8*8+game.mainMenuY*8,font[current_font],"-")
+        end
+
+        for i=0,14 do
+            drawfont(x+8*3,8*8+i*8,font[current_font],string.format("OPTION ITEM %d",i))
+        end
+
     end
     
     if game.action and (game.operMode == 0x00) and config.titleMarquee then

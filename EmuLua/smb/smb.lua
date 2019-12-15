@@ -788,4 +788,55 @@ function smb.setInjuryTimer(n)
     memory.writebyte(0x79e, n or 0x08)
 end
 
+function smb.getButtons(n)
+    local buttonNames = {
+        [0]="right",
+        "left",
+        "down",
+        "up",
+        "start",
+        "select",
+    }
+    local b = {}
+    for i=0,5 do
+        if n == bit.bor(n, 2^i) then
+            b[buttonNames[i]]=true
+        else
+            b[buttonNames[i]]=false
+        end
+    end
+    return b
+end
+
+function smb.demoRunning()
+    return (memory.readbyte(0x7a2)==0)
+end
+
+function smb.drawRivetedBox(x,y,w,h, o)
+    local o = o or {}
+    
+    local mainColor = o.mainColor or "P17"
+    local lightColor = o.lightColor or "P36"
+    local darkColor = o.darkColor or "P0F"
+    
+    gui.drawbox(x-1,y-1, x+w,y+h,"clear",lightColor)
+    gui.drawbox(x,y, x+w+1,y+h+1,"clear",darkColor)
+    
+    -- main window
+    gui.drawbox(x,y, x+w,y+h,mainColor,mainColor)
+    
+    -- upper left rivet
+    gui.drawbox(x+2+1,y+2+1, x+2+1+1,y+2+1+1,darkColor,darkColor)
+    gui.drawbox(x+2,y+2, x+2+1,y+2+1,lightColor,lightColor)
+    -- lower left rivet
+    gui.drawbox(x+2+1,y+h-4+2, x+2+1+1,y+h-4+2+1,darkColor,darkColor)
+    gui.drawbox(x+2,y+h-5+2, x+2+1,y+h-5+2+1,lightColor,lightColor)
+    -- upper right rivet
+    gui.drawbox(x+w-3+1,y+2+1, x+w-3+1+1,y+2+1+1,darkColor,darkColor)
+    gui.drawbox(x+w-3,y+2, x+w-3+1,y+2+1,lightColor,lightColor)
+    -- lower right rivet
+    gui.drawbox(x+w-3+1,y+h-4+2, x+w-3+1+1,y+h-4+2+1,darkColor,darkColor)
+    gui.drawbox(x+w-3,y+h-5+2, x+w-3+1,y+h-5+2+1,lightColor,lightColor)
+end
+
 return smb
