@@ -111,3 +111,10 @@ movingWater = true
 
 // add options menu to title screen
 options = false
+
+// Fiery Suit replaced with Cannonball Suit
+cannonBallSuit = true
+
+// Set player to walk behind the bridge rail
+// Needs work to not put the player behind clouds.
+behindBridge = false

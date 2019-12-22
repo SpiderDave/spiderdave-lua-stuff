@@ -111,6 +111,9 @@ registerExec(0xd92c+3,1 ,1,"onPlayerInjury")
 registerExec(0xc319,1 ,1,"onSetEnemySpeed")
 registerExec(0x860a+3,1 ,1,"onSetPlayerPalette")
 registerExec(0x9448,1 ,1,"onLoadBackgroundMetatile")
+
+registerExec(0x9464,1 ,1,"onLoadBackgroundMetatile2")
+
 registerExec(0x94b3,1 ,1,"onLoadForegroundMetatile")
 registerExec(0xf6c8,1 ,1,"onMusic")
 registerExec(0xf6a4,1 ,1,"onEventMusic")
@@ -214,6 +217,18 @@ registerExec(0xb492,1 ,1,"onCheckAirJump")
 registerExec(0xb506,1 ,1,"onGetWaterLevel")
 registerExec(0xb50c,1 ,1,"onSetWaterTopYSpeed")
 
+
+--registerExec(0xecea,1 ,1,"onSetFireballX")
+--registerExec(0xece4,1 ,1,"onSetFireballY")
+
+registerExec(0xecf6,1 ,1,"onSetFireballSprite")
+
+registerExec(0xb176,1 ,1,"onSetPlayerSpriteAttributes")
+
+registerExec(0x80b1,1 ,1,"onSpriteTransfer")
+
+
+
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
 function _onCheckIfFiery(address,len,t)
@@ -274,6 +289,13 @@ end
 
 
 function _onLoadBackgroundMetatile(address,len,t)
+    if type(onLoadBackgroundMetatile)=="function" then
+        local a = onLoadBackgroundMetatile(t.a)
+        if a then memory.setregister("a", a) end
+    end
+end
+
+function _onLoadBackgroundMetatile2(address,len,t)
     if type(onLoadBackgroundMetatile)=="function" then
         local a = onLoadBackgroundMetatile(t.a)
         if a then memory.setregister("a", a) end
@@ -467,7 +489,12 @@ end
 
 function _onLoadBlockSolidity(address,len,t)
     if type(onLoadBlockSolidity)=="function" then
-        local a = onLoadBlockSolidity(t.a)
+
+        local p = memory.readbyte(0x725) --CurrentPageLoc
+        local x = (bit.bor(memory.readbyte(0x06), 0xc0)-0xc0) + p * 0x10
+        local y = t.y/0x10
+
+        local a = onLoadBlockSolidity(t.a, x, y)
         if a then memory.setregister("a", a) end
     end
 end
@@ -914,3 +941,57 @@ function _onCheckMainMenuButtons(address,len,t)
         end
     end
 end
+
+--function _onSetFireballX(address,len,t)
+--    if type(onSetFireballXY)=="function" then
+--        local a = onSetFireballXY(t.x, "x", t.a)
+--        if a then
+--            memory.writebyte(0x203+t.y, coerceToByte(a))
+--            memory.setregister("a", coerceToByte(a))
+--        end
+--    end
+--end
+
+--function _onSetFireballY(address,len,t)
+--    if type(onSetFireballXY)=="function" then
+--        local a = onSetFireballXY(t.x, "y", t.a)
+--        if a then
+--            memory.writebyte(0x200+t.y, coerceToByte(a))
+--            memory.setregister("a", coerceToByte(a))
+--        end
+--    end
+--end
+
+
+function _onSetFireballSprite(address,len,t)
+    if type(onSetFireballSprite)=="function" then
+        -- Check for two specific return addresses to know we are drawing fireball
+        -- and not the firebars, since they share code here.
+        local returnAddress = memory.readbyte(0x1f7)*0x100 + memory.readbyte(0x1f6)
+        if returnAddress == 0xb668 or returnAddress == 0xb66d then
+            local a = onSetFireballSprite(t.a)
+            if a then
+                memory.setregister("a", coerceToByte(a))
+            end
+        end
+    end
+end
+
+function _onSetPlayerSpriteAttributes(address,len,t)
+    if type(onSetPlayerSpriteAttributes)=="function" then
+        local a = onSetPlayerSpriteAttributes(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+
+function _onSpriteTransfer(address,len,t)
+    if type(onSpriteTransfer)=="function" then
+        local a = onSpriteTransfer(t.a)
+        if a then
+            memory.setregister("a", coerceToByte(a))
+        end
+    end
+end
+

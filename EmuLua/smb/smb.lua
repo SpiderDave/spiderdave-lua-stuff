@@ -404,6 +404,7 @@ function smb.createEnemy(eType, x, y, xs, ys)
     if eType == 0x2e then -- power up
         i=05
         memory.writebyte(0x39, 0x00) -- PowerUpType
+        memory.writebyte(0x23, 0x80) -- put it in already spawned state
     else
         i = smb.getUnusedEnemyIndex()
     end
@@ -429,7 +430,7 @@ function smb.createEnemy(eType, x, y, xs, ys)
     smb.setEnemyPositionAndSpeed(i, scroll+x, 0x100 + y, xs,ys)
     
     smb.setFacing(i)
-    return true
+    return i
 end
 
 function smb.activateEnemy(i)
@@ -838,5 +839,18 @@ function smb.drawRivetedBox(x,y,w,h, o)
     gui.drawbox(x+w-3+1,y+h-4+2, x+w-3+1+1,y+h-4+2+1,darkColor,darkColor)
     gui.drawbox(x+w-3,y+h-5+2, x+w-3+1,y+h-5+2+1,lightColor,lightColor)
 end
+
+function smb.getFireballData()
+    local f={}
+    for i=0, 1 do
+        f[i] = {}
+        f[i].state = memory.readbyte(0x24+i)
+        f[i].y = memory.readbyte(0x200+ memory.readbyte(0x6f1+i))
+        f[i].x = memory.readbyte(0x203+ memory.readbyte(0x6f1+i))
+        f[i].active = (f[i].state ~=0)
+    end
+    return f
+end
+
 
 return smb

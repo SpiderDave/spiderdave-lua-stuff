@@ -13,6 +13,9 @@
 --   * Make jumping off enemies work for all enemies
 --   * Add Kubiro's shoe.
 
+-- It doesn't return a table
+require "Spidey.TSerial"
+
 -- Load the Spidey library with all the bells and whistles.
 spidey=require "Spidey.SpideyStuff"
 
@@ -38,6 +41,14 @@ local Thing = require("smb.thing")
 local obj = Thing.holder
 
 local blocks = require("smb.blocks")
+
+local blocktest = require("smb.blocktest")
+
+local menus = require("smb.menus")
+
+local enemies = require("smb.enemies")
+enemies.init{TSerial=TSerial, util=util, file ="smb/savedEnemies.dat"}
+enemies.load()
 
 local messages = require("smb.messages")
 
@@ -68,6 +79,7 @@ gfx.brickTop = gfx.load("brickTop")
 gfx.bigBill = gfx.load("bigBill")
 gfx.customBlock = gfx.load("customBlock")
 gfx.cursor = gfx.load("cursor")
+gfx.cursor2 = gfx.load("cursor2")
 
 if config.convert then
     local convert=function(f)
@@ -85,6 +97,7 @@ if config.convert then
     convert("bigBill")
     convert("customBlock")
     convert("cursor")
+    convert("cursor2")
     spidey.message("conversion finished")
 end
 
@@ -244,8 +257,9 @@ function onPlayerInjury(abort)
 end
 
 function onSetEnemySpeed(eType, speed, sign)
+    --spidey.message("%d %d", sign, speed)
     if eType==0x06 then
-        --spidey.message(speed)
+        --spidey.message("%d %d", sign, speed)
         --speed=speed*3
     end
     return speed
@@ -261,6 +275,9 @@ function onSetPlayerPalette(CurrentPlayer, PlayerStatus, index, c)
         p[1] = tonumber(p[1])
         p[2] = tonumber(p[2])
         p[3] = tonumber(p[3])
+        
+        if config.cannonBallSuit and (PlayerStatus == 0x02) then p = {0x37,0x27,0x0f} end
+        
         --spidey.message("%02x %02x %02x %s", p[1],p[2],p[3], configItem)
         
         if index>=1 and index<=3 then return p[index] end
@@ -308,7 +325,6 @@ function onLoadForegroundMetatile(n)
 --        n=84
 --    end
 --    n=0x61
-    
     return n
 end
 
@@ -336,8 +352,8 @@ function onTileTest(a, index)
     
     local m = {
         text = "HELLO WORLD!",
-        x = 0x05,
-        y = 0x0f,
+        x = 0x07*2-1,
+        y = 0x08*2,
     }
     m=nil -- disable
     
@@ -350,6 +366,33 @@ function onTileTest(a, index)
             end
         end
     end
+    
+
+    if blocktest[game.location.id] then
+        for _,b in ipairs(blocktest[game.location.id]) do
+            if ((x==b.x*2) or (x==b.x*2+1)) then
+                --spidey.message(game.location.id)
+                if y==b.y*2 then
+                    --a=0x45
+                    a=0x47
+                    memory.writebyte(0x03,0x50) -- attribute
+                elseif y==b.y*2 +1 then
+                    a=0x47
+                    memory.writebyte(0x03,0x50) -- attribute
+                end
+            end
+        end
+    end
+
+--    if ((x==0x07*2) or (x==0x07*2+1)) then
+--        if y==8*2 then
+--            a=0x45
+--            memory.writebyte(0x03,0x50) -- attribute
+--        elseif y==8*2 +1 then
+--            a=0x47
+--            memory.writebyte(0x03,0x50) -- attribute
+--        end
+--    end
     
     if config.map then
         smb.map=smb.map or {}
@@ -458,6 +501,12 @@ function onStomp()
 end
 
 function onSetFireballSpeed(axis, s, sign)
+    if config.cannonBallSuit then
+        if axis == "x" then s = (0x12 * sign) + smb.getPlayerSpeed() end
+        if axis == "y" then s = 0xfc * sign end
+        return s
+    end
+    
     if config.fireballSpeedX and (axis=="x") then s=config.fireballSpeedX*sign end
     if config.fireballSpeedY and (axis=="y") then s=config.fireballSpeedY*sign end
     
@@ -468,6 +517,7 @@ function onSetFireballSpeed(axis, s, sign)
             s = s + smb.getPlayerSpeed() * config.fireballSpeedXRelative
         end
     end
+    
     --if axis=="y" then s=-3 end
     --if axis=="x" then s=30*sign end
     
@@ -477,6 +527,9 @@ function onSetFireballSpeed(axis, s, sign)
 end
 
 function onSetFireballDownwardForce(yf)
+    if config.cannonBallSuit then
+        return 0x29
+    end
     if config.fireballDownwardForce then yf=config.fireballDownwardForce end
     return yf
 end
@@ -654,12 +707,23 @@ function onCheckScrollable(canScroll)
 end
 
 function onPlayerStandingOnMetaTile(tile)
-    --spidey.message(smb.getMetaTileName(tile))
+    --spidey.message("%02x %s",tile, smb.getMetaTileName(tile))
+    
+    if tile == 0x63 then
+        player.standingOnBridge = true
+    end
+    
     if config.bridgeConveyer then
         if tile==0x89 then
             local x,y = smb.getPlayerPosition()
             smb.setPlayerPosition(x-1)
         end
+    end
+end
+
+function onSetPlayerSpriteAttributes(a)
+    if config.behindBridge and (player.standingOnBridge == true) then
+        return bit.bor(a, 0x20)
     end
 end
 
@@ -833,8 +897,28 @@ end
 --end
 
 
-function onLoadBlockSolidity(b)
+function onLoadBlockSolidity(b, x, y)
     --if b==0x51 then b=0 end
+    --spidey.message(x)
+    
+    if blocktest[game.location.id] then
+        for _,b in ipairs(blocktest[game.location.id]) do
+            if x==b.x and y==b.y then
+                return 0x51
+            end
+        end
+    end
+    
+--    if x==0x07 and y==0x08 then
+--        return 0x51
+--    else
+--        return b
+--    end
+    
+    
+    --if y==0x90 then return 0x51 end
+    
+    --if b==0x51 then b=0x67 end
     return b
 end
 
@@ -1071,6 +1155,7 @@ function initialize()
 end
 
 function onCheckFireballBlockCollision(fireballIndex, collision)
+    if config.cannonBallSuit then return false end
     --spidey.message(tostring(collision))
     if config.fireballsGoThroughBlocks then return false end
 end
@@ -1080,6 +1165,7 @@ function onCheckEnemyShootable(enemyType)
 end
 
 function onSetFireballStateAfterEnemyCollision(fireballIndex, oldState, newState)
+    if config.cannonBallSuit then return oldState end
     if config.fireballsPierce then return oldState end
 end
 
@@ -1128,6 +1214,65 @@ function onCheckMainMenuButtons(n)
 --    end
 end
 
+function onSetFireballSprite(s)
+    if config.cannonBallSuit then return 0xfc end
+end
+
+
+function onSpriteTransfer()
+        if true then return end -- disable
+        
+        local a = memory.readbyte(0x3c4)
+        if a ~= bit.bor(a, 0x80) then
+            --memory.writebyte(0x3c4, bit.bor(a, 0x80))
+            local index = memory.readbyte(0x6e4) -- Player_SprDataOffset
+            local playerSpriteOffset = memory.readbyte(0x6e4) -- Player_SprDataOffset
+            --spidey.message("%02x", playerSpriteOffset)
+            local playerSprites = {}
+            for i=0,7 do
+                playerSprites[i] = {}
+                for j=0,3 do
+                    playerSprites[i][j] = memory.readbyte(0x200+playerSpriteOffset+i*4+j)
+                end
+            end
+            
+            -- 0 1
+            -- 2 3
+            -- 4 5
+            -- 6 7
+            
+            -- 6 7
+            -- 4 5
+            -- 2 3
+            -- 0 1
+            
+            
+--            playerSprites[0][1], playerSprites[6][1] = playerSprites[6][1], playerSprites[0][1]
+--            playerSprites[1][1], playerSprites[7][1] = playerSprites[7][1], playerSprites[1][1]
+--            playerSprites[2][1], playerSprites[4][1] = playerSprites[4][1], playerSprites[2][1]
+--            playerSprites[3][1], playerSprites[5][1] = playerSprites[5][1], playerSprites[3][1]
+            
+            
+--            for i=0,7 do
+--                memory.writebyte(0x200+playerSpriteOffset+i*4+2, bit.bor(playerSprites[i][2], 0x80))
+--            end
+            
+            for i = 0,3 do
+                memory.writebyte(0x200+playerSpriteOffset+i*4*2+1, playerSprites[6-i][1])
+                memory.writebyte(0x200+playerSpriteOffset+i*4*2+1+1, bit.bor(playerSprites[6-i][2],0x80))
+                memory.writebyte(0x200+playerSpriteOffset+i*4*2+1+4, playerSprites[7-i][1])
+                memory.writebyte(0x200+playerSpriteOffset+i*4*2+1+4+1, bit.bor(playerSprites[7-i][2],0x80))
+            end
+            
+        end
+end
+
+
+function onEntrance_GameTimerSetup()
+    --spidey.message("entrance")
+    enemies.reset()
+end
+
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
     lastinp=inp
@@ -1158,6 +1303,10 @@ function spidey.update(inp,joy)
     game.ScreenEdge_X_Pos = ScreenEdge_X_Pos
     local mouseTileX = math.floor((inp.xmouse+ScreenEdge_X_Pos % 16)/16)
     local mouseTileY = math.floor(inp.ymouse/16)
+    
+    player.fireballData = smb.getFireballData()
+    
+    player.standingOnBridge = false
     
     initialize()
     
@@ -1258,7 +1407,7 @@ function spidey.update(inp,joy)
     
     if config.options and game.action and (game.operMode == 0x00) and smb.demoRunning()==false then
         local menuSize = 3
-        if game.showOptions then menuSize = 15 end
+        if game.showOptions then menuSize = #menus.options end
 
         if joy[1].select_press or joy[1].down_press_repeat then
             game.mainMenuY = (game.mainMenuY + 1) % menuSize
@@ -1269,14 +1418,15 @@ function spidey.update(inp,joy)
             smb.playSound("TimerTick")
         end
         
-        if not game.showOptions then
-            -- this should be moved to draw section
-            gui.drawbox(8*9,8*17,  8*24,8*21,"P22","P22")
-            drawfont(8*11,8*17,font[current_font],"1 PLAYER GAME")
-            drawfont(8*11,8*19,font[current_font],"2 PLAYER GAME")
-            drawfont(8*11,8*21,font[current_font],"OPTIONS")
-            gfx.draw(8*9,8*17+game.mainMenuY*16,gfx.cursor.image)
-        end
+        -- this should be moved to draw section
+        gui.drawbox(8*9,8*17,  8*24,8*21,"P22","P22")
+        drawfont(8*11,8*17,font[current_font],"1 PLAYER GAME")
+        drawfont(8*11,8*19,font[current_font],"2 PLAYER GAME")
+        drawfont(8*11,8*21,font[current_font],"OPTIONS")
+        
+        local y = game.mainMenuY
+        if game.showOptions then y = 2 end -- Lock cursor when options menu is open.
+        gfx.draw(8*9,8*17+y*16,gfx.cursor.image)
     end
     
     if game.action and (game.operMode == 0x00) and game.showOptions then
@@ -1290,12 +1440,24 @@ function spidey.update(inp,joy)
         
         local my=0
         --gfx.draw(8*10,8*8+my*16,gfx.cursor.image)
+        gfx.draw(x+8*1,8*8+game.mainMenuY*8,gfx.cursor2.image)
         if math.floor(spidey.counter/8) %2==0 then
-            drawfont(x+8*1,8*8+game.mainMenuY*8,font[current_font],"-")
+            --drawfont(x+8*1,8*8+game.mainMenuY*8,font[current_font],"-")
         end
+        
+        for i,item in ipairs(menus.options) do
+            drawfont(x+8*3,8*8+(i-1)*8,font[current_font], menus.resolve(item.text))
+        end
+        
+--        for i=0,14 do
+--            drawfont(x+8*3,8*8+i*8,font[current_font],string.format("OPTION ITEM %d",i))
+--        end
 
-        for i=0,14 do
-            drawfont(x+8*3,8*8+i*8,font[current_font],string.format("OPTION ITEM %d",i))
+
+        if joy[1].A_press then
+            if menus.options[game.mainMenuY+1].action then
+                menus.options[game.mainMenuY+1].action()
+            end
         end
 
     end
@@ -1395,6 +1557,50 @@ function spidey.update(inp,joy)
         end
     end
     
+    -- flip mario
+    if game.action and false then
+        local a = memory.readbyte(0x3c4)
+        if a ~= bit.bor(a, 0x80) then
+            memory.writebyte(0x3c4, bit.bor(a, 0x80))
+            local index = memory.readbyte(0x6e4) -- Player_SprDataOffset
+            local playerSprites = {}
+            for i=0,7 do
+                playerSprites[i] = {}
+                for j=0,3 do
+                    playerSprites[i][j] = memory.readbyte(0x200+index*4+j)
+                end
+            end
+            
+            -- 0 1
+            -- 2 3
+            -- 4 5
+            -- 6 7
+            
+            local swap = function(a,b)
+                a,b = b,a
+            end
+            swap(playerSprites[0][1], playerSprites[6][1])
+            swap(playerSprites[1][1], playerSprites[7][1])
+            swap(playerSprites[2][1], playerSprites[4][1])
+            swap(playerSprites[3][1], playerSprites[5][1])
+            
+            
+            for i=0,7 do
+                --playerSprites[i][2] = bit.bor(playerSprites[i][2], 0x80)
+                
+                --memory.writebyte(0x200+(7-index*4)+1, playerSprites[i][1])
+                --memory.writebyte(0x200+(7-index*4)+2, playerSprites[i][2])
+            end
+        end
+    end
+    
+    if game.action and config.cannonBallSuit then
+        for _,fireball in pairs(player.fireballData) do
+            if fireball.active then
+                gfx.draw(fireball.x,fireball.y,gfx.bullet.image)
+            end
+        end
+    end
     
     --game.flying=true
     if game.flying then
@@ -1611,6 +1817,49 @@ function spidey.update(inp,joy)
     end
     
     
+    
+    if config.editEnemies and inp.doubleclick and (mouseTileY>1) then
+        local x = game.scrollX + inp.xmouse
+        local y = inp.ymouse
+        x = math.floor(x / 16)*16
+        y = math.floor(y / 16)*16-8
+        local enemy = enemies.getByName(config.enemy or "Goomba")
+        
+        if enemy then
+            local found = false
+            for i,e in ipairs(enemies) do
+                if e.x==x and e.y==y and e.location == game.location.id then
+                    table.remove(enemies,i)
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                enemies[#enemies+1] ={type=enemy.type, x=x, y=y, xs=enemy.xs or 0, ys=enemy.ys or 0, location=game.location.id, powerUpType=enemy.powerUpType, state=enemy.state}
+            end
+            enemies.save()
+        end
+    end
+    
+    if joy[1].select_press then
+        enemies.reset()
+    end
+    
+    for i,e in ipairs(enemies) do
+        if (not e.active) and (e.location==game.location.id) and (e.x - game.scrollX < 0x100) then
+            local enemyIndex = smb.createEnemy(e.type,e.x-game.scrollX, e.y,e.xs,e.ys)
+            if enemyIndex then
+                if e.powerUpType then memory.writebyte(0x39, e.powerUpType) end
+                if e.state then memory.writebyte(0x1e + enemyIndex, e.state) end
+            end
+            e.active = true
+        end
+        
+        if (e.location==game.location.id) and (e.x-game.scrollX > 0) and (e.x-game.scrollX < 0x100) then
+            gui.text(e.x-game.scrollX, e.y+8, string.format("%02x", e.type), "#ccccffa0","clear")
+        end
+        
+    end
     
     if inp.leftbutton and (mouseTileY>1) and config.leftButton == "block" then
         

@@ -204,4 +204,20 @@ end
 
 util.config = config
 
+function util.writeToFile(file, data)
+    local f = io.open(file,"w")
+    f:write(data)
+    f:close()
+end
+
+function util.getFileContents(path)
+    local file = io.open(path,"rb")
+    if file==nil then return nil end
+    io.input(file)
+    ret=io.read('*a')
+    io.close(file)
+    return ret
+end
+
+
 return util
