@@ -2,6 +2,7 @@ readme.md
 SpiderDave_SMB_Framework.lua
 smb/ai.lua
 smb/blocks.lua
+smb/blocktest.lua
 smb/callbacks.lua
 smb/callbacksPrototype.lua
 smb/config.default.txt
@@ -11,6 +12,7 @@ smb/thing.lua
 smb/messages.lua
 smb/menus.lua
 smb/music.lua
+smb/enemies.lua
 smb/atc.yaml
 smb/images/gd/bigBill.gd
 smb/images/gd/blooper.gd
