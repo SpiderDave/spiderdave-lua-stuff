@@ -89,11 +89,13 @@ end
 
 enemies.load = function(file)
     file = file or enemies.file
+    
     -- remove just the numerical entries
     for i=1,#enemies do
         table.remove(enemies)
     end
     local s = enemies.util.getFileContents(file)
+    if not s then return false end
     local t = enemies.TSerial.unpack(s)
     for i=1,#t do
         enemies[i]=t[i]

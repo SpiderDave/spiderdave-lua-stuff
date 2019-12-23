@@ -13,6 +13,7 @@ smb/messages.lua
 smb/menus.lua
 smb/music.lua
 smb/enemies.lua
+smb/yaml.lua
 smb/atc.yaml
 smb/images/gd/bigBill.gd
 smb/images/gd/blooper.gd
