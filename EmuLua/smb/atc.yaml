@@ -4,10 +4,10 @@ info:
 data:
     noteLength: |
         00
-    square1: |
+    square2: |
         81 1C 62 14 1C 12 06 0C 12
         14 08 62 14 18 0C 12 18 00
-    square2: |
+    square1: |
         66 66 74 74 6A 44 44 44 44
         6C 6A 6C 70 6C 6A 66
         66 66 74 74 6A 44 44 44 44

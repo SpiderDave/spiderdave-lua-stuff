@@ -1297,7 +1297,7 @@ function onMusicHeaderLoaded(h)
         end
         h.musicDataAddress=0x7000 -- override the music data address with our custom address
         
-        s = music[track].data.square1 .. music[track].data.square2 .. music[track].data.triangle .. music[track].data.noise
+        s = music[track].data.square2 .. music[track].data.square1 .. music[track].data.triangle .. music[track].data.noise
         s = spidey.hex2bin(util.stripSpaces(s))
 
         -- fill our custom music data address with the data
@@ -1312,6 +1312,12 @@ end
 
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
+    
+    if config.resetOnLoad then
+        emu.poweron()
+        emu.message("")
+        config.resetOnLoad = false
+    end
     
     lastinp=inp
     
@@ -1465,6 +1471,10 @@ function spidey.update(inp,joy)
         local y = game.mainMenuY
         if game.showOptions then y = 2 end -- Lock cursor when options menu is open.
         gfx.draw(8*9,8*17+y*16,gfx.cursor)
+    end
+    
+    if game.action and config.noDemo then
+        memory.writebyte(0x7a2,0x17) -- suppress demo
     end
     
     if game.action and (game.operMode == 0x00) and game.showOptions then
