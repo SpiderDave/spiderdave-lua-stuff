@@ -1312,6 +1312,7 @@ end
 
 emu.registerexit(function(x) emu.message("") end)
 function spidey.update(inp,joy)
+    
     lastinp=inp
     
     if smb.paused() then
@@ -1463,7 +1464,7 @@ function spidey.update(inp,joy)
         
         local y = game.mainMenuY
         if game.showOptions then y = 2 end -- Lock cursor when options menu is open.
-        gfx.draw(8*9,8*17+y*16,gfx.cursor.image)
+        gfx.draw(8*9,8*17+y*16,gfx.cursor)
     end
     
     if game.action and (game.operMode == 0x00) and game.showOptions then
@@ -1477,7 +1478,7 @@ function spidey.update(inp,joy)
         
         local my=0
         --gfx.draw(8*10,8*8+my*16,gfx.cursor.image)
-        gfx.draw(x+8*1,8*8+game.mainMenuY*8,gfx.cursor2.image)
+        gfx.draw(x+8*1,8*8+game.mainMenuY*8,gfx.cursor2)
         if math.floor(spidey.counter/8) %2==0 then
             --drawfont(x+8*1,8*8+game.mainMenuY*8,font[current_font],"-")
         end
@@ -1634,7 +1635,7 @@ function spidey.update(inp,joy)
     if game.action and config.cannonBallSuit then
         for _,fireball in pairs(player.fireballData) do
             if fireball.active then
-                gfx.draw(fireball.x,fireball.y,gfx.bullet.image)
+                gfx.draw(fireball.x,fireball.y,gfx.bullet)
             end
         end
     end
@@ -2110,7 +2111,7 @@ function spidey.draw()
         local o = obj[i]
         
         if o.active and o.onScreen then
-            gfx.draw(o.x-game.scrollX,o.y,o.image)
+            gfx.draw(o.x-game.scrollX,o.y,o)
         end
     end
     
@@ -2130,7 +2131,7 @@ function spidey.draw()
             drawfont(8*11-1,8*13-1,font[current_font],"CONTINUE?")
             drawfont(8*14-1,8*15-1,font[current_font],"YES")
             drawfont(8*14-1,8*17-1,font[current_font],"NO")
-            gfx.draw(8*12,8*(15+(game.continueModeMenuY or 0)*2)-1,gfx.cursor.image)
+            gfx.draw(8*12,8*(15+(game.continueModeMenuY or 0)*2)-1,gfx.cursor)
         end
     end
     
