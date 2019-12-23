@@ -42,7 +42,11 @@ local obj = Thing.holder
 
 local blocks = require("smb.blocks")
 
-local blocktest = require("smb.blocktest")
+local blocktest = {}
+if config.levelData then
+    blocktest = require("smb."..config.levelData)
+end
+--local blocktest = require("smb.blocktest")
 
 local menus = require("smb.menus")
 
@@ -60,6 +64,17 @@ obj.setAI(ai)
 require("smb.callbacks")
 
 --local jetpack = require("smb.jetpack")
+
+local yaml = require("smb.yaml")
+local music = require("smb.music")
+music.init{util = util, yaml = yaml}
+
+
+if config.musicOverride then 
+    music.track = config.musicOverride
+    music.load(music.track)
+end
+
 
 local graphics = require("Spidey.graphics")
 graphics:init(config.graphics_mode or "")
@@ -1271,6 +1286,28 @@ end
 function onEntrance_GameTimerSetup()
     --spidey.message("entrance")
     enemies.reset()
+end
+
+function onMusicHeaderLoaded(h)
+    local track = music.track
+    local s = ""
+    if music[track] then
+        for k,v in pairs(music[track].data.header) do
+            h[k] = v
+        end
+        h.musicDataAddress=0x7000 -- override the music data address with our custom address
+        
+        s = music[track].data.square1 .. music[track].data.square2 .. music[track].data.triangle .. music[track].data.noise
+        s = spidey.hex2bin(util.stripSpaces(s))
+
+        -- fill our custom music data address with the data
+        for i=0, #s-1 do
+            memory.writebyte(h.musicDataAddress+i,s:byte(i+1))
+        end
+
+    end
+
+    return h
 end
 
 emu.registerexit(function(x) emu.message("") end)

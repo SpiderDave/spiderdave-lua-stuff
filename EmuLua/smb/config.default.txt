@@ -118,3 +118,17 @@ cannonBallSuit = true
 // Set player to walk behind the bridge rail
 // Needs work to not put the player behind clouds.
 behindBridge = false
+
+// Add extra enemies by double clicking
+editEnemies = false
+
+// Enemy/object to use with the "editEnemies" option
+enemy = Goomba
+
+// load a level data file
+// Example: a value of "blocktest" will load "smb/blocktest.lua"
+//levelData = blocktest
+
+// Set a track to override all music with.
+// Example: a value of "atc" will load "smb/atc.yaml"
+//musicOverride = atc

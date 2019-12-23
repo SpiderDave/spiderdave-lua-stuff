@@ -9,6 +9,8 @@ smb/gfx.lua
 smb/smb.lua
 smb/thing.lua
 smb/messages.lua
+smb/music.lua
+smb/atc.yaml
 smb/images/gd/bigBill.gd
 smb/images/gd/blooper.gd
 smb/images/gd/blooper2.gd

@@ -228,6 +228,14 @@ registerExec(0xb176,1 ,1,"onSetPlayerSpriteAttributes")
 registerExec(0x80b1,1 ,1,"onSpriteTransfer")
 
 
+registerExec(0xf71b,1 ,1,"onMusicHeaderLoaded")
+
+registerExec(0xf743+2,1 ,1,"onSquare")
+registerExec(0xf87e+2,1 ,1,"onNoise")
+registerExec(0xf825+2,1 ,1,"onTriangle1")
+registerExec(0xf83a+2,1 ,1,"onTriangle2")
+
+
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -995,3 +1003,80 @@ function _onSpriteTransfer(address,len,t)
     end
 end
 
+function _onMusicHeaderLoaded(address,len,t)
+    if type(onMusicHeaderLoaded)=="function" then
+        local h = {}
+        h.noteLength = memory.readbyte(0xf0)
+        h.musicDataAddress = memory.readbyte(0xf6)*0x100 + memory.readbyte(0xf5)
+        h.triangleDataOffset = memory.readbyte(0xf9)
+        h.squareDataOffset = memory.readbyte(0xf8)
+        h.noiseDataOffset = memory.readbyte(0x7b0)
+        
+        local ret = onMusicHeaderLoaded(h)
+        
+        if ret then
+            for k,v in pairs(ret) do
+                if k=="noteLength" then memory.writebyte(0xf0, v) end
+                if k=="musicDataAddress" then 
+                    memory.writebyte(0xf5, v % 0x100)
+                    memory.writebyte(0xf6, math.floor(v/0x100))
+                end
+                if k=="triangleDataOffset" then memory.writebyte(0xf9, v) end
+                if k=="squareDataOffset" then memory.writebyte(0xf8, v) end
+                if k=="noiseDataOffset" then
+                    memory.writebyte(0x7b0, v)
+                    memory.writebyte(0x7c1, v)
+                end
+            end
+        end
+    end
+end
+
+
+
+function _onSquare(address,len,t)
+    if type(onReadMusicData)=="function" then
+        local a = onReadMusicData("square", t.y, t.a)
+        if a then 
+            memory.setregister("a", coerceToByte(a))
+            if a==0 then
+                t.p = bit.bor(t.p, 0x02)
+                memory.setregister("p", t.p)
+            else
+                t.p = bit.bor(t.p, 0x02)-2
+                memory.setregister("p", t.p)
+            end
+        end
+    end
+end
+
+function _onNoise(address,len,t)
+    if type(onReadMusicData)=="function" then
+        local a = onReadMusicData("noise", t.y, t.a)
+        if a then memory.setregister("a", coerceToByte(a)) end
+    end
+end
+
+function _onTriangle1(address,len,t)
+    if type(onReadMusicData)=="function" then
+        local a = onReadMusicData("triangle", t.y, t.a)
+        if a then 
+            memory.setregister("a", coerceToByte(a))
+            if a==0 then
+                t.p = bit.bor(t.p, 0x02)
+                memory.setregister("p", t.p)
+            else
+                t.p = bit.bor(t.p, 0x02)-2
+                memory.setregister("p", t.p)
+            end
+        end
+        
+    end
+end
+
+function _onTriangle2(address,len,t)
+    if type(onReadMusicData)=="function" then
+        local a = onReadMusicData("triangle", t.y, t.a)
+        if a then memory.setregister("a", coerceToByte(a)) end
+    end
+end

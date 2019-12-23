@@ -1,0 +1,20 @@
+info:
+    title: Around the World
+    artist: ATC
+data:
+    noteLength: |
+        00
+    square1: |
+        81 1C 62 14 1C 12 06 0C 12
+        14 08 62 14 18 0C 12 18 00
+    square2: |
+        66 66 74 74 6A 44 44 44 44
+        6C 6A 6C 70 6C 6A 66
+        66 66 74 74 6A 44 44 44 44
+        6C 6A 6C 70 6C 6A 66
+    triangle: |
+        81 26 04 34 04 2A 04 04 04 04
+        2C 2A 2C 30 2C 2A 
+    noise: |
+        60 70 60 70 60 70 60 70
+        60 70 60 70 60 70 60 70
