@@ -24,6 +24,8 @@ local font=require "Spidey.default_font"
 
 -- Utilities.
 local util = require "Spidey.util"
+util.deque = require "Spidey.deque"
+
 
 -- Config file loading.  This will also hold the loaded values.
 local config = util.config
@@ -35,7 +37,7 @@ config.load("smb/config.txt")
 
 -- The smb library.
 local smb = require("smb.smb")
-smb.init{config=config, util=util} --pass a table to make some things available to smb library.
+smb.init{config=config, util=util, spidey=spidey} --pass a table to make some things available to smb library.
 
 local Thing = require("smb.thing")
 local obj = Thing.holder
@@ -119,8 +121,14 @@ end
 game = {
     player={}
 }
+
+smb.init{game = game}
+
 local player=game.player
 game.paused = false
+
+
+game.buffer = util.deque:new()
 
 current_font=9
 --current_font=6
@@ -353,6 +361,10 @@ function onTileTest(a, index)
     local y = memory.readbyte(0x01)
     
     
+    if a == 0x41 then
+        game.waterLevel = y
+    end
+    
     -- 0 2
     -- 1 3
     local tilePos = {
@@ -383,17 +395,19 @@ function onTileTest(a, index)
     end
     
 
-    if blocktest[game.location.id] then
-        for _,b in ipairs(blocktest[game.location.id]) do
-            if ((x==b.x*2) or (x==b.x*2+1)) then
-                --spidey.message(game.location.id)
-                if y==b.y*2 then
-                    --a=0x45
-                    a=0x47
-                    memory.writebyte(0x03,0x50) -- attribute
-                elseif y==b.y*2 +1 then
-                    a=0x47
-                    memory.writebyte(0x03,0x50) -- attribute
+    if not smb.titleScreen() then
+        if blocktest[game.location.id] then
+            for _,b in ipairs(blocktest[game.location.id]) do
+                if ((x==b.x*2) or (x==b.x*2+1)) then
+                    --spidey.message(game.location.id)
+                    if y==b.y*2 then
+                        --a=0x45
+                        a=0x47
+                        memory.writebyte(0x03,0x50) -- attribute
+                    elseif y==b.y*2 +1 then
+                        a=0x47
+                        memory.writebyte(0x03,0x50) -- attribute
+                    end
                 end
             end
         end
@@ -916,10 +930,12 @@ function onLoadBlockSolidity(b, x, y)
     --if b==0x51 then b=0 end
     --spidey.message(x)
     
-    if blocktest[game.location.id] then
-        for _,b in ipairs(blocktest[game.location.id]) do
-            if x==b.x and y==b.y then
-                return 0x51
+    if not smb.titleScreen() then
+        if blocktest[game.location.id] then
+            for _,b in ipairs(blocktest[game.location.id]) do
+                if x==b.x and y==b.y then
+                    return 0x51
+                end
             end
         end
     end
@@ -1288,6 +1304,44 @@ function onEntrance_GameTimerSetup()
     enemies.reset()
 end
 
+function onLoadVramAddress(x, a)
+    if false and x == 2 then
+        spidey.message("%02x %04x",x,a)
+        --return 0x8cc7
+        --return smb.getVramAddressTable(3)
+        
+        local address = 0x6300
+        
+        local s = "3f0020 0f291a0f 0f36170f 0f30210f 0f27170f 0f162718 0f1a3027 0f163027 0f0f3617 00"
+        local s = "0f0f0f 0f0f0f0f 0f0f0f0f 0f0f0f0f 0f0f0f0f 0f0f0f0f 0f0f0f0f 0f0f0f0f 0f0f0f0f 00"
+        s = spidey.hex2bin(util.stripSpaces(s))
+
+        for i=0, #s-1 do
+            memory.writebyte(address+i,s:byte(i+1))
+        end
+        
+        return address
+    end
+end
+
+function onUpdateScreen(bufferFree, address)
+    -- We only want to mess with things when the buffer is empty
+    if bufferFree and #game.buffer>0 then
+        local buffer = game.buffer:pop()
+        
+        -- our custom memory location
+        address = 0x6100
+        
+        -- dump buffer to our custom memory location
+        for i = 0, #buffer-1 do
+            memory.writebyte(address+i, buffer:byte(i+1))
+        end
+        memory.writebyte(address+#buffer, 0)
+        
+        return address
+    end
+end
+
 function onMusicHeaderLoaded(h)
     local track = music.track
     local s = ""
@@ -1375,6 +1429,15 @@ function spidey.update(inp,joy)
     
     if spidey.debug.enabled then
     end
+    
+    -- lava death
+--    if game.action and game.waterLevel then
+--        local px,py = smb.getPlayerPosition()
+--        if py> game.waterLevel*0x10-8 then 
+--            smb.killPlayer()
+--        end
+--    end
+    
     
 --    if game.action then
 --        local x,y = smb.getPlayerPosition()
@@ -1889,24 +1952,62 @@ function spidey.update(inp,joy)
         end
     end
     
-    if joy[1].select_press then
-        enemies.reset()
+    --if game.action and joy[1].select_press then
+    if config._dev and game.action and spidey.counter %2==0 and #game.buffer<100 then
+        local f = function(s)
+            game.buffer:push(spidey.hex2bin(s))
+        end
+        
+        --game.buffer:push(spidey.hex2bin(string.format("3f11 01 %02x 00", 0x20+spidey.counter % 0x10)))
+        
+        local c = string.format("%05d", spidey.counter)
+        local c2=""
+        for i=1,#c do
+            c2=c2.."0"..c:sub(i,i)
+        end
+        game.buffer:push(spidey.hex2bin(string.format("2079 05 %s 00", c2 )))
+        
+        -- dude
+        --f("2043 05 0d1e0d0e24 00")
+        -- score
+        --f("2063 06 090909090909 00")
+        
+        -- random 0 on screen
+        --f(string.format("%04x 01 00 00",math.random(0x2080, 0x27ff)))
+        
+        -- random mario colors
+        f(string.format("%04x 01 %02x 00", math.random(0x3f11, 0x3f11+2), math.random(255)))
+        
+        --f(string.format("%04x 01 %02x 00", math.random(0x3f19, 0x3f19+2), math.random(255)))
+        
+        -- fun with palettes
+        --f(string.format("%04x 01 %02x 00", math.random(0x3f00, 0x3f1f), math.random(255)))
+        
+        -- epilepsy
+--        if math.random(0,1)==1 then
+--            f("3f00 01 30 00")
+--        else
+--            f("3f00 01 0f 00")
+--        end
+        
+        
     end
     
-    for i,e in ipairs(enemies) do
-        if (not e.active) and (e.location==game.location.id) and (e.x - game.scrollX < 0x100) then
-            local enemyIndex = smb.createEnemy(e.type,e.x-game.scrollX, e.y,e.xs,e.ys)
-            if enemyIndex then
-                if e.powerUpType then memory.writebyte(0x39, e.powerUpType) end
-                if e.state then memory.writebyte(0x1e + enemyIndex, e.state) end
+    if game.action and not smb.titleScreen() then
+        for i,e in ipairs(enemies) do
+            if (not e.active) and (e.location==game.location.id) and (e.x - game.scrollX < 0x100) then
+                local enemyIndex = smb.createEnemy(e.type,e.x-game.scrollX, e.y,e.xs,e.ys)
+                if enemyIndex then
+                    if e.powerUpType then memory.writebyte(0x39, e.powerUpType) end
+                    if e.state then memory.writebyte(0x1e + enemyIndex, e.state) end
+                end
+                e.active = true
             end
-            e.active = true
+            
+            if (e.location==game.location.id) and (e.x-game.scrollX > 0) and (e.x-game.scrollX < 0x100) then
+                gui.text(e.x-game.scrollX, e.y+8, string.format("%02x", e.type), "#ccccffa0","clear")
+            end
         end
-        
-        if (e.location==game.location.id) and (e.x-game.scrollX > 0) and (e.x-game.scrollX < 0x100) then
-            gui.text(e.x-game.scrollX, e.y+8, string.format("%02x", e.type), "#ccccffa0","clear")
-        end
-        
     end
     
     if inp.leftbutton and (mouseTileY>1) and config.leftButton == "block" then
@@ -2156,6 +2257,10 @@ function spidey.draw()
             end
         end
         
+    end
+    
+    if config.waterOverlay and game.action and memory.readbyte(0x74e)==0 then
+        gui.drawbox(0,32+8,spidey.screenWidth-1,spidey.screenHeight-9,config.waterOverlay,config.waterOverlay)
     end
 end
 

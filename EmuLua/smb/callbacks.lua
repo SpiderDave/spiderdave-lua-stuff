@@ -236,6 +236,10 @@ registerExec(0xf825+2,1 ,1,"onTriangle1")
 registerExec(0xf83a+2,1 ,1,"onTriangle2")
 
 
+registerExec(0x80c1,1 ,1,"onLoadVramAddress")
+
+registerExec(0x80c3,1 ,1,"onUpdateScreen")
+
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -1080,3 +1084,28 @@ function _onTriangle2(address,len,t)
         if a then memory.setregister("a", coerceToByte(a)) end
     end
 end
+
+function _onLoadVramAddress(address,len,t)
+    if type(onLoadVramAddress)=="function" then
+        local ret = onLoadVramAddress(t.x, t.a * 0x100 + memory.readbyte(0))
+        if ret then
+            memory.writebyte(0, ret % 0x100)
+            memory.writebyte(1, math.floor(ret /0x100))
+            memory.setregister("a", math.floor(ret /0x100))
+        end
+    end
+end
+
+function _onUpdateScreen(address,len,t)
+    if type(onUpdateScreen)=="function" then
+        local bufferFree = false
+        if memory.readbyte(0x773) == 0 and memory.readbyte(0x300) == 0 and memory.readbyte(0x301) == 0 then bufferFree = true end
+        
+        local address = onUpdateScreen(bufferFree, memory.readbyte(1)*0x100+memory.readbyte(0))
+        if address then
+            memory.writebyte(0, address % 0x100)
+            memory.writebyte(1, math.floor(address/0x100))
+        end
+    end
+end
+

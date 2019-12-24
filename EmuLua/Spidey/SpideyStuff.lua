@@ -1002,6 +1002,9 @@ function spidey.bin2hex(str)
 end
 
 function spidey.hex2bin(str)
+    -- remove all spaces first
+    str = string.gsub(str, "%s", "")
+
     local output=''
     for i = 1, (#str/2) do
         local c = str:sub(i*2-1,i*2)

@@ -267,6 +267,11 @@ function smb.frozen()
     return
 end
 
+function smb.titleScreen()
+    -- OperMode must be "TitleScreenMode"
+    return (memory.readbyte(0x770)==0x00)
+end
+
 function smb.paused()
      local GamePauseStatus = memory.readbyte(0x0776)
      if GamePauseStatus == 0x01 then return true end
@@ -591,14 +596,16 @@ function smb.switchPlayer()
     
     local playerStatus = memory.readbyte(0x756)
     
+    local buffer=""
+    
     --player = memory.readbyte(0x753)
     local player = memory.readbyte(0x753)
     player = 1 - player
     memory.writebyte(0x753, player)
 
-    memory.readbyte(0x2002)
-    memory.writebyte(0x2006, 0x3f)
-    memory.writebyte(0x2006, 0x11)
+    --memory.readbyte(0x2002)
+    --memory.writebyte(0x2006, 0x3f)
+    --memory.writebyte(0x2006, 0x11)
     
     --smb.updatePalette = true
     
@@ -619,9 +626,10 @@ function smb.switchPlayer()
             p[1] = tonumber(p[1])
             p[2] = tonumber(p[2])
             p[3] = tonumber(p[3])
-            memory.writebyte(0x2007, p[1])
-            memory.writebyte(0x2007, p[2])
-            memory.writebyte(0x2007, p[3])
+            --memory.writebyte(0x2007, p[1])
+            --memory.writebyte(0x2007, p[2])
+            --memory.writebyte(0x2007, p[3])
+            buffer = buffer .. string.format("3f11 03 %02x%02x%02x",p[1],p[2],p[3])
         end
     end
     
@@ -635,13 +643,16 @@ function smb.switchPlayer()
 --        memory.writebyte(0x2007, 0x19)
 --    end
     
-    memory.readbyte(0x2002)
+    --memory.readbyte(0x2002)
     
-    memory.writebyte(0x2006, 0x20)
-    memory.writebyte(0x2006, 0x43)
+    --memory.writebyte(0x2006, 0x20)
+    --memory.writebyte(0x2006, 0x43)
+    
+    buffer = buffer .. string.format("2043 %02x ", #playerNames[player])
     
     for _,v in ipairs(playerNames[player]) do
-        memory.writebyte(0x2007, v)
+        buffer = buffer .. string.format("%02x", v)
+        --memory.writebyte(0x2007, v)
     end
     
     for i=0,6 do
@@ -652,27 +663,35 @@ function smb.switchPlayer()
     end
     
     local nCoins = memory.readbyte(0x75e)
-    memory.readbyte(0x2002)
+    --memory.readbyte(0x2002)
     
-    memory.writebyte(0x2006, 0x20)
-    memory.writebyte(0x2006, 0x6d)
+    --memory.writebyte(0x2006, 0x20)
+    --memory.writebyte(0x2006, 0x6d)
     
-    memory.writebyte(0x2007, math.floor(nCoins/10))
-    memory.writebyte(0x2007, nCoins % 10)
+    --memory.writebyte(0x2007, math.floor(nCoins/10))
+    --memory.writebyte(0x2007, nCoins % 10)
     
+    buffer = buffer .. string.format("206d 02 %04x", nCoins)
     
-    memory.readbyte(0x2002)
+    --memory.readbyte(0x2002)
     
-    memory.writebyte(0x2006, 0x28)
-    memory.writebyte(0x2006, 0x62)
+    --memory.writebyte(0x2006, 0x28)
+    --memory.writebyte(0x2006, 0x62)
+    
+    buffer = buffer .. "2862 06 "
     
     for i=0,5 do
         local n = memory.readbyte(0x7dd+i+player*6)
         if i==0 and n==0 then
             n=0x24
         end
-        memory.writebyte(0x2007, n)
+        buffer = buffer .. string.format("%02x", n)
+        --memory.writebyte(0x2007, n)
     end
+    
+    buffer = buffer .. " 00"
+    
+    smb.game.buffer:push(smb.spidey.hex2bin(buffer))
     
     return player
 end
@@ -852,5 +871,30 @@ function smb.getFireballData()
     return f
 end
 
+-- needs work
+function smb.killPlayer()
+    if not smb.action() then return end
+    if not smb.playerHasControl() then return end
+    
+    memory.writebyte(0x57,0x00) -- halt player movement by initializing speed
+    
+    --memory.writebyte(0x9f,0xfe) -- set vertical speed
+    memory.writebyte(0x0e,0x0b) -- injure player subroutine
+    memory.writebyte(0xfc,0x01) -- death music
+    memory.writebyte(0x1d,0x01) -- player state
+    
+    smb.setPlayerSpeed(0,-4)
+end
+
+function smb.getVramAddressTable(n)
+    --VRAM_AddrTable_Low
+    --VRAM_AddrTable_High
+    local t = {}
+    for i=0,0x12 do
+        t[i]=memory.readbyte(0x806d+i)*0x100 + memory.readbyte(0x805a+i)
+    end
+    if n then return t[n] end
+    return t
+end
 
 return smb
