@@ -37,3 +37,4 @@ Spidey/default_font.lua
 Spidey/graphics.lua
 Spidey/util.lua
 Spidey/deque.lua
+Spidey/auxlib.lua
