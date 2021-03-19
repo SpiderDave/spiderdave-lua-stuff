@@ -132,3 +132,8 @@ enemy = Goomba
 // Set a track to override all music with.
 // Example: a value of "atc" will load "smb/atc.yaml"
 //musicOverride = atc
+
+// Bloopers can't float down to hit you if 0x10 (normal)
+// Bloopers can float down to hit you when you're big if 0x0c (like PAL version)
+// Bloopers can float down to hit you when you're small if 0
+blooperDistance = 0x0c

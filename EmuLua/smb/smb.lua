@@ -198,10 +198,11 @@ function smb.NESByteToInt(n)
 end
 
 function smb.intToNESByte(n)
+    n = math.floor(n)
     if n<0 then
         return n+0x100
     else
-        return n
+        return math.min(255,n)
     end
 end
 
@@ -319,7 +320,8 @@ function smb.playerIsStanding()
     return false
 end
 
-function smb.getPlayerPosition()
+-- Old version, subtracts 0x100 from y pos.
+function smb.getPlayerPositionOld()
 --    local ScreenEdge_X_Pos = memory.readbyte(0x71c)
 --    local ScreenEdge_PageLoc = memory.readbyte(0x71a)
 --    local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
@@ -340,6 +342,27 @@ function smb.getPlayerPosition()
     
     return px,py
 end
+
+function smb.getPlayerPosition()
+--    local ScreenEdge_X_Pos = memory.readbyte(0x71c)
+--    local ScreenEdge_PageLoc = memory.readbyte(0x71a)
+--    local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
+
+    local playerX = memory.readbyte(0x86)
+    local playerY = memory.readbyte(0xce)
+    local Player_PageLoc = memory.readbyte(0x6d)
+    local Player_X_Scroll = memory.readbyte(0x6ff)
+    
+    local Player_Y_HighPos = memory.readbyte(0xb5)
+    
+    --local px = Player_PageLoc*0x100+playerX-scrollX
+    local px = Player_PageLoc*0x100+playerX
+    local py = playerY + Player_Y_HighPos*0x100
+    --gui.text(px,py, "*", "red","clear" )
+    --spidey.message("%02x %02x",px,py)
+    return px,py
+end
+
 
 function smb.setPlayerPosition(px,py)
     if px then
@@ -511,7 +534,9 @@ end
 
 function smb.getAreaAddrOffsets()
     local l = {}
-    for world = 0, 7 do
+    -- Add an absurd number of worlds, mostly so we can 
+    -- support world "-1" glitch, which is actually world 36-1.
+    for world = 0, 7+50 do
         local level = 0
         for area = 0, 4 do -- here we assume there are 4 or 5 areas per world (some have pipe intro areas)
             l[world] = l[world] or {}
@@ -896,5 +921,73 @@ function smb.getVramAddressTable(n)
     if n then return t[n] end
     return t
 end
+
+function smb.getMetaTile(metaTileType, n)
+    if not n then
+        n = metaTileType
+        metaTileType = nil
+    end
+    
+    local p = math.floor(n/0x40) -- palette
+    n = n - p*0x40 -- tile without palette info
+    
+    local metaTileAddress = {}
+    for i=0,3 do
+        metaTileAddress[i]=memory.readbyte(0x8b0c+i)*0x100 +  memory.readbyte(0x8b08+i)
+    end
+    
+    local t = {}
+    for i = 0, 3 do
+        t[i] = memory.readbyte(metaTileAddress[p]+n*4+i)
+    end
+    
+    --spidey.message("%02x %02x %02x %02x", t[0], t[1], t[2], t[3])
+    
+    return t
+end
+
+function smb.getMetaTileXY(x,y)
+    local ScreenEdge_X_Pos = memory.readbyte(0x71c)
+    local ScreenEdge_PageLoc = memory.readbyte(0x71a)
+    local scrollX = ScreenEdge_PageLoc *0x100 + ScreenEdge_X_Pos
+
+    local x1= math.floor((scrollX+x*16) / 16)
+    local y1= y-2
+    local p = ScreenEdge_PageLoc
+    
+    local x2= x1 % 0x20
+
+    if y1>=0 then
+        local tile = memory.readbyte(0x500+math.floor(x2/16)*0xd0+(x2 % 16)+(y1*0x10))
+        --gui.drawbox(x*16-(ScreenEdge_X_Pos % 16), y*16, x*16+15-(ScreenEdge_X_Pos % 16), y*16+15, 'white',"black")
+        --gui.text(x*16-(ScreenEdge_X_Pos % 16)+2, y*16+4, string.format("%02x",tile), "blue","clear" )
+        
+        local tileP = 0
+        local tileIndex = tile
+        if tileIndex >=0x80 then
+            tileIndex= tileIndex-0x80
+            tileP = tileP + 2
+        end
+        if tileIndex >=0x40 then
+            tileIndex= tileIndex-0x40
+            tileP = tileP + 1
+        end
+        local desc = smb.constants.metaTiles[tileP][tileIndex] or "unknown"
+        
+        local t = {
+            desc = smb.constants.metaTiles[tileP][tileIndex] or "unknown",
+            index = tileIndex,
+            paletteIndex = tileP,
+            byte = tileIndex + tileP * 0x40,
+        }
+        return t
+        
+    else
+        return false
+    end
+
+
+end
+
 
 return smb

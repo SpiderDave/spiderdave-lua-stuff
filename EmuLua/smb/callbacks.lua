@@ -240,6 +240,12 @@ registerExec(0x80c1,1 ,1,"onLoadVramAddress")
 
 registerExec(0x80c3,1 ,1,"onUpdateScreen")
 
+registerExec(0xc437,1 ,1,"onSpinyFix")
+
+registerExec(0x98f8,1 ,1,"onAddPlant")
+
+registerExec(0xcc2d,1 ,1,"onBlooperDistanceCheck")
+
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -1109,3 +1115,34 @@ function _onUpdateScreen(address,len,t)
     end
 end
 
+function _onSpinyFix(address,len,t)
+    if type(onSpinyFix)=="function" then
+        local ret = onSpinyFix(false)
+        if ret then
+            memory.setregister("a", memory.getregister("y"))
+        end
+    end
+end
+
+function _onAddPlant(address,len,t)
+    if type(onAddPlant)=="function" then
+        local ret = onAddPlant(t.p ~= bit.bor(t.p, 0x02))
+        if ret ~= nil then
+            if ret==true then
+                t.p = bit.bor(t.p, 0x02)-2
+            else
+                t.p = bit.bor(t.p, 0x02)
+            end
+            memory.setregister("p", t.p)
+        end
+    end
+end
+
+function _onBlooperDistanceCheck(address,len,t)
+    if type(onBlooperDistanceCheck)=="function" then
+        local ret = onBlooperDistanceCheck(t.a - memory.readbyte(0xcf+t.x))
+        if ret ~= nil then
+            memory.setregister("a", memory.readbyte(0xcf+t.x) + ret)
+        end
+    end
+end

@@ -5,11 +5,8 @@
 --   * wavy effect in water
 --   * animated palette for podobo
 --   * sound effect for correct path in castles
---   * animated water/lava
 --   * name entry screen
 --   * continue screen
---   * Store player status and star time on player when switching.
---   * Update font to use SMB's font.  use "?" from Kamikaze Mario DX+.
 --   * Make jumping off enemies work for all enemies
 --   * Add Kubiro's shoe.
 
@@ -43,6 +40,9 @@ local Thing = require("smb.thing")
 local obj = Thing.holder
 
 local blocks = require("smb.blocks")
+
+local grapple = require("smb.grapple")
+grapple.init{smb=smb}
 
 local blocktest = {}
 if config.levelData then
@@ -90,6 +90,7 @@ gfx.blooper = gfx.load("blooper2")
 gfx.bulletBill = gfx.load("bulletbill")
 gfx.medusa = gfx.load("medusa1")
 gfx.bullet = gfx.load("bullet")
+gfx.cannonBall = gfx.load("cannonBall")
 gfx.bullet.xo = 8
 gfx.bullet.yo = 8
 gfx.brickTop = gfx.load("brickTop")
@@ -110,6 +111,7 @@ if config.convert then
     convert("bulletbill")
     convert("medusa1")
     convert("bullet")
+    convert("cannonBall")
     convert("brickTop")
     convert("bigBill")
     convert("customBlock")
@@ -129,6 +131,9 @@ game.paused = false
 
 
 game.buffer = util.deque:new()
+
+game.difficulty = config.difficulty or 1
+game.difficultyTimer = 0
 
 current_font=9
 --current_font=6
@@ -281,9 +286,15 @@ end
 
 function onSetEnemySpeed(eType, speed, sign)
     --spidey.message("%d %d", sign, speed)
-    if eType==0x06 then
+    --if eType==0x06 then
         --spidey.message("%d %d", sign, speed)
         --speed=speed*3
+   
+   if game.difficulty then
+        local s = math.abs(speed)
+        s = math.min(30, math.floor(s + game.difficulty * 1.7 )-1)
+        --spidey.message("sign=%d speed=%d newSpeed=%d diff=%d", sign, speed, s, game.difficulty)
+        return s*sign
     end
     return speed
 end
@@ -301,53 +312,16 @@ function onSetPlayerPalette(CurrentPlayer, PlayerStatus, index, c)
         
         if config.cannonBallSuit and (PlayerStatus == 0x02) then p = {0x37,0x27,0x0f} end
         
-        --spidey.message("%02x %02x %02x %s", p[1],p[2],p[3], configItem)
-        
         if index>=1 and index<=3 then return p[index] end
-    else
-        --spidey.message("Not found: ".. configItem )
     end
-
--- dark mario
---if index==0 then return 0x06 end
---if index==1 then return c-0x10 end
---if index==2 then return c-0x10 end
---if index==3 then return c-0x10 end
-
---    if index==1 or index==3 then
---        if CurrentPlayer==0 then
---            return c-3
---        else
---            return c+5
---        end
---    end
 end
 
 
 function onLoadBackgroundMetatile(n)
-    --if n==3 then n=0 end
-    --if n==2 then n=85 end
-    --n=0x0a
-    --n=0x61 -- 3d blocks
---    n=game.tile
---    n=n+1
-    if n==0x66 or n==0x67 then n=0 end
     return n
 end
 
 function onLoadForegroundMetatile(n)
---    if n==84 then
---        if math.random(0,1)==1 then
---            n=85
---        end
---    end
-    
---    if n==84 then
---        n=0x61
---    elseif n==0x61 then
---        n=84
---    end
---    n=0x61
     return n
 end
 
@@ -398,16 +372,23 @@ function onTileTest(a, index)
     if not smb.titleScreen() then
         if blocktest[game.location.id] then
             for _,b in ipairs(blocktest[game.location.id]) do
+                
                 if ((x==b.x*2) or (x==b.x*2+1)) then
-                    --spidey.message(game.location.id)
-                    if y==b.y*2 then
-                        --a=0x45
-                        a=0x47
-                        memory.writebyte(0x03,0x50) -- attribute
-                    elseif y==b.y*2 +1 then
-                        a=0x47
+                    if ((y==b.y*2) or (y==b.y*2+1)) then
+                        local metaTile = smb.getMetaTile(b.tile or 0x52)
+                        a = metaTile[index]
+                        
+                        
                         memory.writebyte(0x03,0x50) -- attribute
                     end
+                    --spidey.message(game.location.id)
+--                    if y==b.y*2 then
+--                        a=0x47
+--                        memory.writebyte(0x03,0x50) -- attribute
+--                    elseif y==b.y*2 +1 then
+--                        a=0x47
+--                        memory.writebyte(0x03,0x50) -- attribute
+--                    end
                 end
             end
         end
@@ -572,8 +553,19 @@ function onGameTimer(useTimer)
 end
 
 function onSetLakituTimer(t)
-    if config.lakituTimer then t = config.lakituTimer end
+    if config.lakituTimer then 
+        return config.lakituTimer 
+    end
+
+    t=math.max(20,t-(game.difficulty-1)*8)
     return t
+end
+
+function onSpinyFix(fix)
+    if game.difficulty > 2 then
+        fix = true
+    end
+    return fix
 end
 
 function onSetCheepCheepTimer(t)
@@ -633,7 +625,7 @@ function onVramUpdate(c, index, address)
     if address == 0x8d7c then return 1 end
     if address == 0x8d95 then return 2 end
     
-    if index==0x03 then spidey.message("%04x", address) end
+    --if index==0x03 then spidey.message("%04x", address) end
     
     
     --local newMessage = smb.makeMessage("THANK YOU MARIO DUDE!")
@@ -744,7 +736,7 @@ function onPlayerStandingOnMetaTile(tile)
     
     if config.bridgeConveyer then
         if tile==0x89 then
-            local x,y = smb.getPlayerPosition()
+            local x,y = smb.getPlayerPositionOld()
             smb.setPlayerPosition(x-1)
         end
     end
@@ -930,11 +922,14 @@ function onLoadBlockSolidity(b, x, y)
     --if b==0x51 then b=0 end
     --spidey.message(x)
     
+    --spidey.message("%02x",x)
+    
     if not smb.titleScreen() then
         if blocktest[game.location.id] then
             for _,b in ipairs(blocktest[game.location.id]) do
                 if x==b.x and y==b.y then
-                    return 0x51
+                    return b.tile or 0x51
+                    --return 0x51
                 end
             end
         end
@@ -1201,7 +1196,7 @@ function onSetFireballStateAfterEnemyCollision(fireballIndex, oldState, newState
 end
 
 function onCheckAirJump(allow)
---    local x,y = smb.getPlayerPosition()
+--    local x,y = smb.getPlayerPositionOld()
 --    local n=4
 --    if y>=0x20-8-n and y>=20-8+n then return true end
 
@@ -1210,7 +1205,7 @@ end
 
 function onGetWaterLevel(h)
 --    spidey.message("%02x",h)
---    local x,y = smb.getPlayerPosition()
+--    local x,y = smb.getPlayerPositionOld()
 --    if y<=0x80 then return 0 end
 end
 
@@ -1358,10 +1353,28 @@ function onMusicHeaderLoaded(h)
         for i=0, #s-1 do
             memory.writebyte(h.musicDataAddress+i,s:byte(i+1))
         end
-
     end
 
     return h
+end
+
+function onAddPlant(n)
+    if game.difficulty > 2 then
+        -- plants appear on 1-1 starting at difficulty 3
+        return true
+    end
+end
+
+function grapple.updatePlayerPosition(x,y)
+    smb.setPlayerPosition(x,y)
+end
+
+
+function onBlooperDistanceCheck(a,b,c)
+    -- Bloopers can't float down to hit you if 0x10 (normal)
+    -- Bloopers can float down to hit you when you're big if 0x0c (like PAL version)
+    -- Bloopers can float down to hit you when you're small if 0
+    if config.blooperDistance then return config.blooperDistance end
 end
 
 emu.registerexit(function(x) emu.message("") end)
@@ -1417,9 +1430,25 @@ function spidey.update(inp,joy)
     
     -- game.location id is a string like "1-2 0225".
     local world, level, area, areaPointer = smb.getLocation()
-    game.location = {world=world, level=level, area=area, areaPointer=areaPointer, id = string.format("%x-%x %02x%02x",world+1, level+1, area, areaPointer)}
+    --game.location = {world=world, level=level, area=area, areaPointer=areaPointer, id = string.format("%x-%x %02x%02x",world+1, level+1, area, areaPointer)}
+    game.location = {world=world, level=level, area=area, areaPointer=areaPointer, id = string.format("%x-%x %02x",world+1, level+1, area)}
     
-    --gui.text(50,50, game.location.id)
+    if config.debug then
+        gui.text(20,50, game.location.id)
+    end
+    
+    if config.difficultyTimeScale then
+        if game.action and smb.playerHasControl() then
+            game.difficultyTimer = game.difficultyTimer +1
+        end
+        local d = game.difficultyTimer * (config.difficultyTimeScale *.01)
+        game.difficulty = math.max(1,math.floor(d))
+        if config.debug then
+            gui.text(20,70, d)
+            gui.text(20,70+8, game.difficulty)
+        end
+    end
+    
     --gui.text(50,50+8, string.format("%02x %02x",mouseTileX,mouseTileY))
     
 --    if cheats.active then
@@ -1432,7 +1461,7 @@ function spidey.update(inp,joy)
     
     -- lava death
 --    if game.action and game.waterLevel then
---        local px,py = smb.getPlayerPosition()
+--        local px,py = smb.getPlayerPositionOld()
 --        if py> game.waterLevel*0x10-8 then 
 --            smb.killPlayer()
 --        end
@@ -1440,7 +1469,7 @@ function spidey.update(inp,joy)
     
     
 --    if game.action then
---        local x,y = smb.getPlayerPosition()
+--        local x,y = smb.getPlayerPositionOld()
 --        if y<0x20 then 
 --            memory.writebyte(0x704, 0)
 --        else
@@ -1708,7 +1737,7 @@ function spidey.update(inp,joy)
     if game.action and config.cannonBallSuit then
         for _,fireball in pairs(player.fireballData) do
             if fireball.active then
-                gfx.draw(fireball.x,fireball.y,gfx.bullet)
+                gfx.draw(fireball.x,fireball.y,gfx.cannonBall)
             end
         end
     end
@@ -1743,7 +1772,7 @@ function spidey.update(inp,joy)
     if player.control and config.holdEnemies then
         if player.holdingIndex then
             if joy[1].B then
-                local x,y = smb.getPlayerPosition()
+                local x,y = smb.getPlayerPositionOld()
                 local xs, ys = 0,0
                 smb.setEnemyPositionAndSpeed(player.holdingIndex, x+player.facing*12, 0x100 + y+4, xs,ys)
                 smb.setFacing(player.holdingIndex)
@@ -1763,7 +1792,7 @@ function spidey.update(inp,joy)
                 state = 0x84
                 memory.writebyte(0x1e + player.holdingIndex, state)
                 
-                local x,y = smb.getPlayerPosition()
+                local x,y = smb.getPlayerPositionOld()
                 local xs, ys = 0,0
                 xs = 0x30*player.facing
                 --ys = 2
@@ -1927,7 +1956,64 @@ function spidey.update(inp,joy)
 
     end
     
+--    local t = smb.getMetaTileXY(mouseTileX,mouseTileY)
+--    if t then
+--        spidey.message("%02x %02x %02x %s   %02x %02x", mouseTileX,mouseTileY, t.byte, t.desc,  ((grapple.x or 0) - game.scrollX)/16, ((grapple.y or 0)-0x100)/16)
+--    end
     
+    if config.grapple and game.action and smb.playerHasControl() then
+        local px,py = smb.getPlayerPosition()
+        if joy[1].B_press then grapple.pressButton() end
+        
+        grapple.update(px,py,player.facing)
+        
+        if grapple.lastState=="attached" and (not grapple.state) then
+            smb.setPlayerSpeed(grapple.xs,grapple.ys)
+            smb.setPlayerMoveForce(grapple.xs,grapple.ys)
+        end
+        
+    end
+    
+    if inp.doubleclick then
+        local t = smb.getMetaTileXY(mouseTileX,mouseTileY)
+        if t then
+            spidey.message(t.desc)
+        end
+        blocktest[game.location.id] = blocktest[game.location.id] or {}
+        local index = #blocktest[game.location.id]+1 -- default index is a new slot
+        for i,b in ipairs(blocktest[game.location.id]) do
+            if b.x == mouseTileX and b.y == mouseTileY-2 then
+                index = i
+                break
+            end
+        end
+        
+        local tile = 0x52 -- default
+        if game.tileCopy then
+            tile = game.tileCopy.byte
+        end
+        
+        local x = math.floor((game.scrollX + mouseTileX*16)/16)
+        local y = mouseTileY-2
+        --spidey.message("%02x %02x", x, y)
+        
+        blocktest[game.location.id][index] = {
+            x=x,
+            y=mouseTileY-2,
+            tile = tile,
+        }
+        
+        --spidey.message("[%s]  %02x,%02x  %02x",game.location.id, mouseTileX,mouseTileY, index)
+    end
+    if inp.middlebutton_press then
+        local t = smb.getMetaTileXY(mouseTileX,mouseTileY)
+        if t then
+            --spidey.message(t.desc)
+            game.tileCopy = t
+            --spidey.message("%02x",t.byte or 255)
+        end
+        
+    end
     
     if config.editEnemies and inp.doubleclick and (mouseTileY>1) then
         local x = game.scrollX + inp.xmouse
@@ -2005,7 +2091,9 @@ function spidey.update(inp,joy)
             end
             
             if (e.location==game.location.id) and (e.x-game.scrollX > 0) and (e.x-game.scrollX < 0x100) then
-                gui.text(e.x-game.scrollX, e.y+8, string.format("%02x", e.type), "#ccccffa0","clear")
+                if config.editEnemies then
+                    gui.text(e.x-game.scrollX, e.y+8, string.format("%02x", e.type), "#ccccffa0","clear")
+                end
             end
         end
     end
@@ -2042,7 +2130,7 @@ function spidey.update(inp,joy)
         
         if (player.shootTime > 0 and player.shootTime % 3 == 0) and (smb.frozen()~=true) and player.isOnScreen then
             player.shootTime=player.shootTime-1
-            local px,py = smb.getPlayerPosition()
+            local px,py = smb.getPlayerPositionOld()
             
             memory.writebyte(0xff, 0x20) -- play fireball sfx in square1 sound queue
             
@@ -2060,6 +2148,7 @@ function spidey.update(inp,joy)
     
     if joy[1].select_press then
         --smb.warp(2,2)
+        smb.getMetaTile(0x51)
     end
     
     
@@ -2208,7 +2297,7 @@ end
 
 function spidey.before()
     if game.action and player.hasBoot then
-        local px,py = smb.getPlayerPosition()
+        local px,py = smb.getPlayerPositionOld()
         px = px - game.scrollX
         gui.box(px,py+16, px+15,py+16+16, "green", "black")
         gui.box(px-2+3*player.facing,py+16+12, px-2+2*player.facing+18,py+16+16, "green", "black")
@@ -2227,7 +2316,7 @@ function spidey.draw()
     end
     
 --    if game.action and player.hasBoot then
---        local px,py = smb.getPlayerPosition()
+--        local px,py = smb.getPlayerPositionOld()
 --        px = px - game.scrollX
 --        spidey.message("%02x %02x",px,py)
 

@@ -101,7 +101,7 @@ if (FCEU) then
     spidey.emu.name="FCEU"
     spidey.emu.fceu=true
     spidey.emu.button_names={'up','down','left','right','A','B','select','start'}
-    require("auxlib")
+    require("Spidey.auxlib")
     spidey.screenWidth=256
     spidey.screenHeight=240
     spidey.cheatEngine.range=0x10000
