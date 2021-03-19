@@ -1631,7 +1631,7 @@ function spidey.update(inp,joy)
     if game.action and (game.operMode == 0x00) and config.titleMarquee then
         if memory.readbyte(0x7a2) > 2 then
             game.scrollTitleText = game.scrollTitleText or 0
-            local txt = "SMB FRAMEWORK BY SPIDERDAVE 2019"
+            local txt = "SMB FRAMEWORK BY SPIDERDAVE 2021"
             txt = "                    "..txt
             if spidey.counter % 08 == 0 then
                 game.scrollTitleText = (game.scrollTitleText +1) % #txt
@@ -1642,10 +1642,32 @@ function spidey.update(inp,joy)
     end
     
     if config.randomMessages and game.action and (game.messageCounter>0) then
-        if (game.messageCounter == 1) or (not game.messageR) then
-            game.messageR = math.random(1,#messages)
+        local messageType = 'toad'
+        
+        game.world, game.level = smb.getLocation()
+        if game.world+1 == 8 and game.level+1 == 4 then
+            messageType = 'princess'
         end
-        local m = messages[game.messageR]
+        
+        if (game.messageCounter == 1) or (not game.messageR) then
+            game.messageR = math.random(1,#messages[messageType])
+        end
+        local m = messages[messageType][game.messageR]
+        
+        local players={[0]="MARIO","LUIGI"}
+        local player = players[smb.currentPlayer()]
+        local otherPlayer = players[1-smb.currentPlayer()]
+        
+        for i = 1,2 do
+            for set = 1, #m[i] do
+                if m[i][set] then
+                    m[i][set][3] = string.gsub(m[i][set][3], "_player_", player)
+                    m[i][set][3] = string.gsub(m[i][set][3], "_otherplayer_", otherPlayer)
+                end
+            end
+        end
+        
+        
         gui.drawbox(8*1,7+8*8,  8*2+8*29,7+8*8+8*11+8,"black","black")
         for k,v in pairs(m[1]) do
             if v then
