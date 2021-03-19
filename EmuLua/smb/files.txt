@@ -15,6 +15,7 @@ smb/music.lua
 smb/enemies.lua
 smb/yaml.lua
 smb/atc.yaml
+smb/grapple.lua
 smb/images/gd/bigBill.gd
 smb/images/gd/blooper.gd
 smb/images/gd/blooper2.gd
