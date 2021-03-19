@@ -51,6 +51,8 @@ end
 --local blocktest = require("smb.blocktest")
 
 local menus = require("smb.menus")
+menus.init{spidey=spidey, config=config, util=util, file="smb/init.cfg", TSerial=TSerial}
+menus.loadConfig()
 
 local enemies = require("smb.enemies")
 enemies.init{TSerial=TSerial, util=util, file ="smb/savedEnemies.dat"}
@@ -1547,11 +1549,25 @@ function spidey.update(inp,joy)
 
         if joy[1].select_press or joy[1].down_press_repeat then
             game.mainMenuY = (game.mainMenuY + 1) % menuSize
+            if game.mainMenuY > 14 then
+                game.mainMenuY = 14
+                game.mainMenuYOffset = game.mainMenuYOffset + 1
+            end
             smb.playSound("TimerTick")
         elseif joy[1].up_press_repeat then
             game.mainMenuY = game.mainMenuY - 1
-            if game.mainMenuY < 0 then game.mainMenuY = menuSize-1 end
-            smb.playSound("TimerTick")
+            if game.mainMenuY < 0 then
+                if (game.mainMenuYOffset or 0) > 0 then
+                    game.mainMenuY = 0
+                    game.mainMenuYOffset = game.mainMenuYOffset - 1
+                    smb.playSound("TimerTick")
+                else
+                    game.mainMenuY = 0
+                end
+            else
+                smb.playSound("TimerTick")
+            end
+            
         end
         
         -- this should be moved to draw section
@@ -1571,33 +1587,43 @@ function spidey.update(inp,joy)
     
     if game.action and (game.operMode == 0x00) and game.showOptions then
         memory.writebyte(0x7a2,0x17) -- suppress demo
-        local x = 8*9
+        local x = 8*8
         local y = 8*7
-        local w = 8*20
+        local w = 8*21
         local h = 8*17
         
+        game.mainMenuYOffset = game.mainMenuYOffset or 0
         smb.drawRivetedBox(x,y,w,h, {mainColor = "#B44C0CE0"})
         
+        
+--        if game.mainMenuY < game.mainMenuYOffset then
+--            game.mainMenuYOffset = game.mainMenuYOffset +1
+--        end
+--        if game.mainMenuYOffset + game.mainMenuY > 14 then
+--            game.mainMenuYOffset = game.mainMenuYOffset +1
+--        end
+        
+        --game.mainMenuYOffset = 4
+        
         local my=0
+        
         --gfx.draw(8*10,8*8+my*16,gfx.cursor.image)
         gfx.draw(x+8*1,8*8+game.mainMenuY*8,gfx.cursor2)
         if math.floor(spidey.counter/8) %2==0 then
             --drawfont(x+8*1,8*8+game.mainMenuY*8,font[current_font],"-")
         end
         
-        for i,item in ipairs(menus.options) do
-            drawfont(x+8*3,8*8+(i-1)*8,font[current_font], menus.resolve(item.text))
+        --for i = mainMenuYOffset +1, game.mainMenuYOffset + 14 do
+        for i = 1,15 do
+            local item = menus.options[i+game.mainMenuYOffset]
+            if item then
+                drawfont(x+8*3,8*8+(i-1)*8,font[current_font], menus.resolve(item.text))
+            end
         end
         
---        for i=0,14 do
---            drawfont(x+8*3,8*8+i*8,font[current_font],string.format("OPTION ITEM %d",i))
---        end
-
-
         if joy[1].A_press then
-            if menus.options[game.mainMenuY+1].action then
-                menus.options[game.mainMenuY+1].action()
-            end
+            local m = menus.options[game.mainMenuYOffset+game.mainMenuY+1]
+            if m and m.action then m.action() end
         end
 
     end

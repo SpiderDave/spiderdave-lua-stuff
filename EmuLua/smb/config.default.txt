@@ -110,7 +110,7 @@ boot = false
 movingWater = true
 
 // add options menu to title screen
-options = false
+options = true
 
 // Fiery Suit replaced with Cannonball Suit
 cannonBallSuit = false
