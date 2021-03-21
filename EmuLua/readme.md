@@ -1,4 +1,6 @@
-Emulator Lua scripts for use with FCEUX.  The current version of FCEUX on the home page is 2 years out of date, and does not work properly with this script.  Grab a more recent version here: https://ci.appveyor.com/project/zeromus/fceux/build/artifacts
+Emulator Lua scripts for use with FCEUX.  FCEUX 2.3.0 is recommended.  Get it at http://fceux.com/web/download.html
+
+Castlevania 2 Lua Script:
 
 You will need:
 * Windows
@@ -13,5 +15,8 @@ How to use:
 * "File" --> "Open Rom... --> "Castlevania II - Simon's Quest (USA).nes"
 * "File" --> "Lua" --> "New Lua Script Window..." --> "Browse..." --> (select a script such as SpiderDave_Castlevania2.lua) --> "Run"
 
-
 Note: There are a lot of things unfinished, broken or exploitable at the moment :(
+
+----
+ Super Mario Bros Framework Lua Script:
+ Follow the instructions as above, except the updater is updateSMB.exe and use "Super Mario Bros. (World).nes".
