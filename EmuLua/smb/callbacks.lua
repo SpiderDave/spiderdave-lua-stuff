@@ -160,8 +160,8 @@ registerExec(0xbfd7,1 ,1,"onImposeGravity")
 --registerExec(0x8ee6,1 ,1,"onVblank")
 registerExec(0xb033,1 ,1,"onVblank")
 
---registerExec(0xc469,1 ,1,"onSetFirebarSpeed")
-registerExec(0xcd4e,1 ,1,"onSetFirebarSpeed")
+registerExec(0xc469,1 ,1,"onSetFirebarSpeed")
+--registerExec(0xcd4e,1 ,1,"onSetFirebarSpeed")
 registerExec(0xd414,1 ,1,"onSetFirebarSpinDirection")
 
 registerExec(0xcd96,1 ,1,"onSetFirebarLength")
@@ -246,6 +246,11 @@ registerExec(0x98f8,1 ,1,"onAddPlant")
 
 registerExec(0xcc2d,1 ,1,"onBlooperDistanceCheck")
 
+registerExec(0xd1f9,1 ,1,"onSetBowserFireSpeed")
+registerExec(0xd15b,1 ,1,"onSetBowserFireTimer")
+
+
+registerExec(0xcc5e,1 ,1,"onSetCheepCheepSwimSpeedX")
 
 -- Here we make better callbacks out of the callbacks.  It's callbacks all the way down!
 
@@ -1146,3 +1151,46 @@ function _onBlooperDistanceCheck(address,len,t)
         end
     end
 end
+
+function _onSetBowserFireSpeed(address,len,t)
+    if type(onSetBowserFireSpeed)=="function" then
+        local a = onSetBowserFireSpeed(t.a)
+        if a ~= nil then
+            memory.writebyte(0, a)
+            memory.setregister("a", a)
+        end
+    end
+end
+
+function _onSetBowserFireTimer(address,len,t)
+    if type(onSetBowserFireTimer)=="function" then
+        local a = onSetBowserFireTimer(t.a)
+        if a ~= nil then
+            memory.setregister("a", a)
+        end
+    end
+end
+
+function _onSetCheepCheepSwimSpeedX(address,len,t)
+    if type(onSetCheepCheepSwimSpeedX)=="function" then
+        local x = memory.readbyte(0x6e+t.x) * 0x100 + memory.readbyte(0x87+t.x)
+        local y = memory.readbyte(0xb6+t.x) * 0x100 + memory.readbyte(0xcf+t.x)
+        
+        local a, x, y = onSetCheepCheepSwimSpeedX(t.a, x, y, t.x)
+        
+        if a ~= nil then
+            memory.setregister("a", a)
+        end
+        
+        if x ~= nil then
+            memory.writebyte(0x6e+t.x, math.floor(x/0x100))
+            memory.writebyte(0x87+t.x, math.floor(x%0x100))
+        end
+        if y ~= nil then
+            memory.writebyte(0xb6+t.x, math.floor(y/0x100))
+            memory.writebyte(0xcf+t.x, math.floor(y%0x100))
+        end
+    end
+end
+
+

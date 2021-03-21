@@ -575,6 +575,24 @@ function onSetCheepCheepTimer(t)
     return t
 end
 
+function onSetBowserFireSpeed(s)
+    s = math.min(255, math.floor(s + math.max(0, game.difficulty-5) *2.1))
+    return s
+end
+
+function onSetBowserFireTimer(s)
+    s = math.max(5, s - math.floor(math.max(0, game.difficulty-5) * .3))
+    return s
+end
+
+function onSetCheepCheepSwimSpeedX(s, x, y, index)
+    if index%3~=0 then return end
+    s=s*1.6+(index*.4)
+    y=math.floor(math.sin(spidey.counter*.03+index*.4)*(20-index)+255+120)
+    
+    return s,x,y
+end
+
 function onHitWall(side, facing)
     if side== facing then
         --spidey.message("bump %02x %02x", side, facing)
@@ -1028,7 +1046,7 @@ function onSetFirebarSpeed(s)
     --spidey.message(s)
     --s=s*8
     --s=0
-    s=4
+    --s=4
     
 --    game.firebarSpeedMultiplier = 2
 --    game.firebarAccel = game.firebarAccel or 1
@@ -1043,9 +1061,18 @@ function onSetFirebarSpeed(s)
 --        game.firebarSpeed = 0
 --        game.firebarAccel = 1
 --    end
-    s = math.random(0,100)
+    --s = math.random(0,100)
+    
+    
+    s = s + math.max(0, game.difficulty-2)*10
+    s =  math.min(60,math.floor(s))
+    
+    
+    --spidey.message(s)
+    
     --s=200
     --s = game.firebarSpeed
+    
     
     return s
 end
@@ -1057,11 +1084,15 @@ function onSetFirebarSpinDirection(a)
 end
 
 function onSetFirebarLength(len)
-    --len=len-2
+    if game.difficulty<2 then
+        len=len-2
+    elseif game.difficulty >= 70 and game.difficulty<90 then
+        len=len+1
+    end
     return len
 end
 
-function X_onSetFirebarPositions()
+function _onSetFirebarPositions()
     local index = memory.readbyte(0)
     --n=math.floor(spidey.counter/4) % 9
 --    if index==n or index==n+1 then
@@ -1079,8 +1110,10 @@ function X_onSetFirebarPositions()
     --memory.writebyte(2,n2*.2)
     
     
-    if index % 2==0 then
-        memory.writebyte(1,255-n1)
+    if game.difficulty >= 90 then
+        if index % 2==0 then
+            memory.writebyte(1,255-n1)
+        end
     end
 end
 
@@ -1443,7 +1476,7 @@ function spidey.update(inp,joy)
         if game.action and smb.playerHasControl() then
             game.difficultyTimer = game.difficultyTimer +1
         end
-        local d = game.difficultyTimer * (config.difficultyTimeScale *.01)
+        local d =(config.difficulty or 1) + game.difficultyTimer * (config.difficultyTimeScale *.01)
         game.difficulty = math.max(1,math.floor(d))
         if config.debug then
             gui.text(20,70, d)
@@ -1652,6 +1685,7 @@ function spidey.update(inp,joy)
         if (game.messageCounter == 1) or (not game.messageR) then
             game.messageR = math.random(1,#messages[messageType])
         end
+        
         local m = messages[messageType][game.messageR]
         
         local players={[0]="MARIO","LUIGI"}
@@ -1659,10 +1693,12 @@ function spidey.update(inp,joy)
         local otherPlayer = players[1-smb.currentPlayer()]
         
         for i = 1,2 do
-            for set = 1, #m[i] do
-                if m[i][set] then
-                    m[i][set][3] = string.gsub(m[i][set][3], "_player_", player)
-                    m[i][set][3] = string.gsub(m[i][set][3], "_otherplayer_", otherPlayer)
+            if m[i] then
+                for set = 1, #m[i] do
+                    if m[i][set] then
+                        m[i][set][3] = string.gsub(m[i][set][3], "_player_", player)
+                        m[i][set][3] = string.gsub(m[i][set][3], "_otherplayer_", otherPlayer)
+                    end
                 end
             end
         end
